@@ -1,0 +1,33 @@
+name: Feature Request
+description: Propose a new feature, improvement, or workflow for SilkPlayer
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We welcome suggestions to make SilkPlayer even cleaner, faster, and more delightful!
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement / Motivation
+      description: Is your feature request related to a specific problem or missing workflow?
+      placeholder: I frequently watch series and would love to have...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe what you would like SilkPlayer to do and how it should look or feel.
+      placeholder: Add a shortcut or setting that...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any alternative solutions or features?

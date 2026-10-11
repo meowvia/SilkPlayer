@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh-Hans</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>zh-Hans</string>
+        <string>en</string>
+    </array>
+    <key>CFBundleExecutable</key>
+    <string>SilkPlayer</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.silkplayer.SilkPlayer</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>SilkPlayer</string>
+    <key>CFBundleDisplayName</key>
+    <string>SilkPlayer</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 SilkPlayer. All rights reserved.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>SilkPlayer 需要访问外置磁盘以播放本地视频与外挂字幕 / SilkPlayer requires access to external drives to play videos and load subtitles.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>SilkPlayer 需要访问文稿文件夹以播放视频 / SilkPlayer requires access to your documents folder to play videos.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>SilkPlayer 需要访问下载文件夹以播放视频 / SilkPlayer requires access to your downloads folder to play videos.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>SilkPlayer 需要访问桌面文件夹以播放视频 / SilkPlayer requires access to your desktop folder to play videos.</string>
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>SilkPlayer 需要访问网络共享磁盘以播放视频 / SilkPlayer requires access to network volumes to play videos.</string>
+
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Video Media</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.movie</string>
+                <string>public.video</string>
+                <string>public.avi</string>
+                <string>com.apple.quicktime-movie</string>
+                <string>public.mpeg-4</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>
