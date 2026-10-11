@@ -1,0 +1,694 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.0
+// swift-module-flags: -target arm64-apple-macos14.0 -enable-objc-interop -enable-library-evolution -language-mode 6 -O -enable-experimental-feature DebugDescriptionMacro -module-name SilkCoreKit -package-name silkcorekit
+// swift-module-flags-ignorable:  -formal-cxx-interoperability-mode=off -interface-compiler-version 6.0
+import AVFoundation
+import AppKit
+import AudioToolbox
+import Combine
+import CoreAudio
+import CoreGraphics
+import CoreImage
+import CoreMedia
+import CoreVideo
+import Foundation
+import Libavcodec
+import Libavformat
+import Libavutil
+import Libswresample
+import Libswscale
+import Metal
+import MetalKit
+import QuartzCore
+import Swift
+import VideoToolbox
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+import os
+import simd
+public struct ChannelReshape : Swift.Sendable {
+  public var pivots_0_3: Swift.SIMD4<Swift.Float>
+  public var pivots_4_7: Swift.SIMD4<Swift.Float>
+  public var pivot_8_info: Swift.SIMD4<Swift.Float>
+  public var coeffs_0: Swift.SIMD4<Swift.Float>
+  public var coeffs_1: Swift.SIMD4<Swift.Float>
+  public var coeffs_2: Swift.SIMD4<Swift.Float>
+  public var coeffs_3: Swift.SIMD4<Swift.Float>
+  public var coeffs_4: Swift.SIMD4<Swift.Float>
+  public var coeffs_5: Swift.SIMD4<Swift.Float>
+  public var coeffs_6: Swift.SIMD4<Swift.Float>
+  public var coeffs_7: Swift.SIMD4<Swift.Float>
+  public init()
+}
+public struct DolbyVisionReshapeUniforms : Swift.Sendable {
+  public var nonlinear_offset: Swift.SIMD4<Swift.Float>
+  public var nonlinear_matrix: simd.simd_float3x3
+  public var linear_matrix: simd.simd_float3x3
+  public var ch0: SilkCoreKit.ChannelReshape
+  public var ch1: SilkCoreKit.ChannelReshape
+  public var ch2: SilkCoreKit.ChannelReshape
+  public static let `default`: SilkCoreKit.DolbyVisionReshapeUniforms
+  public init()
+  public init?(doviMetadata: Swift.UnsafePointer<Libavutil.AVDOVIMetadata>)
+}
+final public class SilkAudioEngine : @unchecked Swift.Sendable {
+  final public var volume: Swift.Float {
+    get
+  }
+  final public var currentAudioTime: Swift.Double {
+    get
+  }
+  final public var hasAudioOutputStarted: Swift.Bool {
+    get
+  }
+  final public var isBufferFull: Swift.Bool {
+    get
+  }
+  final public var hasAudioSamples: Swift.Bool {
+    get
+  }
+  final public func reanchor(to pts: Swift.Double)
+  public init()
+  @objc deinit
+  final public func open(codecParameters: Swift.UnsafeMutablePointer<Libavcodec.AVCodecParameters>, timeBase: Libavutil.AVRational) -> Swift.Bool
+  final public func decodeAndEnqueue(packet: Swift.UnsafeMutablePointer<Libavcodec.AVPacket>)
+  final public func play()
+  final public func pause()
+  final public func setVolume(_ val: Swift.Float)
+  final public func notifySeek(targetTime: Swift.Double)
+  final public func flush()
+  final public func close()
+}
+final public class SilkDemuxer : @unchecked Swift.Sendable {
+  final public var videoStreamIndex: Swift.Int32 {
+    get
+  }
+  final public var audioStreamIndex: Swift.Int32 {
+    get
+  }
+  final public var subtitleStreamIndex: Swift.Int32 {
+    get
+  }
+  final public var duration: Swift.Double {
+    get
+  }
+  final public var videoWidth: Swift.Int {
+    get
+  }
+  final public var videoHeight: Swift.Int {
+    get
+  }
+  final public var sampleAspectRatio: (num: Swift.Int, den: Swift.Int) {
+    get
+  }
+  final public var displayVideoWidth: Swift.Int {
+    get
+  }
+  final public var displayVideoHeight: Swift.Int {
+    get
+  }
+  final public var videoRotation: Swift.Int {
+    get
+  }
+  final public var videoFps: Swift.Double {
+    get
+  }
+  final public var videoCodecName: Swift.String {
+    get
+  }
+  final public var videoTimeBase: Libavutil.AVRational {
+    get
+  }
+  final public var audioTimeBase: Libavutil.AVRational {
+    get
+  }
+  final public var dolbyVisionProfile: Swift.Int {
+    get
+  }
+  final public var isHDR10: Swift.Bool {
+    get
+  }
+  final public var mediaTracks: [SilkCoreKit.SilkMediaTrack] {
+    get
+  }
+  final public var chapters: [SilkCoreKit.SilkChapter] {
+    get
+  }
+  final public var videoCodecParameters: Swift.UnsafeMutablePointer<Libavcodec.AVCodecParameters>? {
+    get
+  }
+  final public var audioCodecParameters: Swift.UnsafeMutablePointer<Libavcodec.AVCodecParameters>? {
+    get
+  }
+  final public var currentURL: Foundation.URL? {
+    get
+  }
+  public init()
+  @objc deinit
+  final public func open(url: Foundation.URL) -> Swift.Bool
+  final public func selectTrack(id: Swift.Int32, mediaType: AVFoundation.AVMediaType)
+  final public func readPacket() -> Swift.UnsafeMutablePointer<Libavcodec.AVPacket>?
+  final public func seek(to seconds: Foundation.TimeInterval) -> Swift.Bool
+  final public func keyframeTimestamp(atOrBefore seconds: Swift.Double) -> Swift.Double?
+  final public func close()
+  final public func extractSubtitleCues(streamIndex: Swift.Int32) -> [SilkCoreKit.SubtitleCue]
+  final public func parseSubtitlePacket(_ pkt: Swift.UnsafeMutablePointer<Libavcodec.AVPacket>) -> SilkCoreKit.SubtitleCue?
+}
+public enum SilkPlaybackState : Swift.Sendable, Swift.Equatable {
+  case idle
+  case loading
+  case readyToPlay
+  case playing
+  case paused
+  case buffering
+  case ended
+  case failed(Swift.String)
+  public static func == (a: SilkCoreKit.SilkPlaybackState, b: SilkCoreKit.SilkPlaybackState) -> Swift.Bool
+}
+public struct SilkTrackInfo : Swift.Identifiable, Swift.Sendable, Swift.Equatable {
+  public let id: Swift.Int32
+  public let mediaType: AVFoundation.AVMediaType
+  public let name: Swift.String
+  public let language: Swift.String
+  public let isDefault: Swift.Bool
+  public let rotation: Swift.Int
+  public let bitDepth: Swift.Int
+  public let codecName: Swift.String
+  public init(id: Swift.Int32, mediaType: AVFoundation.AVMediaType, name: Swift.String, language: Swift.String = "", isDefault: Swift.Bool = false, rotation: Swift.Int = 0, bitDepth: Swift.Int = 8, codecName: Swift.String = "")
+  public static func == (a: SilkCoreKit.SilkTrackInfo, b: SilkCoreKit.SilkTrackInfo) -> Swift.Bool
+  public typealias ID = Swift.Int32
+}
+@_Concurrency.MainActor public protocol SilkEngineDelegate : AnyObject {
+  @_Concurrency.MainActor func engineDidUpdateState(_ state: SilkCoreKit.SilkPlaybackState)
+  @_Concurrency.MainActor func engineDidUpdateTime(currentTime: Foundation.TimeInterval, duration: Foundation.TimeInterval)
+  @_Concurrency.MainActor func engineDidFinishPlayback(error: (any Swift.Error)?)
+  @_Concurrency.MainActor func engineDidUpdateBuffering(progress: Swift.Double)
+  @_Concurrency.MainActor func engineDidReceiveSubtitleCue(_ cue: SilkCoreKit.SubtitleCue)
+}
+extension SilkCoreKit.SilkEngineDelegate {
+  @_Concurrency.MainActor public func engineDidReceiveSubtitleCue(_ cue: SilkCoreKit.SubtitleCue)
+}
+public struct MetalTransformUniforms : Swift.Sendable, Swift.Equatable {
+  public var rotation: Swift.Int32
+  public var flipH: Swift.Int32
+  public var flipV: Swift.Int32
+  public var padding: Swift.Int32
+  public init(rotation: Swift.Int32 = 0, flipH: Swift.Int32 = 0, flipV: Swift.Int32 = 0)
+  public static func == (a: SilkCoreKit.MetalTransformUniforms, b: SilkCoreKit.MetalTransformUniforms) -> Swift.Bool
+}
+@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency final public class SilkMetalRenderView : AppKit.NSView {
+  nonisolated(unsafe) final public var isDolbyVision: Swift.Bool {
+    get
+    set
+  }
+  nonisolated(unsafe) final public var isHDR10: Swift.Bool {
+    get
+    set
+  }
+  nonisolated(unsafe) final public var doviUniforms: SilkCoreKit.DolbyVisionReshapeUniforms
+  nonisolated(unsafe) final public var targetAspect: CoreFoundation.CGFloat?
+  nonisolated(unsafe) final public var transformUniforms: SilkCoreKit.MetalTransformUniforms
+  nonisolated final public var videoRotation: Swift.Int {
+    get
+    set
+  }
+  @_Concurrency.MainActor @preconcurrency final public func renderCurrentFrameImmediately()
+  nonisolated(unsafe) final public var currentPixelBuffer: CoreVideo.CVPixelBuffer? {
+    get
+  }
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic public init(frame frameRect: Foundation.NSRect)
+  @_Concurrency.MainActor @preconcurrency @objc required dynamic public init?(coder: Foundation.NSCoder)
+  nonisolated final public func updateColorPipeline()
+  @_Concurrency.MainActor @preconcurrency @objc override final public func viewDidMoveToWindow()
+  @_Concurrency.MainActor @preconcurrency @objc override final public func layout()
+  nonisolated final public func render(pixelBuffer: CoreVideo.CVPixelBuffer, doviUniforms: SilkCoreKit.DolbyVisionReshapeUniforms? = nil)
+  @_Concurrency.MainActor @preconcurrency final public func clear()
+  @objc deinit
+}
+@_Concurrency.MainActor final public class SilkPlayerEngine : Foundation.ObservableObject {
+  @_Concurrency.MainActor final public let renderView: SilkCoreKit.SilkMetalRenderView
+  @Combine.Published<Swift.Bool> @_projectedValueProperty($isPlaying) @_Concurrency.MainActor final public var isPlaying: Swift.Bool {
+    get
+  }
+  @_Concurrency.MainActor final public var $isPlaying: Combine.Published<Swift.Bool>.Publisher {
+    get
+  }
+  @_Concurrency.MainActor weak final public var delegate: (any SilkCoreKit.SilkEngineDelegate)?
+  @_Concurrency.MainActor final public var duration: Foundation.TimeInterval {
+    get
+  }
+  @Combine.Published<Foundation.TimeInterval> @_projectedValueProperty($currentTime) @_Concurrency.MainActor final public var currentTime: Foundation.TimeInterval {
+    get
+  }
+  @_Concurrency.MainActor final public var $currentTime: Combine.Published<Foundation.TimeInterval>.Publisher {
+    get
+  }
+  @_Concurrency.MainActor final public var videoWidth: Swift.Int {
+    get
+  }
+  @_Concurrency.MainActor final public var videoHeight: Swift.Int {
+    get
+  }
+  @_Concurrency.MainActor final public var displayVideoWidth: Swift.Int {
+    get
+  }
+  @_Concurrency.MainActor final public var displayVideoHeight: Swift.Int {
+    get
+  }
+  @_Concurrency.MainActor final public var videoFps: Swift.Double {
+    get
+  }
+  @_Concurrency.MainActor final public var videoCodecName: Swift.String {
+    get
+  }
+  @_Concurrency.MainActor final public var isDolbyVision: Swift.Bool {
+    get
+  }
+  @_Concurrency.MainActor final public var dolbyVisionProfile: Swift.Int {
+    get
+  }
+  @_Concurrency.MainActor final public var mediaTracks: [SilkCoreKit.SilkMediaTrack] {
+    get
+  }
+  @_Concurrency.MainActor final public var chapters: [SilkCoreKit.SilkChapter] {
+    get
+  }
+  @_Concurrency.MainActor final public var volume: Swift.Float {
+    get
+  }
+  @_Concurrency.MainActor final public var isMuted: Swift.Bool {
+    get
+    set
+  }
+  nonisolated final public var playbackRate: Swift.Double {
+    get
+    set
+  }
+  @_Concurrency.MainActor public init()
+  @objc isolated deinit
+  @_Concurrency.MainActor final public func open(url: Foundation.URL) -> Swift.Bool
+  @_Concurrency.MainActor final public func openAsync(url: Foundation.URL, autoPlay: Swift.Bool = false, completion: @escaping @_Concurrency.MainActor @Sendable (Swift.Bool) -> Swift.Void)
+  @_Concurrency.MainActor final public func play()
+  @_Concurrency.MainActor final public func pause()
+  @_Concurrency.MainActor final public func stop()
+  @_Concurrency.MainActor final public func close()
+  @_Concurrency.MainActor final public func setVolume(_ val: Swift.Float)
+  @_Concurrency.MainActor final public func setPlaybackRate(_ rate: Swift.Double)
+  @_Concurrency.MainActor final public func stepFrame(forward: Swift.Bool)
+  @_Concurrency.MainActor final public func selectTrack(id: Swift.Int32, mediaType: AVFoundation.AVMediaType)
+  nonisolated final public func extractSubtitleCues(streamIndex: Swift.Int32) -> [SilkCoreKit.SubtitleCue]
+  @_Concurrency.MainActor final public func currentFrameImage() async -> CoreGraphics.CGImage?
+  @_Concurrency.MainActor final public func requestSeek(to seconds: Foundation.TimeInterval, exact: Swift.Bool = true)
+  @_Concurrency.MainActor final public func seek(to seconds: Foundation.TimeInterval)
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+}
+public enum SilkPlayerState : Swift.Sendable, Swift.Equatable {
+  case readyToPlay
+  case buffering
+  case bufferFinished
+  case paused
+  case playedToTheEnd
+  case error
+  public static func == (a: SilkCoreKit.SilkPlayerState, b: SilkCoreKit.SilkPlayerState) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+@_Concurrency.MainActor public protocol SilkPlayerLayerDelegate : AnyObject {
+  @_Concurrency.MainActor func player(layer: SilkCoreKit.SilkPlayerLayer, state: SilkCoreKit.SilkPlayerState)
+  @_Concurrency.MainActor func player(layer: SilkCoreKit.SilkPlayerLayer, currentTime: Foundation.TimeInterval, totalTime: Foundation.TimeInterval)
+  @_Concurrency.MainActor func player(layer: SilkCoreKit.SilkPlayerLayer, finish error: (any Swift.Error)?)
+  @_Concurrency.MainActor func player(layer: SilkCoreKit.SilkPlayerLayer, bufferedCount: Swift.Int, consumeTime: Foundation.TimeInterval)
+  @_Concurrency.MainActor func player(layer: SilkCoreKit.SilkPlayerLayer, didReceiveSubtitleCue cue: SilkCoreKit.SubtitleCue)
+}
+extension SilkCoreKit.SilkPlayerLayerDelegate {
+  @_Concurrency.MainActor public func player(layer: SilkCoreKit.SilkPlayerLayer, didReceiveSubtitleCue cue: SilkCoreKit.SubtitleCue)
+}
+final public class SilkPlayerOptions : @unchecked Swift.Sendable {
+  final public var hardwareDecode: Swift.Bool
+  final public var asynchronousDecompression: Swift.Bool
+  final public var isAccurateSeek: Swift.Bool
+  final public var preferredForwardBufferDuration: Swift.Double
+  final public var maxBufferDuration: Swift.Double
+  final public var videoAdaptable: Swift.Bool
+  final public var autoRotate: Swift.Bool
+  final public var autoSelectEmbedSubtitle: Swift.Bool
+  final public var isSeekImageSubtitle: Swift.Bool
+  final public var display: SilkCoreKit.SilkPlayerOptions.DisplayMode
+  final public var startPlayTime: Swift.Double
+  public enum DisplayMode : Swift.Sendable {
+    case plane
+    public static func == (a: SilkCoreKit.SilkPlayerOptions.DisplayMode, b: SilkCoreKit.SilkPlayerOptions.DisplayMode) -> Swift.Bool
+    public func hash(into hasher: inout Swift.Hasher)
+    public var hashValue: Swift.Int {
+      get
+    }
+  }
+  public init()
+  @objc deinit
+}
+public struct SilkDoviInfo : Swift.Sendable {
+  public let dv_profile: Swift.Int
+  public let dv_level: Swift.Int
+  public init(dv_profile: Swift.Int, dv_level: Swift.Int = 0)
+}
+@objc public class SilkMediaTrack : ObjectiveC.NSObject, @unchecked Swift.Sendable, SilkCoreKit.MediaPlayerTrack {
+  final public let trackID: Swift.Int32
+  final public let mediaType: AVFoundation.AVMediaType
+  final public let name: Swift.String
+  final public let languageCode: Swift.String?
+  public var isEnabled: Swift.Bool
+  final public let rotation: Swift.Int
+  final public let dovi: SilkCoreKit.SilkDoviInfo?
+  final public let isDoviProfile5: Swift.Bool
+  final public let formatDescription: CoreMedia.CMFormatDescription?
+  final public let codecName: Swift.String
+  final public let isImageSubtitle: Swift.Bool
+  public init(trackID: Swift.Int32, mediaType: AVFoundation.AVMediaType, name: Swift.String, languageCode: Swift.String? = nil, isEnabled: Swift.Bool = false, rotation: Swift.Int = 0, dovi: SilkCoreKit.SilkDoviInfo? = nil, isDoviProfile5: Swift.Bool = false, formatDescription: CoreMedia.CMFormatDescription? = nil, codecName: Swift.String = "", isImageSubtitle: Swift.Bool = false)
+  @objc deinit
+}
+public struct SilkChapter : Swift.Sendable {
+  public let title: Swift.String
+  public let start: Swift.Double
+  public init(title: Swift.String, start: Swift.Double)
+}
+public struct SilkDynamicInfo : Swift.Sendable {
+  public let metadata: [Swift.String : Swift.String]
+}
+@objc @_Concurrency.MainActor final public class SilkPlayerWrapper : ObjectiveC.NSObject, Foundation.ObservableObject {
+  @_Concurrency.MainActor final public let engine: SilkCoreKit.SilkPlayerEngine
+  @_Concurrency.MainActor weak final public var layerDelegate: SilkCoreKit.SilkPlayerLayer?
+  @_Concurrency.MainActor final public var view: AppKit.NSView? {
+    get
+  }
+  @_Concurrency.MainActor final public var playbackVolume: Swift.Float {
+    get
+    set
+  }
+  @_Concurrency.MainActor final public var isMuted: Swift.Bool {
+    get
+    set
+  }
+  @_Concurrency.MainActor final public var playbackRate: Swift.Float {
+    get
+    set
+  }
+  @_Concurrency.MainActor final public var nominalFrameRate: Swift.Float {
+    get
+  }
+  @_Concurrency.MainActor final public var naturalSize: CoreFoundation.CGSize {
+    get
+  }
+  @_Concurrency.MainActor final public var chapters: [SilkCoreKit.SilkChapter] {
+    get
+  }
+  @_Concurrency.MainActor final public var dynamicInfo: SilkCoreKit.SilkDynamicInfo? {
+    get
+  }
+  @_Concurrency.MainActor final public var subtitleDataSouce: SilkCoreKit.SubtitleDataSouce? {
+    get
+  }
+  @_Concurrency.MainActor public init(engine: SilkCoreKit.SilkPlayerEngine)
+  @_Concurrency.MainActor final public func stepFrame(forward: Swift.Bool)
+  @_Concurrency.MainActor final public func tracks(mediaType: AVFoundation.AVMediaType) -> [SilkCoreKit.SilkMediaTrack]
+  @_Concurrency.MainActor final public func select(track: SilkCoreKit.SilkMediaTrack)
+  @_Concurrency.MainActor final public func select(track: any SilkCoreKit.MediaPlayerTrack, completion: (@_Concurrency.MainActor @Sendable () -> Swift.Void)? = nil)
+  @_Concurrency.MainActor final public func thumbnailImageAtCurrentTime() async -> CoreGraphics.CGImage?
+  @_Concurrency.MainActor final public func deselectTrack(mediaType: AVFoundation.AVMediaType)
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+}
+@objc @_Concurrency.MainActor final public class SilkPlayerLayer : ObjectiveC.NSObject, SilkCoreKit.SilkEngineDelegate {
+  @_Concurrency.MainActor final public let player: SilkCoreKit.SilkPlayerWrapper
+  @_Concurrency.MainActor weak final public var delegate: (any SilkCoreKit.SilkPlayerLayerDelegate)?
+  @_Concurrency.MainActor final public let options: SilkCoreKit.SilkPlayerOptions
+  @_Concurrency.MainActor public init(options: SilkCoreKit.SilkPlayerOptions, delegate: (any SilkCoreKit.SilkPlayerLayerDelegate)?)
+  @_Concurrency.MainActor convenience public init(url: Foundation.URL, options: SilkCoreKit.SilkPlayerOptions, delegate: (any SilkCoreKit.SilkPlayerLayerDelegate)?)
+  @_Concurrency.MainActor final public func open(url: Foundation.URL) -> Swift.Bool
+  @_Concurrency.MainActor final public func openAsync(url: Foundation.URL, autoPlay: Swift.Bool = false, completion: @escaping @_Concurrency.MainActor @Sendable (Swift.Bool) -> Swift.Void)
+  @_Concurrency.MainActor final public func play()
+  @_Concurrency.MainActor final public func pause()
+  @_Concurrency.MainActor final public func stop()
+  @_Concurrency.MainActor final public func close()
+  @_Concurrency.MainActor final public func requestSeek(time: Swift.Double, exact: Swift.Bool = true)
+  @_Concurrency.MainActor final public func seek(time: Swift.Double, autoPlay: Swift.Bool = true, completion: ((Swift.Bool) -> Swift.Void)? = nil)
+  @_Concurrency.MainActor final public func engineDidUpdateState(_ state: SilkCoreKit.SilkPlaybackState)
+  @_Concurrency.MainActor final public func engineDidUpdateTime(currentTime: Foundation.TimeInterval, duration: Foundation.TimeInterval)
+  @_Concurrency.MainActor final public func engineDidFinishPlayback(error: (any Swift.Error)?)
+  @_Concurrency.MainActor final public func engineDidUpdateBuffering(progress: Swift.Double)
+  @_Concurrency.MainActor final public func engineDidReceiveSubtitleCue(_ cue: SilkCoreKit.SubtitleCue)
+  @objc deinit
+}
+public enum VerticalAlign : Swift.Sendable {
+  case top
+  case center
+  case bottom
+  public static func == (a: SilkCoreKit.VerticalAlign, b: SilkCoreKit.VerticalAlign) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct TextPosition : Swift.Sendable {
+  public var verticalAlign: SilkCoreKit.VerticalAlign
+  public init(verticalAlign: SilkCoreKit.VerticalAlign = .bottom)
+}
+public struct SubtitlePart : Swift.Identifiable, @unchecked Swift.Sendable {
+  public let id: Foundation.UUID
+  public var image: AppKit.NSImage?
+  public var origin: CoreFoundation.CGPoint
+  public var text: Foundation.NSAttributedString?
+  public var textPosition: SilkCoreKit.TextPosition?
+  public init(id: Foundation.UUID = UUID(), image: AppKit.NSImage? = nil, origin: CoreFoundation.CGPoint = .zero, text: Foundation.NSAttributedString? = nil, textPosition: SilkCoreKit.TextPosition? = nil)
+  public typealias ID = Foundation.UUID
+}
+public struct SubtitleCue : @unchecked Swift.Sendable {
+  public let startTime: Foundation.TimeInterval
+  public let endTime: Foundation.TimeInterval
+  public let text: Swift.String
+  public let attributedText: Foundation.NSAttributedString?
+  public let image: AppKit.NSImage?
+  public let origin: CoreFoundation.CGPoint
+  public let position: SilkCoreKit.TextPosition?
+  public init(startTime: Foundation.TimeInterval, endTime: Foundation.TimeInterval, text: Swift.String, attributedText: Foundation.NSAttributedString? = nil, image: AppKit.NSImage? = nil, origin: CoreFoundation.CGPoint = .zero, position: SilkCoreKit.TextPosition? = nil)
+}
+public class SubtitleInfo : Swift.Identifiable, @unchecked Swift.Sendable {
+  final public let id: Foundation.UUID
+  public var subtitleID: Swift.String
+  public var name: Swift.String
+  public var languageCode: Swift.String?
+  public var isEnabled: Swift.Bool
+  public var isExternal: Swift.Bool
+  public var cues: [SilkCoreKit.SubtitleCue]
+  public init(id: Foundation.UUID = UUID(), subtitleID: Swift.String = "", name: Swift.String = "", languageCode: Swift.String? = nil, isEnabled: Swift.Bool = false, isExternal: Swift.Bool = false, cues: [SilkCoreKit.SubtitleCue] = [])
+  public typealias ID = Foundation.UUID
+  @objc deinit
+}
+public class URLSubtitleInfo : SilkCoreKit.SubtitleInfo, @unchecked Swift.Sendable {
+  final public let downloadURL: Foundation.URL
+  public init(url: Foundation.URL)
+  @objc deinit
+}
+public struct SubtitleDataSouce : Swift.Sendable {
+  public var infos: [SilkCoreKit.SubtitleInfo]
+  public init(infos: [SilkCoreKit.SubtitleInfo] = [])
+}
+public protocol MediaPlayerTrack : AnyObject {
+  var trackID: Swift.Int32 { get }
+  var name: Swift.String { get }
+  var languageCode: Swift.String? { get }
+  var isEnabled: Swift.Bool { get set }
+}
+public class FFmpegAssetTrack : SilkCoreKit.SubtitleInfo, SilkCoreKit.MediaPlayerTrack, @unchecked Swift.Sendable {
+  public var trackID: Swift.Int32
+  public var codecName: Swift.String
+  public var isImageSubtitle: Swift.Bool
+  public init(trackID: Swift.Int32, name: Swift.String, languageCode: Swift.String?, codecName: Swift.String = "", isImageSubtitle: Swift.Bool = false)
+  @objc deinit
+}
+public enum SilkSubtitleParser {
+  public static func decodeString(from data: Foundation.Data) -> Swift.String?
+  public static func parse(url: Foundation.URL) -> [SilkCoreKit.SubtitleCue]
+  public static func parseSRT(_ text: Swift.String) -> [SilkCoreKit.SubtitleCue]
+  public static func parseVTT(_ text: Swift.String) -> [SilkCoreKit.SubtitleCue]
+  public static func parseASS(_ text: Swift.String) -> [SilkCoreKit.SubtitleCue]
+  public static func cleanSubtitleText(_ s: Swift.String) -> Swift.String
+  public static func makeCinemaAttributedText(_ text: Swift.String) -> Foundation.NSAttributedString
+}
+@_Concurrency.MainActor final public class SilkSubtitleModel : Foundation.ObservableObject {
+  @Combine.Published<[SilkCoreKit.SubtitlePart]> @_projectedValueProperty($parts) @_Concurrency.MainActor final public var parts: [SilkCoreKit.SubtitlePart] {
+    get
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    set
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    _modify
+  }
+  @_Concurrency.MainActor final public var $parts: Combine.Published<[SilkCoreKit.SubtitlePart]>.Publisher {
+    get
+    @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
+  @Combine.Published<[SilkCoreKit.SubtitleInfo]> @_projectedValueProperty($subtitleInfos) @_Concurrency.MainActor final public var subtitleInfos: [SilkCoreKit.SubtitleInfo] {
+    get
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    set
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    _modify
+  }
+  @_Concurrency.MainActor final public var $subtitleInfos: Combine.Published<[SilkCoreKit.SubtitleInfo]>.Publisher {
+    get
+    @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
+  @Combine.Published<SilkCoreKit.SubtitleInfo?> @_projectedValueProperty($selectedSubtitleInfo) @_Concurrency.MainActor final public var selectedSubtitleInfo: SilkCoreKit.SubtitleInfo? {
+    get
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    set
+  }
+  @_Concurrency.MainActor final public var $selectedSubtitleInfo: Combine.Published<SilkCoreKit.SubtitleInfo?>.Publisher {
+    get
+    @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
+  @_Concurrency.MainActor final public var subtitleDelay: Swift.Double
+  @_Concurrency.MainActor final public var url: Foundation.URL? {
+    get
+    set
+  }
+  @_Concurrency.MainActor public init()
+  @_Concurrency.MainActor final public func addSubtitle(info: SilkCoreKit.SubtitleInfo)
+  @_Concurrency.MainActor final public func subtitle(currentTime: Swift.Double) -> [SilkCoreKit.SubtitlePart]
+  @_Concurrency.MainActor final public func updateActiveSubtitles()
+  @_Concurrency.MainActor final public func appendLiveCue(_ cue: SilkCoreKit.SubtitleCue)
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+}
+public typealias SubtitleModel = SilkCoreKit.SilkSubtitleModel
+public struct SilkVideoFrame : @unchecked Swift.Sendable {
+  public let pixelBuffer: CoreVideo.CVPixelBuffer
+  public let pts: Swift.Double
+  public let duration: Swift.Double
+  public let doviUniforms: SilkCoreKit.DolbyVisionReshapeUniforms?
+  public init(pixelBuffer: CoreVideo.CVPixelBuffer, pts: Swift.Double, duration: Swift.Double = 0, doviUniforms: SilkCoreKit.DolbyVisionReshapeUniforms? = nil)
+}
+final public class SilkVideoDecoder : @unchecked Swift.Sendable {
+  final public var lastPixelBuffer: CoreVideo.CVPixelBuffer? {
+    get
+  }
+  final public var currentDoviUniforms: SilkCoreKit.DolbyVisionReshapeUniforms? {
+    get
+  }
+  public init()
+  @objc deinit
+  final public func open(codecParameters: Swift.UnsafeMutablePointer<Libavcodec.AVCodecParameters>, timeBase: Libavutil.AVRational) -> Swift.Bool
+  final public func decode(packet: Swift.UnsafeMutablePointer<Libavcodec.AVPacket>) -> [SilkCoreKit.SilkVideoFrame]
+  final public func flush()
+  final public func close()
+}
+public struct VideoTransform : Swift.Sendable, Swift.Equatable {
+  public var intrinsicRotation: Swift.Int
+  public var userRotation: Swift.Int
+  public var flipH: Swift.Bool
+  public var flipV: Swift.Bool
+  public var zoom: Swift.Double
+  public var pan: CoreFoundation.CGPoint
+  public init(intrinsicRotation: Swift.Int = 0, userRotation: Swift.Int = 0, flipH: Swift.Bool = false, flipV: Swift.Bool = false, zoom: Swift.Double = 1.0, pan: CoreFoundation.CGPoint = .zero)
+  public var effectiveRotation: Swift.Int {
+    get
+  }
+  public var isPerpendicular: Swift.Bool {
+    get
+  }
+  public func isEffectiveVertical(rawWidth: Swift.Int, rawHeight: Swift.Int, sar: (num: Swift.Int, den: Swift.Int)? = nil, ratioSetting: Swift.String = "auto") -> Swift.Bool
+  public func displayAspectRatio(rawWidth: Swift.Int, rawHeight: Swift.Int, sar: (num: Swift.Int, den: Swift.Int)? = nil, ratioSetting: Swift.String = "auto") -> CoreFoundation.CGFloat
+  public func renderedVideoRect(in viewSize: CoreFoundation.CGSize, rawWidth: Swift.Int, rawHeight: Swift.Int, sar: (num: Swift.Int, den: Swift.Int)? = nil, ratioSetting: Swift.String = "auto") -> CoreFoundation.CGRect
+  public func viewToVideo(point: CoreFoundation.CGPoint, in viewSize: CoreFoundation.CGSize, rawWidth: Swift.Int, rawHeight: Swift.Int, sar: (num: Swift.Int, den: Swift.Int)? = nil, ratioSetting: Swift.String = "auto") -> CoreFoundation.CGPoint?
+  public func videoToView(point: CoreFoundation.CGPoint, in viewSize: CoreFoundation.CGSize, rawWidth: Swift.Int, rawHeight: Swift.Int, sar: (num: Swift.Int, den: Swift.Int)? = nil, ratioSetting: Swift.String = "auto") -> CoreFoundation.CGPoint
+  public mutating func rotateClockwise()
+  public mutating func rotateCounterclockwise()
+  public mutating func toggleFlipH()
+  public mutating func toggleFlipV()
+  public mutating func resetToNatural()
+  public static func == (a: SilkCoreKit.VideoTransform, b: SilkCoreKit.VideoTransform) -> Swift.Bool
+}
+public struct SilkThumbnailItem : Swift.Sendable {
+  public let time: Swift.Double
+  public let image: AppKit.NSImage
+  public init(time: Swift.Double, image: AppKit.NSImage)
+}
+final public class SilkFFmpegExtractor : @unchecked Swift.Sendable {
+  public init()
+  @objc deinit
+  public static func sanitizePath(_ rawPath: Swift.String) -> Swift.String
+  final public func open(filePath: Swift.String)
+  final public func openAsync(filePath: Swift.String) async -> Swift.Double
+  final public func close()
+  final public func extractKeyframeSync(at requestedSeconds: Swift.Double, targetWidth: Swift.Int32 = 240, accurate: Swift.Bool = true) -> SilkCoreKit.SilkThumbnailItem?
+  final public func extractKeyframe(at seconds: Swift.Double, targetWidth: Swift.Int32 = 240, accurate: Swift.Bool = true) async -> SilkCoreKit.SilkThumbnailItem?
+}
+public typealias SilkThumbEngine = SilkCoreKit.SilkThumbnailEngine
+@_Concurrency.MainActor final public class SilkThumbnailEngine : Foundation.ObservableObject {
+  @_Concurrency.MainActor public static let shared: SilkCoreKit.SilkThumbnailEngine
+  @Combine.Published<AppKit.NSImage?> @_projectedValueProperty($activeThumbnail) @_Concurrency.MainActor final public var activeThumbnail: AppKit.NSImage? {
+    get
+  }
+  @_Concurrency.MainActor final public var $activeThumbnail: Combine.Published<AppKit.NSImage?>.Publisher {
+    get
+  }
+  @Combine.Published<Swift.Double> @_projectedValueProperty($activeThumbnailTime) @_Concurrency.MainActor final public var activeThumbnailTime: Swift.Double {
+    get
+  }
+  @_Concurrency.MainActor final public var $activeThumbnailTime: Combine.Published<Swift.Double>.Publisher {
+    get
+  }
+  @Combine.Published<Swift.Bool> @_projectedValueProperty($isLoading) @_Concurrency.MainActor final public var isLoading: Swift.Bool {
+    get
+  }
+  @_Concurrency.MainActor final public var $isLoading: Combine.Published<Swift.Bool>.Publisher {
+    get
+  }
+  @_Concurrency.MainActor public init()
+  @_Concurrency.MainActor final public func prepare(for filePath: Swift.String?)
+  @_Concurrency.MainActor final public func requestThumbnail(for filePath: Swift.String?, at time: Swift.Double)
+  @_Concurrency.MainActor final public func clearCurrent()
+  @_Concurrency.MainActor final public func reset()
+  @_Concurrency.MainActor final public func captureScreenshot(for filePath: Swift.String?, at time: Swift.Double) async -> AppKit.NSImage?
+  @_Concurrency.MainActor final public func captureScreenshotCGImage(for filePath: Swift.String?, at time: Swift.Double) async -> CoreGraphics.CGImage?
+  @_Concurrency.MainActor final public func captureScreenshotSync(for filePath: Swift.String?, at time: Swift.Double) -> AppKit.NSImage?
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+}
+@_Concurrency.MainActor final public class ThumbnailLRUCache {
+  public struct Key : Swift.Hashable, Swift.Sendable {
+    public let path: Swift.String
+    public let bucket: Swift.Int
+    public init(path: Swift.String, time: Swift.Double)
+    public static func == (a: SilkCoreKit.ThumbnailLRUCache.Key, b: SilkCoreKit.ThumbnailLRUCache.Key) -> Swift.Bool
+    public func hash(into hasher: inout Swift.Hasher)
+    public var hashValue: Swift.Int {
+      get
+    }
+  }
+  @_Concurrency.MainActor final public var count: Swift.Int {
+    get
+  }
+  @_Concurrency.MainActor public init(capacity: Swift.Int = 256)
+  @_Concurrency.MainActor final public func get(for key: SilkCoreKit.ThumbnailLRUCache.Key) -> AppKit.NSImage?
+  @_Concurrency.MainActor final public func getNearest(path: Swift.String, time: Swift.Double, maxDelta: Swift.Double = 15.0) -> AppKit.NSImage?
+  @_Concurrency.MainActor final public func set(_ image: AppKit.NSImage, for key: SilkCoreKit.ThumbnailLRUCache.Key)
+  @_Concurrency.MainActor final public func removeAll()
+  @objc deinit
+}
+extension SilkCoreKit.SilkPlayerEngine : Swift.Sendable {}
+extension SilkCoreKit.SilkPlayerState : Swift.Hashable {}
+extension SilkCoreKit.SilkPlayerOptions.DisplayMode : Swift.Equatable {}
+extension SilkCoreKit.SilkPlayerOptions.DisplayMode : Swift.Hashable {}
+extension SilkCoreKit.SilkPlayerWrapper : Swift.Sendable {}
+extension SilkCoreKit.SilkPlayerLayer : Swift.Sendable {}
+extension SilkCoreKit.VerticalAlign : Swift.Equatable {}
+extension SilkCoreKit.VerticalAlign : Swift.Hashable {}
+extension SilkCoreKit.SilkSubtitleModel : Swift.Sendable {}
+extension SilkCoreKit.SilkThumbnailEngine : Swift.Sendable {}
+extension SilkCoreKit.ThumbnailLRUCache : Swift.Sendable {}

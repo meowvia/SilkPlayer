@@ -1,0 +1,83 @@
+name: Bug Report
+description: Report a bug or unintended behavior in SilkPlayer
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please provide as much context as possible to help us diagnose and reproduce the bug quickly.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: When attempting to play a 4K HEVC file with ASS subtitles...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the issue.
+      placeholder: |
+        1. Open SilkPlayer
+        2. Drag and drop video file 'sample.mkv'
+        3. Press 'F' to enter fullscreen
+        4. See error or unexpected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: macos-version
+    attributes:
+      label: macOS Version
+      options:
+        - macOS 15 Sequoia
+        - macOS 14 Sonoma
+        - Other (specify in description)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: chip
+    attributes:
+      label: Hardware / Apple Silicon Chip
+      options:
+        - Apple M4 / M4 Pro / M4 Max
+        - Apple M3 / M3 Pro / M3 Max
+        - Apple M2 / M2 Pro / M2 Max / M2 Ultra
+        - Apple M1 / M1 Pro / M1 Max / M1 Ultra
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: SilkPlayer Version
+      placeholder: e.g. v0.4.6
+    validations:
+      required: true
+
+  - type: textarea
+    id: media-format
+    attributes:
+      label: Media File Details (Optional)
+      description: Container format, video codec, audio codec, resolution, and subtitle format (e.g. MKV, HEVC 10-bit HDR, DTS-HD MA, ASS).
+      placeholder: MKV, 3840x2160 HEVC Main 10, TrueHD 7.1 Atmos, ASS subtitles
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context / Console Logs
+      description: Paste any crash logs or relevant console logs from Terminal or Console.app.

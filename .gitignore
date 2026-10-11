@@ -1,0 +1,55 @@
+# Swift & Xcode
+.build/
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+.swiftpm/
+
+# macOS System Files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentReleases
+.Spotlight-V100
+.Trashes
+
+# Packaging & Disk Images
+*.dmg
+*.pkg
+
+# Test media files (keep repo lightweight)
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.webm
+*.flv
+*.ts
+*.m2ts
+*.iso
+*.srt
+*.ass
+*.vtt
+
+# Test binaries & caches
+/tmp/silk_test_runner
+*.swp
+*~
+
+# Logs & temporary traces
+*.log
+
+# Private Local Archives (Internal notes & reports, never pushed)
+.archive/
+Documentation/.archive/
+
+# Proprietary Core Source Files (Kept in private repository, never committed)
+Sources/SilkPlayer/Engine/
+*SilkThumbnailEngine.swift
+*ThumbnailLRUCache.swift
+*SilkPlaybackEngine.swift
+*SilkRenderPipeline.swift
+PrivateCore/
