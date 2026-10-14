@@ -457,8 +457,8 @@ extension Notification.Name {
         NSApp?.activate(ignoringOtherApps: true)
     }
 
-    /// Recursively expands folders and external disk volumes into contained video paths
-    public static func expandFilesAndDirectories(_ paths: [String]) -> [String] {
+    /// Recursively expands folders and external disk volumes into contained video/audio paths
+    nonisolated public static func expandFilesAndDirectories(_ paths: [String]) -> [String] {
         var results: [String] = []
         for path in paths {
             let url = URL(fileURLWithPath: path)
@@ -650,10 +650,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         let minW: CGFloat = 640
         let screen = window.screen ?? NSScreen.main
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-        let maxSize = NSSize(
-            width: max(1920, screenFrame.width),
-            height: max(1080, screenFrame.height)
-        )
+        let maxSize = screenFrame.size
 
         // In fullscreen mode or during zoom to screen size, allow unconstrained filling
         if window.styleMask.contains(.fullScreen) || frameSize == screenFrame.size {
@@ -662,12 +659,41 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
         // Allow Shift-key freeform resizing without aspect ratio constraints
         if NSEvent.modifierFlags.contains(.shift) {
-            return frameSize
+            let minSide: CGFloat = (player?.isAudioOnly == true) ? 380.0 : 360.0
+            let minWidth: CGFloat = (player?.isAudioOnly == true) ? 380.0 : minW
+            return NSSize(
+                width: max(minWidth, min(maxSize.width, frameSize.width)),
+                height: max(minSide, min(maxSize.height, frameSize.height))
+            )
+        }
+
+        // Dedicated pure-audio window resize branch: strictly maintain 1:1 proportional (等比) square resizing
+        if player?.isAudioOnly == true {
+            let minAudioSize: CGFloat = 380.0
+            let maxAudioDimension = min(maxSize.width, maxSize.height)
+
+            let curSize = window.frame.size
+            let deltaW = abs(frameSize.width - curSize.width)
+            let deltaH = abs(frameSize.height - curSize.height)
+
+            var targetSide: CGFloat
+            if deltaH > deltaW && deltaH > 1.0 {
+                // Dragging top or bottom edge: scale by vertical delta
+                targetSide = frameSize.height
+            } else {
+                // Dragging left or right edge, or corner: scale by horizontal delta
+                targetSide = frameSize.width
+            }
+
+            // Clamp to [minAudioSize, maxAudioDimension] preserving strict 1:1 square
+            targetSide = max(minAudioSize, min(maxAudioDimension, targetSide))
+            return NSSize(width: round(targetSide), height: round(targetSide))
         }
 
         guard let player = self.player, (player.videoWidth > 0 || player.videoHeight > 0) else {
-            // Idle window without loaded video: accept tiling size directly
-            if isTilingOrSnapSize(frameSize, screenFrame: screenFrame) {
+            // Idle window without loaded video:
+            // Never trigger snap tiling during live manual dragging
+            if !window.inLiveResize && isTilingOrSnapSize(frameSize, screenFrame: screenFrame) {
                 return frameSize
             }
             return NSSize(
@@ -680,10 +706,8 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         let minH = round(minW / max(0.001, baseAspect))
 
         // Video-Adaptive Split Screen Tiling ("播放自适应分屏"):
-        // When macOS requests split-screen / tiling (e.g. dragging to left/right edge in macOS 15 Sequoia,
-        // green button tile menu, or quarter-screen grid), adaptively calculate dimensions to match the
-        // video's actual resolution and aspect ratio — eliminating letterbox bars and wasted black screen!
-        if isTilingOrSnapSize(frameSize, screenFrame: screenFrame) {
+        // Only trigger when NOT in interactive live resize dragging
+        if !window.inLiveResize && isTilingOrSnapSize(frameSize, screenFrame: screenFrame) {
             let tolerance: CGFloat = 40.0
 
             // 1. Full-height vertical split (e.g. Left half, Right half, 1/3, 2/3 column tiles)
@@ -754,44 +778,135 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             targetW = targetH * baseAspect
         }
 
-        // Clamp to screen maximum while strictly preserving aspect ratio
+        // Clamp to screen maximum visible bounds while strictly preserving aspect ratio
         if targetW > maxSize.width {
             targetW = maxSize.width
-            targetH = targetW / max(0.001, baseAspect)
+            targetH = round(targetW / max(0.001, baseAspect))
         }
         if targetH > maxSize.height {
             targetH = maxSize.height
-            targetW = targetH * baseAspect
+            targetW = round(targetH * baseAspect)
         }
+        if targetW > maxSize.width {
+            targetW = maxSize.width
+            targetH = round(targetW / max(0.001, baseAspect))
+        }
+        targetW = min(targetW, maxSize.width)
+        targetH = min(targetH, maxSize.height)
 
         return NSSize(width: round(targetW), height: round(targetH))
     }
 
-    public func windowDidResize(_ notification: Notification) {
+    public func windowDidEndLiveResize(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
               !window.styleMask.contains(.fullScreen),
-              let player = self.player,
-              player.videoWidth > 0, player.videoHeight > 0 else { return }
+              !window.isZoomed,
+              let player = self.player else { return }
+
+        // Perform boundary safety adjustment once user finishes dragging
+        let screen = window.screen ?? NSScreen.main
+        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        var curFrame = window.frame
+        var adjusted = false
+
+        // 1. Strict dock invasion defense: ensure bottom of window never sinks below screenFrame.minY
+        if curFrame.minY < screenFrame.minY {
+            curFrame.origin.y = screenFrame.minY
+            adjusted = true
+        }
+
+        // 2. Strict menu bar invasion defense: ensure top of window never exceeds screenFrame.maxY
+        if curFrame.maxY > screenFrame.maxY {
+            curFrame.origin.y = max(screenFrame.minY, screenFrame.maxY - curFrame.height)
+            adjusted = true
+        }
+
+        // 3. Screen horizontal boundaries clamp
+        if curFrame.minX < screenFrame.minX {
+            curFrame.origin.x = screenFrame.minX
+            adjusted = true
+        }
+        if curFrame.maxX > screenFrame.maxX {
+            curFrame.origin.x = max(screenFrame.minX, screenFrame.maxX - curFrame.width)
+            adjusted = true
+        }
+
+        if adjusted {
+            window.setFrame(curFrame, display: true, animate: false)
+        }
+
+        let contentSize = window.contentRect(forFrameRect: window.frame).size
+        if player.videoWidth > 0 || player.videoHeight > 0 {
+            player.updateRememberedWindowSize(contentSize)
+        }
+    }
+
+    public func windowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              !window.styleMask.contains(.fullScreen) else { return }
+
+        // If the window is in interactive live resize by user mouse dragging,
+        // do not mutate frame or fight with AppKit's live tracking loop.
+        if window.inLiveResize {
+            return
+        }
 
         let screen = window.screen ?? NSScreen.main
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-        let curFrame = window.frame
+        var curFrame = window.frame
+        var adjusted = false
 
-        // 1. Vertical split centering (Left/Right half-screen snapping)
-        let isLeftDocked = abs(curFrame.minX - screenFrame.minX) <= 10.0
-        let isRightDocked = abs(curFrame.maxX - screenFrame.maxX) <= 10.0
-        let isHalfWidth = abs(curFrame.width - round(screenFrame.width * 0.5)) <= 40.0
+        // 1. Strict dock invasion defense: bottom of window must never sink below screenFrame.minY
+        if curFrame.minY < screenFrame.minY {
+            curFrame.origin.y = screenFrame.minY
+            adjusted = true
+        }
 
-        if (isLeftDocked || isRightDocked) && isHalfWidth && curFrame.height < screenFrame.height - 20.0 {
-            let targetY = round(screenFrame.origin.y + (screenFrame.height - curFrame.height) * 0.5)
-            if abs(curFrame.origin.y - targetY) > 2.0 {
-                window.setFrameOrigin(NSPoint(x: curFrame.origin.x, y: targetY))
+        // 2. Strict menu bar invasion defense: top of window must never exceed screenFrame.maxY
+        if curFrame.maxY > screenFrame.maxY {
+            curFrame.origin.y = max(screenFrame.minY, screenFrame.maxY - curFrame.height)
+            adjusted = true
+        }
+
+        // 3. Screen horizontal boundaries clamp
+        if curFrame.minX < screenFrame.minX {
+            curFrame.origin.x = screenFrame.minX
+            adjusted = true
+        }
+        if curFrame.maxX > screenFrame.maxX {
+            curFrame.origin.x = max(screenFrame.minX, screenFrame.maxX - curFrame.width)
+            adjusted = true
+        }
+
+        if adjusted {
+            window.setFrame(curFrame, display: true, animate: false)
+        }
+
+        // 4. Video-adaptive vertical centering on half-screen snap
+        if let player = self.player, !player.isAudioOnly, player.videoWidth > 0, player.videoHeight > 0 {
+            let isLeftDocked = abs(curFrame.minX - screenFrame.minX) <= 10.0
+            let isRightDocked = abs(curFrame.maxX - screenFrame.maxX) <= 10.0
+            let isHalfWidth = abs(curFrame.width - round(screenFrame.width * 0.5)) <= 40.0
+
+            if (isLeftDocked || isRightDocked) && isHalfWidth && curFrame.height < screenFrame.height - 20.0 {
+                let targetY = round(screenFrame.origin.y + (screenFrame.height - curFrame.height) * 0.5)
+                if abs(curFrame.origin.y - targetY) > 2.0 {
+                    window.setFrameOrigin(NSPoint(x: curFrame.origin.x, y: targetY))
+                }
             }
         }
     }
 
     public func windowWillUseStandardFrame(_ window: NSWindow, defaultFrame: NSRect) -> NSRect {
-        // Expand to fill the display visible frame on maximize (Zoom)
+        guard let player = self.player else { return defaultFrame }
+
+        if player.isAudioOnly {
+            let sz: CGFloat = 520
+            let cx = round(defaultFrame.minX + (defaultFrame.width - sz) / 2)
+            let cy = round(defaultFrame.minY + (defaultFrame.height - sz) / 2)
+            return NSRect(x: cx, y: cy, width: sz, height: sz)
+        }
+
         return defaultFrame
     }
 

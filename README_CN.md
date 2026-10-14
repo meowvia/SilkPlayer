@@ -118,12 +118,16 @@ brew install --cask meowvia/tap/silkplayer
 git clone https://github.com/meowvia/SilkPlayer.git
 cd SilkPlayer
 
-# 运行全套自动化测试套件 (480 项全部通过)
+# 运行全套自动化测试套件
 ./scripts/run_tests.sh
 
 # 编译打包最终发布版 DMG (产物输出至 build/ 目录)
 ./scripts/package_app.sh
 ```
+
+> **构建说明**：
+> - FFmpeg 五个核心多媒体库以动态 framework（LGPL-3.0）形式直接附带在工程 `Packages/` 目录下；
+> - 核心解码与渲染引擎 `SilkCoreKit` 为二进制库（静态链接），在执行 `swift build` 或打包时由 SwiftPM 自动从 GitHub Releases 下载对应的预编译 XCFramework 压缩包；本地开发者亦可遵循 [CONTRIBUTING.md](CONTRIBUTING.md) 放入本地编译的 `Packages/SilkCoreKit.xcframework` 进行开发。
 
 ---
 
@@ -140,13 +144,16 @@ SilkPlayer 是业余时间独立开发的一款播放器。低系统资源占用
 
 SilkPlayer 衷心致谢以下开源基石项目：
 
-- **[FFmpeg](https://ffmpeg.org)** (LGPL-3.0 动态链接核心库)
-- **[libplacebo](https://code.videolan.org/videolan/libplacebo)** 与 **[mpv](https://github.com/mpv-player/mpv)** (LGPL-2.1+)
+- **[FFmpeg](https://ffmpeg.org)** (LGPL-3.0 动态 framework)
+- **[libplacebo](https://code.videolan.org/videolan/libplacebo)** 与 **[mpv](https://github.com/mpv-player/mpv)** (LGPL-2.1+，色彩科学与国际标准对照参考)
 
 ### 商标与声明
 - Apple, macOS, Apple Silicon, Metal, VideoToolbox, AppKit 及 SwiftUI 为 Apple Inc. 的注册商标；
 - Dolby 及 Dolby Vision 为 Dolby Laboratories 的注册商标；
 - SilkPlayer 为独立软件项目，与 Apple Inc. 或 Dolby Laboratories 无附属或背书关系。
 
-### 开源许可证
-本项目前台应用遵循 [GNU Lesser General Public License v3.0 (LGPL-3.0)](LICENSE) 许可协议，核心动态库均采用动态链接构建，支持商业闭源合规。
+### 架构与开源许可证（双轨许可结构）
+- **前台应用（SilkPlayer）**：遵循 [GNU Lesser General Public License v3.0 (LGPL-3.0)](LICENSE) 许可协议，开源前端完全自由分发；
+- **多媒体底层库（FFmpeg）**：五个基础库（Libavcodec, Libavformat, Libavutil, Libswresample, Libswscale）均为 LGPL-3.0 动态 framework 链接；
+- **核心引擎（SilkCoreKit）**：遵循独立的专有组件使用协议 [SILKCOREKIT_LICENSE.md](SILKCOREKIT_LICENSE.md)，免费供个人非商业使用，作为 SilkPlayer 组件通过 Swift package 物理隔离；
+- 详细依赖与重新链接说明请参见 [THIRD_PARTY.md](Documentation/THIRD_PARTY.md)。

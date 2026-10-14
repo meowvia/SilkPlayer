@@ -1,5 +1,6 @@
 # Swift & Xcode
 .build/
+.build-ci/
 build/
 DerivedData/
 *.xcodeproj/xcuserdata/
@@ -53,3 +54,7 @@ Sources/SilkPlayer/Engine/
 *SilkPlaybackEngine.swift
 *SilkRenderPipeline.swift
 PrivateCore/
+
+# Proprietary Binary Packages (Remote binaryTarget distribution)
+Packages/SilkCoreKit.xcframework/
+SilkCoreKit.xcframework.zip

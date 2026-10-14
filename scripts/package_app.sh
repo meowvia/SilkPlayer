@@ -26,7 +26,13 @@ echo "[1/5] Cleaning previous build artifacts and old installed test versions...
 if [[ -x "${SCRIPT_DIR}/clean_installed_app.sh" ]]; then
     "${SCRIPT_DIR}/clean_installed_app.sh"
 fi
-rm -rf "${APP_BUNDLE}" "${STAGING_DIR}" "${BUILD_DIR}"/SilkPlayer-*.dmg "${DMG_PATH}" "${HOME}/Desktop/SilkPlayer-test.dmg"
+
+if [[ "${VERSION}" != *"-test"* && -f "${DMG_PATH}" ]]; then
+    echo "Error: Release ${DMG_PATH} already exists! To prevent accidental overwrite of finalized versions, delete it manually or bump version." >&2
+    exit 1
+fi
+
+rm -rf "${APP_BUNDLE}" "${STAGING_DIR}" "${DMG_PATH}" "${HOME}/Desktop/SilkPlayer-test.dmg"
 mkdir -p "${BUILD_DIR}"
 
 # 2. Release compilation
@@ -74,6 +80,9 @@ for lproj in "${PROJECT_DIR}/Resources"/*.lproj; do
         cp -R "${lproj}" "${APP_BUNDLE}/Contents/Resources/"
     fi
 done
+if [[ -d "${PROJECT_DIR}/Resources/Turntable" ]]; then
+    cp -R "${PROJECT_DIR}/Resources/Turntable" "${APP_BUNDLE}/Contents/Resources/"
+fi
 
 # Copy SwiftPM resource bundles if present
 find "${PROJECT_DIR}/.build" -path "*/Release/*.bundle" -type d | while read -r b; do

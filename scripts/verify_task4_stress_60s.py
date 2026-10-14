@@ -15,8 +15,9 @@ import subprocess
 import re
 from datetime import datetime
 
-VIDEO_PATH = "/Volumes/HDD2T/影音娱乐/电影/哪吒之魔童闹海.mkv"
-APP_BINARY = "/Volumes/2T/SilkPlayer/build/SilkPlayer.app/Contents/MacOS/SilkPlayer"
+MEDIA_DIR = os.environ.get("SILK_TEST_MEDIA_DIR", "/tmp/silk_test_media")
+VIDEO_PATH = os.path.join(MEDIA_DIR, "sample_4k_hdr.mkv")
+APP_BINARY = os.environ.get("SILK_APP_BINARY", "build/SilkPlayer.app/Contents/MacOS/SilkPlayer")
 TOTAL_DURATION = 60  # seconds
 
 def to_mb(val_str, unit):

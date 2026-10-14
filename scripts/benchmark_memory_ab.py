@@ -15,9 +15,10 @@ import re
 from pathlib import Path
 from datetime import datetime
 
-DEFAULT_VIDEO_PATH = "/Volumes/HDD2T/影音娱乐/电影/哪吒之魔童闹海.mkv"
-MOVIES_DIR = "/Volumes/HDD2T/影音娱乐/电影"
-APP_BUNDLE_PATH = "/Volumes/2T/SilkPlayer/build/SilkPlayer.app"
+MEDIA_DIR = os.environ.get("SILK_TEST_MEDIA_DIR", "/tmp/silk_test_media")
+DEFAULT_VIDEO_PATH = os.environ.get("SILK_TEST_MEDIA_PATH", os.path.join(MEDIA_DIR, "sample_video.mkv"))
+MOVIES_DIR = MEDIA_DIR
+APP_BUNDLE_PATH = os.environ.get("SILK_APP_PATH", "build/SilkPlayer.app")
 APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/SilkPlayer")
 CACHES_DIR = os.path.expanduser("~/Library/Caches/SilkPlayer")
 BACKUP_DIR = "/tmp/silkplayer_ab_backup"
@@ -379,7 +380,7 @@ def main():
         restore_env()
 
     # 输出 JSON 报告
-    output_path = "/Volumes/2T/SilkPlayer/build/memory_ab_report.json"
+    output_path = os.environ.get("SILK_BENCHMARK_OUTPUT", "build/memory_ab_report.json")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)

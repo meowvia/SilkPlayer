@@ -5,6 +5,31 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-10-15
+
+### Added
+- **Resonance Corona & Audiophile Vinyl Turntable**:
+  - Circular acoustic resonance corona (`Resonance Corona`) dynamically reacting to real-time playback amplitude with centered glow emission.
+  - Centered vinyl disc with continuous 60fps rotation driven by `TimelineView` and deterministic playback synchronization.
+  - High-fidelity audiophile metal tonearm with high-contrast cartridge, visible stylus needle, and calibrated tracking kinematics synced with audio duration.
+  - Expanded 32-band real-time audio horizon spectrum analyzer.
+- **Dynamic Upcoming Track Preview**:
+  - Responsive upcoming track indicator positioned underneath title metadata with 18pt offset indent.
+  - 0ms reactive synchronization with `PlaylistManager` across single repeat, playlist repeat, shuffle (aligned PRNG seeds), and sequential queue boundaries.
+- **Universal Audio Format Support**:
+  - Direct playback, drag-and-drop ingestion, and playlist queuing for lossless FLAC, Monkey's Audio (APE), Apple Lossless (ALAC), WAV, AAC, MP3, and OGG.
+  - Audio mode 1:1 proportional free resizing eliminating full-height screen snaps and Dock boundary invasion.
+
+### Fixed
+- **Zero-Flicker Track Transitions**:
+  - Audio state keepalive and layout constraints preservation eliminating window re-layout flashes, black blinks, and vinyl rotation jerks during rapid song switches.
+- **Window Geometry Stability**:
+  - Orientation-aware window size memory read/write loop with safe dimension clamping and aspect ratio reset defense.
+- **Core Stability**:
+  - Eliminated audio playback deadlocks, timeline render re-entry loops, and dock boundary layout issues.
+- **Metal Render Pipeline Compatibility & Fallback Defense**:
+  - Enforced macOS 14.0 minimum deployment target for Metal shader bytecode (`air64_v26-apple-macosx14.0.0`) and added two-tier MSL source runtime compilation fallback (`dev.makeLibrary(source:)`), eliminating black screen rendering failures across varied macOS versions and GPU drivers.
+
 ---
 
 ## [1.0.0] - 2026-10-11

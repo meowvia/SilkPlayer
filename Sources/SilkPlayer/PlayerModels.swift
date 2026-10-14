@@ -27,7 +27,8 @@ public struct MediaFileClassifier: Sendable {
     ]
 
     public static let audioExtensions: Set<String> = [
-        "mp3", "flac", "aac", "m4a", "wav", "ogg", "opus", "alac", "aiff"
+        "mp3", "flac", "ape", "wav", "wave", "aac", "m4a", "ogg", "opus", "alac", "aiff", "aif",
+        "wma", "dsf", "dff", "dsd", "cue", "mka", "ac3", "eac3", "dts", "dtshd", "caf", "pcm", "mid", "midi"
     ]
     
     public static func classify(url: URL) -> MediaType {
@@ -90,7 +91,7 @@ public struct MediaFileClassifier: Sendable {
                 continue
             }
             let ext = fileURL.pathExtension.lowercased()
-            if videoExtensions.contains(ext) {
+            if videoExtensions.contains(ext) || audioExtensions.contains(ext) {
                 results.append(fileURL)
                 if results.count >= maxCount {
                     break
@@ -180,6 +181,7 @@ public enum OSDNotification: Equatable, Sendable {
 public protocol PlayerControllable: AnyObject {
     var isLoaded: Bool { get }
     var isPlaying: Bool { get }
+    var isAudioOnly: Bool { get }
     var isMuted: Bool { get }
     var isFullscreen: Bool { get }
     var isDebandEnabled: Bool { get }
@@ -352,6 +354,59 @@ public enum PlayerGeometry: Sendable {
             targetW = maxSafeW
             targetH = round(targetW / safeAspect)
         }
+        return NSSize(width: targetW, height: targetH)
+    }
+
+    /// Pure mathematical calculation for target window content size upon video rotation
+    /// Combines aspect fitting, orientation memory, and proportional clamping within safe screen limits.
+    public static func calculateRotationTargetSize(
+        currentContentSize: NSSize,
+        targetAspect: CGFloat,
+        isTargetVertical: Bool,
+        rememberedSize: NSSize?,
+        screenVisibleSize: NSSize
+    ) -> NSSize {
+        let safeAspect = max(0.001, targetAspect)
+        let minSafe = minimumContentSize(for: safeAspect, screenVisibleHeight: screenVisibleSize.height)
+        let maxSafe = maximumSafeContentSize(for: safeAspect, screenVisibleSize: screenVisibleSize)
+
+        var targetW: CGFloat
+        var targetH: CGFloat
+
+        if let remembered = rememberedSize, remembered.width > 0, remembered.height > 0 {
+            if isTargetVertical {
+                targetH = remembered.height
+                targetW = round(targetH * safeAspect)
+            } else {
+                targetW = remembered.width
+                targetH = round(targetW / safeAspect)
+            }
+        } else {
+            let curArea = max(640.0 * 360.0, currentContentSize.width * currentContentSize.height)
+            targetW = round(sqrt(curArea * safeAspect))
+            targetH = round(targetW / safeAspect)
+        }
+
+        // Clamp against maxSafeContentSize proportionally
+        if targetH > maxSafe.height {
+            targetH = maxSafe.height
+            targetW = round(targetH * safeAspect)
+        }
+        if targetW > maxSafe.width {
+            targetW = maxSafe.width
+            targetH = round(targetW / safeAspect)
+        }
+
+        // Clamp against minimumContentSize proportionally
+        if targetW < minSafe.width {
+            targetW = minSafe.width
+            targetH = round(targetW / safeAspect)
+        }
+        if targetH < minSafe.height {
+            targetH = minSafe.height
+            targetW = round(targetH * safeAspect)
+        }
+
         return NSSize(width: targetW, height: targetH)
     }
 }

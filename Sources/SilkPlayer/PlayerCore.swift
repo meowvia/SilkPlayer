@@ -43,6 +43,10 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var currentFilePath: String? = nil
     private var pendingResumeTime: Double? = nil
 
+    // MARK: - Audio Only & Artwork Metadata
+    @Published public var isAudioOnly: Bool = false
+    @Published public var artworkImage: NSImage? = nil
+
     // MARK: - Video & Codec Metadata
     @Published public var videoCodec: String = "Unknown"
     @Published public var videoWidth: Int = 0
@@ -132,6 +136,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     public var onProgressUpdate: ((String, Double, Double) -> Void)?
     public var onPlaybackEndedNaturally: (() -> Void)?
     public var onFileLoadedFromDrop: ((String) -> Void)?
+    public var onFilesDropped: (([String]) -> Void)?
     public var onEscapePressed: (() -> Void)?
     public var onNextTrackRequested: (@MainActor () -> Void)?
     public var onPreviousTrackRequested: (@MainActor () -> Void)?
@@ -141,10 +146,14 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     public private(set) var playerLayer: SilkPlayerLayer?
     public let options = SilkPlayerOptions()
     public let subtitleModel = SubtitleModel()
-    private weak var renderContainer: MetalPlayerContainerView?
+    weak var renderContainer: MetalPlayerContainerView?
     private var hudAutoHideTimer: Timer?
     private var osdDismissTimer: Timer?
     private var pre2xSpeed: Double = 1.0
+
+    // MARK: - Real-time Audio Rhythm Metering
+    @Published public var audioRhythmLevels: [CGFloat] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    private var audioRhythmTimer: Timer?
 
     // MARK: - Initialization & Teardown
     override public init() {
@@ -190,18 +199,86 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         renderContainer?.applyRenderViewLayout()
     }
 
-    // MARK: - Playback Lifecycle
-    public func loadFile(path: String, startTime: Double = 0.0, autoPlay: Bool? = nil) {
-        stop(resetUI: false)
+    // MARK: - Audiophile Crossfade Management (歌曲切换淡出淡入)
+    private var fadeTask: Task<Void, Never>?
 
-        self.currentFilePath = path
-        SilkThumbnailEngine.shared.prepare(for: path)
+    /// Smoothly fade out current audio playback volume before track switching
+    public func performFadeOut(duration: TimeInterval = 0.28) async {
+        guard let layer = playerLayer, isPlaying else { return }
+        let startVol = layer.player.playbackVolume
+        guard startVol > 0.001 else { return }
+
+        let steps = 10
+        let delayNs = UInt64((duration / Double(steps)) * 1_000_000_000)
+        for i in (0...steps).reversed() {
+            if Task.isCancelled { break }
+            let frac = Float(i) / Float(steps)
+            layer.player.playbackVolume = startVol * frac
+            try? await Task.sleep(nanoseconds: delayNs)
+        }
+    }
+
+    /// Smoothly fade in newly loaded audio playback from zero to target volume
+    public func performFadeIn(targetVolume: Float, duration: TimeInterval = 0.38) {
+        fadeTask?.cancel()
+        fadeTask = Task { @MainActor [weak self] in
+            guard let self = self, let layer = self.playerLayer else { return }
+            layer.player.playbackVolume = 0.0
+            let steps = 12
+            let delayNs = UInt64((duration / Double(steps)) * 1_000_000_000)
+            for i in 1...steps {
+                if Task.isCancelled { break }
+                try? await Task.sleep(nanoseconds: delayNs)
+                guard self.playerLayer === layer else { break }
+                let frac = Float(i) / Float(steps)
+                layer.player.playbackVolume = targetVolume * frac
+            }
+            if !Task.isCancelled, self.playerLayer === layer {
+                layer.player.playbackVolume = targetVolume
+            }
+        }
+    }
+
+    /// Smart load media with smooth crossfade (fade-out current audio track, load, and fade-in new audio track)
+    public func loadMediaWithCrossfade(path: String, startTime: Double = 0.0, autoPlay: Bool? = nil) {
+        fadeTask?.cancel()
+
         let resolvedURL: URL
         if path.contains("://") {
             resolvedURL = URL(string: path) ?? URL(fileURLWithPath: path)
         } else {
             resolvedURL = URL(fileURLWithPath: path)
         }
+        let isIncomingAudio = MediaFileClassifier.classify(url: resolvedURL) == .audio
+        let isCurrentAudio = self.isAudioOnly
+        let shouldCrossfade = isPlaying && (isIncomingAudio || isCurrentAudio)
+
+        if shouldCrossfade {
+            fadeTask = Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                await self.performFadeOut(duration: 0.28)
+                guard !Task.isCancelled else { return }
+                self.loadFile(path: path, startTime: startTime, autoPlay: autoPlay, fadeInOnStart: true)
+            }
+        } else {
+            self.loadFile(path: path, startTime: startTime, autoPlay: autoPlay, fadeInOnStart: false)
+        }
+    }
+
+    // MARK: - Playback Lifecycle
+    public func loadFile(path: String, startTime: Double = 0.0, autoPlay: Bool? = nil, fadeInOnStart: Bool = false) {
+        let resolvedURL: URL
+        if path.contains("://") {
+            resolvedURL = URL(string: path) ?? URL(fileURLWithPath: path)
+        } else {
+            resolvedURL = URL(fileURLWithPath: path)
+        }
+
+        let isIncomingAudio = MediaFileClassifier.classify(url: resolvedURL) == .audio
+        stop(resetUI: false)
+
+        self.currentFilePath = path
+        SilkThumbnailEngine.shared.prepare(for: path)
 
         self.mediaTitle = resolvedURL.deletingPathExtension().lastPathComponent
         self.statusMessage = "Loading \(mediaTitle)..."
@@ -211,6 +288,10 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         self.cachedDuration = 0.0
         self.duration = 0.0
         self.isLoaded = false
+        self.isAudioOnly = isIncomingAudio
+        if !isIncomingAudio {
+            self.artworkImage = nil
+        }
 
         options.startPlayTime = startTime
         self.pendingResumeTime = startTime > 0 ? startTime : nil
@@ -227,8 +308,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             container.applyRenderViewLayout()
         }
 
-        // Apply initial volume & rate
-        newLayer.player.playbackVolume = Float(self.volume / 100.0)
+        let targetVolume = Float(self.volume / 100.0)
+        // Apply initial volume & rate (starts at 0.0 when fadeInOnStart is active)
+        newLayer.player.playbackVolume = fadeInOnStart ? 0.0 : targetVolume
         newLayer.player.isMuted = self.isMuted
         newLayer.player.playbackRate = Float(self.speed)
 
@@ -248,6 +330,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 layer.play()
                 self.isPlaying = true
                 self.playbackState = .playing
+                if fadeInOnStart {
+                    self.performFadeIn(targetVolume: targetVolume, duration: 0.38)
+                }
             } else {
                 layer.pause()
                 self.isPlaying = false
@@ -262,6 +347,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         isPlaying = true
         playbackState = .playing
         resetHUDAutoHideTimer()
+        startAudioRhythmMonitoring()
     }
 
     public func pause() {
@@ -271,6 +357,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         playbackState = .paused
         isHUDVisible = true
         hudAutoHideTimer?.invalidate()
+        stopAudioRhythmMonitoring()
         if let path = currentFilePath, currentTime > 0 {
             onProgressUpdate?(path, currentTime, duration)
         }
@@ -279,7 +366,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     public func togglePlayPause() {
         if playbackState == .ended {
             replay()
-            showOSD(.playPause(isPlaying: true))
+            if !isAudioOnly {
+                showOSD(.playPause(isPlaying: true))
+            }
             return
         }
         if !isLoaded {
@@ -288,10 +377,14 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         }
         if isPlaying {
             pause()
-            showOSD(.playPause(isPlaying: false))
+            if !isAudioOnly {
+                showOSD(.playPause(isPlaying: false))
+            }
         } else {
             play()
-            showOSD(.playPause(isPlaying: true))
+            if !isAudioOnly {
+                showOSD(.playPause(isPlaying: true))
+            }
         }
     }
 
@@ -300,6 +393,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func stop(resetUI: Bool) {
+        stopAudioRhythmMonitoring()
         if let path = currentFilePath, currentTime > 0 {
             onProgressUpdate?(path, currentTime, duration)
         }
@@ -454,12 +548,14 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         scrubTime = clamped
         self.currentTime = clamped
         lastScrubSeekTime = 0
+        playerLayer?.requestSeek(time: clamped, exact: true)
         if wasPlayingBeforeScrub {
             playerLayer?.play()
             isPlaying = true
             playbackState = .playing
+            resetHUDAutoHideTimer()
+            startAudioRhythmMonitoring()
         }
-        playerLayer?.requestSeek(time: clamped, exact: true)
         _ = self.subtitleModel.subtitle(currentTime: clamped)
         if let path = currentFilePath, clamped > 0 {
             onProgressUpdate?(path, clamped, duration)
@@ -825,133 +921,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         applyRotationWindowAdaptation(isOrientationChange: isOrientationChange)
     }
 
-    public func updateRememberedWindowSize(_ contentSize: NSSize) {
-        if isEffectiveVertical {
-            lastPortraitContentSize = contentSize
-        } else {
-            lastLandscapeContentSize = contentSize
-        }
-    }
 
-    public func applyRotationWindowAdaptation(isOrientationChange: Bool) {
-        guard let window = hostWindow ?? NSApp.keyWindow else { return }
-
-        // 全屏模式下：窗口 frame 绝对不动，仅画面居中做黑边适配
-        if window.styleMask.contains(.fullScreen) || window.isZoomed {
-            return
-        }
-
-        // 0° ↔ 180°: 窗口尺寸、位置都不变，只旋转画面
-        if !isOrientationChange {
-            return
-        }
-
-        let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-        let newAspect = effectiveAspectRatio
-        let minContentSz = PlayerGeometry.minimumContentSize(for: newAspect, screenVisibleHeight: screenFrame.height)
-
-        let curContentRect = window.contentRect(forFrameRect: window.frame)
-        let curArea = max(640.0 * 360.0, curContentRect.width * curContentRect.height)
-        let targetContentW = max(minContentSz.width, round(sqrt(curArea * newAspect)))
-        let targetContentH = max(minContentSz.height, round(targetContentW / newAspect))
-
-        let currentCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
-        let newX = max(screenFrame.minX, min(screenFrame.maxX - targetContentW, currentCenter.x - targetContentW / 2.0))
-        let newY = max(screenFrame.minY, min(screenFrame.maxY - targetContentH, currentCenter.y - targetContentH / 2.0))
-        let newFrame = NSRect(x: newX, y: newY, width: targetContentW, height: targetContentH)
-        window.minSize = minContentSz
-        window.contentMinSize = minContentSz
-
-        window.setFrame(newFrame, display: true, animate: false)
-        applyContentAspectRatioLock()
-    }
-
-    public func setAspectRatio(_ ratio: String) {
-        videoAspectRatio = ratio
-        applyContentAspectRatioLock()
-        applyAdaptiveWindowGeometry(animated: true)
-        showOSD(.pictureAdjustment(name: L10n.aspectRatio, value: ratio))
-        renderContainer?.applyRenderViewLayout()
-    }
-
-    public func applyContentAspectRatioLock() {
-        guard let window = hostWindow ?? NSApp.keyWindow else { return }
-        // Keep window.aspectRatio and contentAspectRatio unlocked at the AppKit WindowServer level.
-        // This enables macOS native window tiling / edge snapping (macOS 15 Sequoia Window Tiling)
-        // while PlayerWindowDelegate maintains proportional scaling during manual user corner dragging.
-        window.contentAspectRatio = NSSize(width: 0, height: 0)
-        window.aspectRatio = NSSize(width: 0, height: 0)
-    }
-
-    public func applyAdaptiveWindowGeometry(animated: Bool = true) {
-        guard AppSettings.shared.autoResizeWindow,
-              self.videoWidth > 0, self.videoHeight > 0,
-              let window = self.hostWindow ?? NSApp.keyWindow,
-              !isFullscreen,
-              !window.styleMask.contains(.fullScreen) else { return }
-
-        let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-        let aspect = effectiveAspectRatio
-        let isVertical = isEffectiveVertical
-
-        let minSz = PlayerGeometry.minimumContentSize(for: aspect, screenVisibleHeight: screenFrame.height)
-        let maxSafeContentSz = PlayerGeometry.maximumSafeContentSize(for: aspect, screenVisibleSize: screenFrame.size)
-
-        var targetContentW: CGFloat
-        var targetContentH: CGFloat
-
-        if isVertical {
-            // 竖屏体系：自适应匹配适中舒适高度（屏幕 60%），严格以视频高宽比为准则且不突破安全呼吸上限与最小底线
-            let idealH = round(screenFrame.height * 0.60)
-            targetContentH = min(max(idealH, minSz.height), maxSafeContentSz.height)
-            targetContentW = round(targetContentH * aspect)
-            if targetContentW > maxSafeContentSz.width {
-                targetContentW = maxSafeContentSz.width
-                targetContentH = round(targetContentW / aspect)
-            }
-            if targetContentW < minSz.width {
-                targetContentW = minSz.width
-                targetContentH = round(targetContentW / aspect)
-            }
-        } else {
-            // 横屏体系：标准起始默认窗口（宽 640pt 起始底线，适中舒适展开）
-            let vW = CGFloat(displayVideoWidth > 0 ? displayVideoWidth : videoWidth)
-            let idealW = min(vW, screenFrame.width * 0.55)
-            targetContentW = max(minSz.width, min(maxSafeContentSz.width, idealW))
-            targetContentH = round(targetContentW / aspect)
-
-            if targetContentH > maxSafeContentSz.height {
-                targetContentH = maxSafeContentSz.height
-                targetContentW = round(targetContentH * aspect)
-            }
-            if targetContentW < minSz.width {
-                targetContentW = minSz.width
-                targetContentH = minSz.height
-            }
-        }
-
-        let frameW = targetContentW
-        let frameH = targetContentH
-
-        let currentCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
-        let newX = max(screenFrame.minX, min(screenFrame.maxX - frameW, currentCenter.x - frameW / 2))
-        let newY = max(screenFrame.minY, min(screenFrame.maxY - frameH, currentCenter.y - frameH / 2))
-        let newFrame = NSRect(x: newX, y: newY, width: frameW, height: frameH)
-
-        window.minSize = NSSize(width: 100, height: 100)
-        window.contentMinSize = window.minSize
-
-        window.setFrame(newFrame, display: true, animate: animated)
-
-        let finalContentSize = NSSize(width: targetContentW, height: targetContentH)
-        if isVertical {
-            lastPortraitContentSize = finalContentSize
-        } else {
-            lastLandscapeContentSize = finalContentSize
-        }
-
-        applyContentAspectRatioLock()
-    }
 
     public func adjustSharpen(by delta: Double) {
         sharpen = max(-1.0, min(1.0, sharpen + delta))
@@ -1216,18 +1186,52 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         if !isHUDVisible {
             isHUDVisible = true
         }
+        guard !isAudioOnly else { return }
         resetHUDAutoHideTimer()
     }
 
     private func resetHUDAutoHideTimer() {
         hudAutoHideTimer?.invalidate()
-        guard isPlaying else { return }
+        guard isPlaying, !isAudioOnly else { return }
         hudAutoHideTimer = Timer.scheduledTimer(withTimeInterval: 1.8, repeats: false) { [weak self] _ in
             Task { @MainActor in
-                guard let self = self, self.isPlaying, !self.isScrubbing else { return }
+                guard let self = self, self.isPlaying, !self.isScrubbing, !self.isAudioOnly else { return }
                 self.isHUDVisible = false
             }
         }
+    }
+
+    // MARK: - Audio Rhythm Monitoring Lifecycle
+    public func startAudioRhythmMonitoring() {
+        guard isAudioOnly && isPlaying else { return }
+        guard audioRhythmTimer == nil else { return }
+        audioRhythmTimer = Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self, self.isPlaying, self.isAudioOnly else {
+                    self?.stopAudioRhythmMonitoring()
+                    return
+                }
+                if let bands = self.playerLayer?.audioRhythmBands, bands.count == 7 {
+                    let mapped = bands.map { CGFloat($0) }
+                    var changed = false
+                    for (i, val) in mapped.enumerated() {
+                        if abs(val - self.audioRhythmLevels[i]) > 0.02 {
+                            changed = true
+                            break
+                        }
+                    }
+                    if changed {
+                        self.audioRhythmLevels = mapped
+                    }
+                }
+            }
+        }
+    }
+
+    public func stopAudioRhythmMonitoring() {
+        audioRhythmTimer?.invalidate()
+        audioRhythmTimer = nil
+        audioRhythmLevels = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     }
 
     public func setTrafficLightsHidden(_ hidden: Bool, animated: Bool = true) {
@@ -1319,16 +1323,35 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     // MARK: - Drag and Drop Handling
     public func handleDroppedURLs(_ urls: [URL]) {
-        let videoURLs = urls.filter { MediaFileClassifier.classify(url: $0) == .video }
-        let subURLs = urls.filter { MediaFileClassifier.classify(url: $0) == .subtitle }
+        var pathsToPlay: [String] = []
+        var subPaths: [String] = []
 
-        if let firstVideo = videoURLs.first {
-            onFileLoadedFromDrop?(firstVideo.path)
-            loadFile(path: firstVideo.path)
+        for url in urls {
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+                let found = MediaFileClassifier.findVideos(in: url)
+                pathsToPlay.append(contentsOf: found.map(\.path))
+            } else {
+                let type = MediaFileClassifier.classify(url: url)
+                if type == .video || type == .audio {
+                    pathsToPlay.append(url.path)
+                } else if type == .subtitle {
+                    subPaths.append(url.path)
+                }
+            }
         }
 
-        for sub in subURLs {
-            addSubtitle(path: sub.path)
+        if !pathsToPlay.isEmpty {
+            if let onFilesDropped = onFilesDropped {
+                onFilesDropped(pathsToPlay)
+            } else if let first = pathsToPlay.first {
+                onFileLoadedFromDrop?(first)
+                loadFile(path: first)
+            }
+        }
+
+        for sub in subPaths {
+            addSubtitle(path: sub)
         }
     }
 
@@ -1483,6 +1506,33 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     // MARK: - Media Metadata Detection
     private func detectMetadata(for layer: SilkPlayerLayer? = nil) {
         guard let player = layer?.player ?? playerLayer?.player else { return }
+
+        let wasAudioMode = self.isAudioOnly
+        self.isAudioOnly = layer?.isAudioOnly ?? player.isAudioOnly
+        if self.isAudioOnly {
+            let picData = layer?.attachedPictureData ?? player.attachedPictureData
+            if let picData = picData, let img = NSImage(data: picData) {
+                self.artworkImage = img
+            } else {
+                self.artworkImage = nil
+            }
+            self.videoWidth = 0
+            self.videoHeight = 0
+            self.displayVideoWidth = 0
+            self.displayVideoHeight = 0
+            self.videoCodec = "Audio Stream"
+            self.hwdecCurrent = "CoreAudio (Hardware Master Clock)"
+            self.isHUDVisible = true
+            if isPlaying {
+                startAudioRhythmMonitoring()
+            }
+            if !wasAudioMode {
+                applyAudioWindowGeometry(animated: false)
+            }
+            return
+        }
+
+        stopAudioRhythmMonitoring()
 
         let size = player.naturalSize
         self.videoWidth = Int(size.width)

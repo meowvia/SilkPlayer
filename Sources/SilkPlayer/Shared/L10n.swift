@@ -128,7 +128,7 @@ public enum L10n {
     // MARK: - Canvas & Dialogs
     public static var dragVideoHerePrompt: String { tr("Drag media files here to play, or open from disk", "拖拽媒体文件至此处播放，或从磁盘打开") }
     public static var dropToPlay: String { tr("Drop to Play Video / Attach Subtitles", "拖放以播放视频或载入字幕") }
-    public static var chooseVideoDialog: String { tr("Choose a video to play", "选择要播放的视频文件") }
+    public static var chooseVideoDialog: String { tr("Choose media file to play", "选择要播放的媒体文件") }
     public static var selectSubtitleDialog: String { tr("Select external subtitle file (.srt, .ass, .vtt)", "选择外挂字幕文件 (.srt, .ass, .vtt)") }
     public static var showInFinder: String { tr("Show in Finder", "在访达中显示") }
     public static var copyPath: String { tr("Copy Path", "拷贝路径") }
@@ -136,7 +136,7 @@ public enum L10n {
     // MARK: - Playlist & Inspector
     public static var playlist: String { tr("Playlist", "播放列表") }
     public static var emptyPlaylist: String { tr("Playlist is Empty", "播放列表为空") }
-    public static var dragVideoToPlaylist: String { tr("Drag video files here to add to playlist", "拖拽视频文件至此添加至播放列表") }
+    public static var dragVideoToPlaylist: String { tr("Drag media files here to add to playlist", "拖拽音视频文件至此添加至播放列表") }
     public static var playlistDrawerHelp: String { tr("Playlist Drawer (P)", "播放列表 (P)") }
     public static var clearPlaylist: String { tr("Clear Playlist", "清空播放列表") }
     public static var clearAll: String { tr("Clear All", "一键清空") }

@@ -39,7 +39,6 @@ public struct PlayerContainerView: View {
                 VideoView(playerCore: player)
                     .edgesIgnoringSafeArea(.all)
                     .contextMenu {
-                        let rot = player.transform.effectiveRotation
                         let flipH = player.transform.flipH
                         let flipV = player.transform.flipV
 
@@ -59,20 +58,14 @@ public struct PlayerContainerView: View {
                         Button(L10n.tr("Flip Vertical", "垂直翻转") + (flipV ? " ✓" : "")) {
                             player.toggleFlipVertical()
                         }
-                        Divider()
-                        Button("0°" + (rot == 0 ? " ✓" : "")) {
-                            player.setExactRotation(0)
-                        }
-                        Button("90°" + (rot == 90 ? " ✓" : "")) {
-                            player.setExactRotation(90)
-                        }
-                        Button("180°" + (rot == 180 ? " ✓" : "")) {
-                            player.setExactRotation(180)
-                        }
-                        Button("270°" + (rot == 270 ? " ✓" : "")) {
-                            player.setExactRotation(270)
-                        }
                     }
+
+                // Native Audio Artwork & Minimalist Presentation Layer (for pure audio)
+                if player.isAudioOnly {
+                    AudioArtworkView(player: player, playlist: playlist)
+                        .edgesIgnoringSafeArea(.all)
+                        .allowsHitTesting(false)
+                }
 
                 // Immersive Playback HUD (Embedded Scrubber + Controls + Autohide)
                 PlayerHUDView(

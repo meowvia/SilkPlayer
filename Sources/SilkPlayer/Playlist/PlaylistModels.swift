@@ -33,3 +33,37 @@ public struct PlaylistItem: Identifiable, Hashable, Sendable, Codable {
         self.mediaItemId = mediaItem.id
     }
 }
+
+public enum PlaybackMode: String, CaseIterable, Codable, Sendable {
+    case sequential = "sequential"
+    case listLoop = "listLoop"
+    case singleLoop = "singleLoop"
+    case shuffle = "shuffle"
+
+    public var iconName: String {
+        switch self {
+        case .sequential: return "repeat"
+        case .listLoop: return "repeat"
+        case .singleLoop: return "repeat.1"
+        case .shuffle: return "shuffle"
+        }
+    }
+
+    public var next: PlaybackMode {
+        switch self {
+        case .sequential: return .listLoop
+        case .listLoop: return .singleLoop
+        case .singleLoop: return .shuffle
+        case .shuffle: return .sequential
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .sequential: return L10n.tr("Sequential", "顺序播放")
+        case .listLoop: return L10n.tr("List Loop", "列表循环")
+        case .singleLoop: return L10n.tr("Single Loop", "单曲循环")
+        case .shuffle: return L10n.tr("Shuffle", "随机播放")
+        }
+    }
+}

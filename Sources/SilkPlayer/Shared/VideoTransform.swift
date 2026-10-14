@@ -124,11 +124,12 @@ public struct VideoTransform: Sendable, Equatable {
         ratioSetting: String = "auto"
     ) -> CGPoint? {
         let videoRect = renderedVideoRect(in: viewSize, rawWidth: rawWidth, rawHeight: rawHeight, sar: sar, ratioSetting: ratioSetting)
-        guard videoRect.contains(point), videoRect.width > 0, videoRect.height > 0 else { return nil }
+        let boundsRect = videoRect.insetBy(dx: -0.01, dy: -0.01)
+        guard boundsRect.contains(point), videoRect.width > 0, videoRect.height > 0 else { return nil }
 
         // Normalize to [0, 1] presented viewport coordinates
-        var normX = (point.x - videoRect.minX) / videoRect.width
-        var normY = (point.y - videoRect.minY) / videoRect.height
+        var normX = max(0.0, min(1.0, (point.x - videoRect.minX) / videoRect.width))
+        var normY = max(0.0, min(1.0, (point.y - videoRect.minY) / videoRect.height))
 
         if flipH { normX = 1.0 - normX }
         if flipV { normY = 1.0 - normY }

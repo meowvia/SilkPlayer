@@ -118,12 +118,16 @@ If you prefer to compile SilkPlayer yourself:
 git clone https://github.com/meowvia/SilkPlayer.git
 cd SilkPlayer
 
-# Run automated tests (480 passed)
+# Run automated tests
 ./scripts/run_tests.sh
 
 # Package release DMG
 ./scripts/package_app.sh
 ```
+
+> **Build Notes**:
+> - FFmpeg core multimedia libraries are provided as dynamic frameworks (LGPL-3.0) directly under `Packages/`.
+> - The core playback and rendering engine `SilkCoreKit` is an isolated binary library (statically linked), fetched automatically as a precompiled XCFramework zip archive from GitHub Releases by SwiftPM during `swift build` or packaging. Local contributors can also supply an in-tree build at `Packages/SilkCoreKit.xcframework` per [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -139,13 +143,16 @@ Given limited personal time and test media, occasional compatibility quirks may 
 
 SilkPlayer gratefully acknowledges the following open-source projects:
 
-- **[FFmpeg](https://ffmpeg.org)** (LGPL-3.0 Dynamic Linking Core Libraries)
-- **[libplacebo](https://code.videolan.org/videolan/libplacebo)** & **[mpv](https://github.com/mpv-player/mpv)** (LGPL-2.1+)
+- **[FFmpeg](https://ffmpeg.org)** (LGPL-3.0 Dynamic Frameworks)
+- **[libplacebo](https://code.videolan.org/videolan/libplacebo)** & **[mpv](https://github.com/mpv-player/mpv)** (LGPL-2.1+, color science & international standard comparison reference)
 
 ### Disclaimers
 - Apple, macOS, Apple Silicon, Metal, VideoToolbox, AppKit, and SwiftUI are trademarks of Apple Inc.
 - Dolby and Dolby Vision are trademarks of Dolby Laboratories.
 - SilkPlayer is an independent software project and is not affiliated with or endorsed by Apple Inc. or Dolby Laboratories.
 
-### License
-Released under the [GNU Lesser General Public License v3.0 (LGPL-3.0)](LICENSE) with dynamically linked core libraries, compliant with commercial closed-source distribution requirements.
+### Architecture & Licensing (Dual-Track License Structure)
+- **Host Application (SilkPlayer)**: Released under the [GNU Lesser General Public License v3.0 (LGPL-3.0)](LICENSE) for the open-source frontend.
+- **Underlying Multimedia Libraries (FFmpeg)**: Core libraries (Libavcodec, Libavformat, Libavutil, Libswresample, Libswscale) are linked as LGPL-3.0 dynamic frameworks.
+- **Core Engine (SilkCoreKit)**: Governed by the dedicated proprietary component agreement [SILKCOREKIT_LICENSE.md](SILKCOREKIT_LICENSE.md), free for personal non-commercial use, physically isolated as a Swift package binary component.
+- For detailed upstream dependency and relinking instructions, refer to [THIRD_PARTY.md](Documentation/THIRD_PARTY.md).

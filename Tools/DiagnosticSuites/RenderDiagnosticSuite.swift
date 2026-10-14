@@ -36,40 +36,41 @@ public final class RenderDiagnosticSuite {
         print(" SILKPLAYER MULTI-CLIP RENDERING & COLOR PIPELINE DIAGNOSTIC SUITE")
         print("================================================================================")
 
+        let mediaDir = ProcessInfo.processInfo.environment["SILK_TEST_MEDIA_DIR"] ?? "/tmp/silk_test_media"
         let testMovies: [MovieSample] = [
             MovieSample(
-                title: "极限审判 (Mercy)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/极限审判/极限审判.2160p.HD中英双字[最新电影www.5266ys.com].mp4",
+                title: "Sample 4K SDR A",
+                path: "\(mediaDir)/sample_4k_sdr_a.mp4",
                 category: "4K SDR H264 (User Issue Target)",
                 timestamps: [60.0, 187.0, 300.0, 600.0]
             ),
             MovieSample(
-                title: "盗亦有道 (Goodfellas)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/盗亦有道/盗亦有道.2160p.HD中英双字[最新电影www.5266ys.com].mp4",
+                title: "Sample 4K SDR B",
+                path: "\(mediaDir)/sample_4k_sdr_b.mp4",
                 category: "4K SDR H264",
                 timestamps: [120.0, 300.0, 900.0]
             ),
             MovieSample(
-                title: "送院途中 (Vital Signs)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/送院途中/送院途中.1080p.BD粤语中字[最新电影www.5266ys.com].mp4",
+                title: "Sample 1080p SDR A",
+                path: "\(mediaDir)/sample_1080p_sdr_a.mp4",
                 category: "1080p SDR H264",
                 timestamps: [90.0, 240.0]
             ),
             MovieSample(
-                title: "麦克白 (Macbeth)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/麦克白/Macbeth.2015.Bluray.1080p.DTS-HDMA5.1.x265.10bit-DreamHD.mkv",
+                title: "Sample 1080p 10-bit HEVC",
+                path: "\(mediaDir)/sample_1080p_10bit.mkv",
                 category: "1080p SDR 10-bit HEVC",
                 timestamps: [150.0, 450.0]
             ),
             MovieSample(
-                title: "红雀 (Red Sparrow)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/红雀/红雀.Red.Sparrow.2018.2160p.DSNP.WEB-DL.DDP5.1.Atmos.H265.HDR.DV-ParkHD.mkv",
+                title: "Sample 4K HDR DV",
+                path: "\(mediaDir)/sample_4k_hdr_dv.mkv",
                 category: "4K HDR Dolby Vision HEVC",
                 timestamps: [80.0, 300.0]
             ),
             MovieSample(
-                title: "两杆大烟枪 (Lock Stock)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/两杆大烟枪/Lock.Stock.and.Two.Smoking.Barrels.1998.1080p.AMZN.WEB-DL.DDP5.1.H264-MOMOWEB.mkv",
+                title: "Sample 1080p SDR B",
+                path: "\(mediaDir)/sample_1080p_sdr_b.mkv",
                 category: "1080p SDR H264",
                 timestamps: [100.0, 400.0]
             )
@@ -136,12 +137,12 @@ public final class RenderDiagnosticSuite {
         }
 
         print("\n================================================================================")
-        print(" DIAGNOSTIC EXPERIMENT: HYPOTHESIS TESTING ON USER'S TARGET (极限审判 @ 187s)")
+        print(" DIAGNOSTIC EXPERIMENT: HYPOTHESIS TESTING ON SDR TARGET")
         print("================================================================================")
 
-        let mercyPath = "/Volumes/HDD2T/影音娱乐/电影/极限审判/极限审判.2160p.HD中英双字[最新电影www.5266ys.com].mp4"
-        if FileManager.default.fileExists(atPath: mercyPath) {
-            player.loadFile(path: mercyPath, startTime: 187.0)
+        let targetSamplePath = "\(mediaDir)/sample_4k_sdr_a.mp4"
+        if FileManager.default.fileExists(atPath: targetSamplePath) {
+            player.loadFile(path: targetSamplePath, startTime: 187.0)
             var waitIters = 0
             while !player.isLoaded && waitIters < 40 {
                 await pumpEvents(duration: 0.1)

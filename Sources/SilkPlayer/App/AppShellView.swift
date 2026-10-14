@@ -40,8 +40,10 @@ public struct AppShellView: View {
 
             ZStack {
                 if isPlaying {
-                    Color.black
-                        .edgesIgnoringSafeArea(.all)
+                    if !player.isAudioOnly {
+                        Color.black
+                            .edgesIgnoringSafeArea(.all)
+                    }
 
                     PlayerContainerView(
                         player: player,
@@ -195,6 +197,7 @@ public struct AppShellView: View {
                     }
                 }
                 let paths = collectedURLs.map(\.path)
+                guard !paths.isEmpty else { return }
                 self.openExternalPaths(paths)
             }
             return true
@@ -220,7 +223,7 @@ public struct AppShellView: View {
         withAnimation(appSpringAnimation) {
             navigationModel.state = .playing(url: url)
         }
-        player.loadFile(path: path, startTime: startTime, autoPlay: autoPlay)
+        player.loadMediaWithCrossfade(path: path, startTime: startTime, autoPlay: autoPlay)
     }
 
     private func playMediaItem(_ item: MediaItem, in contextItems: [MediaItem] = []) {
@@ -291,9 +294,11 @@ public struct AppShellView: View {
             guard isPlaying else { return }
             playPrevious()
         }
-        player.onFileLoadedFromDrop = { path in
-            playlistManager.setSingleItem(path: path)
-            startPlayback(path: path)
+        player.onFileLoadedFromDrop = { [self] path in
+            self.openExternalPaths([path])
+        }
+        player.onFilesDropped = { [self] paths in
+            self.openExternalPaths(paths)
         }
         player.onPlayRequestedWhenIdle = { [self] in
             guard !self.playlistManager.isEmpty else { return }
@@ -318,29 +323,27 @@ public struct AppShellView: View {
     }
 
     public func openExternalPaths(_ paths: [String]) {
-        let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
-        guard !expanded.isEmpty else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
+            guard !expanded.isEmpty else { return }
 
-        var newItems: [PlaylistItem] = []
-        for p in expanded {
-            let url = URL(fileURLWithPath: p)
-            let isAccessed = url.startAccessingSecurityScopedResource()
-            defer {
-                if isAccessed {
-                    url.stopAccessingSecurityScopedResource()
+            var newItems: [PlaylistItem] = []
+            for p in expanded {
+                let url = URL(fileURLWithPath: p)
+                let title = url.deletingPathExtension().lastPathComponent
+                let size = (try? FileManager.default.attributesOfItem(atPath: p)[.size] as? Int64) ?? 0
+                let item = MediaItem(path: p, title: title, fileSize: size)
+                newItems.append(PlaylistItem(from: item))
+            }
+
+            guard !newItems.isEmpty else { return }
+
+            Task { @MainActor in
+                self.playlistManager.appendItems(newItems)
+                if let first = newItems.first {
+                    self.playPlaylistItem(first)
                 }
             }
-            let title = url.deletingPathExtension().lastPathComponent
-            let size = (try? FileManager.default.attributesOfItem(atPath: p)[.size] as? Int64) ?? 0
-            let item = MediaItem(path: p, title: title, fileSize: size)
-            newItems.append(PlaylistItem(from: item))
-        }
-
-        guard !newItems.isEmpty else { return }
-
-        playlistManager.appendItems(newItems)
-        if let first = newItems.first {
-            playPlaylistItem(first)
         }
     }
 
@@ -430,15 +433,17 @@ public struct AppShellView: View {
             }
         } else {
             let emptyMin = NSSize(width: 640, height: 360)
+            let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
             window.minSize = emptyMin
             window.contentMinSize = emptyMin
+            window.maxSize = screenFrame.size
+            window.contentMaxSize = screenFrame.size
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
             window.resizeIncrements = NSSize(width: 1, height: 1)
 
             if !Self.didCenterInitialColdLaunchWindow {
                 Self.didCenterInitialColdLaunchWindow = true
-                let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
                 let defaultW: CGFloat = 960
                 let defaultH: CGFloat = 540
                 let centerX = round(screenFrame.minX + (screenFrame.width - defaultW) / 2)

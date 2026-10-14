@@ -29,6 +29,19 @@ jobs:
           swift --version
 
       - name: Run Automated Test Suite
+        id: tests
         run: |
           chmod +x scripts/run_tests.sh
-          ./scripts/run_tests.sh
+          set -o pipefail
+          ./scripts/run_tests.sh 2>&1 | tee test_run.log
+
+      - name: Diagnostics Report on Failure
+        if: failure()
+        run: |
+          echo "### CI Test Failure Diagnostics" >> $GITHUB_STEP_SUMMARY
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          cat test_run.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          grep -E "failed|error:|Assertion failed|XCTAssert|failure" test_run.log | head -n 25 | while IFS= read -r line; do
+            echo "::error::${line}"
+          done

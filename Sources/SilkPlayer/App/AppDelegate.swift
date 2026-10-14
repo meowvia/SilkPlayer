@@ -13,7 +13,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         for arg in args where !arg.hasPrefix("-") {
             if FileManager.default.fileExists(atPath: arg) {
                 let ext = (arg as NSString).pathExtension.lowercased()
-                if MediaFileClassifier.videoExtensions.contains(ext) {
+                if MediaFileClassifier.videoExtensions.contains(ext) || MediaFileClassifier.audioExtensions.contains(ext) {
                     validFiles.append(arg)
                 }
             }

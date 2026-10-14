@@ -6,15 +6,18 @@ import Combine
 @Observable public final class PlaylistManager {
     public nonisolated static let defaultItemsStorageKey = "com.silkplayer.playlist.items"
     public nonisolated static let defaultIndexStorageKey = "com.silkplayer.playlist.currentIndex"
+    public nonisolated static let defaultModeStorageKey = "com.silkplayer.playlist.playbackMode"
 
     public static let shared = PlaylistManager(isPersistenceEnabled: true, autoRestore: true)
 
     public private(set) var items: [PlaylistItem] = []
     public private(set) var currentIndex: Int = -1
+    public private(set) var playbackMode: PlaybackMode = .sequential
 
     public var isPersistenceEnabled: Bool
     private let itemsStorageKey: String
     private let indexStorageKey: String
+    private let modeStorageKey: String
     private let userDefaults: UserDefaults
 
     public init(
@@ -22,11 +25,13 @@ import Combine
         autoRestore: Bool = false,
         itemsStorageKey: String = defaultItemsStorageKey,
         indexStorageKey: String = defaultIndexStorageKey,
+        modeStorageKey: String = defaultModeStorageKey,
         userDefaults: UserDefaults = .standard
     ) {
         self.isPersistenceEnabled = isPersistenceEnabled
         self.itemsStorageKey = itemsStorageKey
         self.indexStorageKey = indexStorageKey
+        self.modeStorageKey = modeStorageKey
         self.userDefaults = userDefaults
 
         if isPersistenceEnabled && autoRestore {
@@ -48,19 +53,83 @@ import Combine
     }
 
     public var hasPrevious: Bool {
-        currentIndex > 0
+        guard !items.isEmpty, currentIndex >= 0 else { return false }
+        switch playbackMode {
+        case .shuffle, .listLoop:
+            return items.count > 1
+        case .sequential, .singleLoop:
+            return currentIndex > 0
+        }
     }
 
     public var hasNext: Bool {
-        currentIndex >= 0 && currentIndex < items.count - 1
+        guard !items.isEmpty, currentIndex >= 0 else { return false }
+        switch playbackMode {
+        case .shuffle, .listLoop:
+            return items.count > 1
+        case .sequential, .singleLoop:
+            return currentIndex < items.count - 1
+        }
     }
 
     public var previousItem: PlaylistItem? {
-        hasPrevious ? items[currentIndex - 1] : nil
+        guard hasPrevious else { return nil }
+        switch playbackMode {
+        case .shuffle:
+            return nil
+        case .listLoop:
+            let idx = (currentIndex - 1 + items.count) % items.count
+            return items[idx]
+        case .sequential, .singleLoop:
+            return currentIndex > 0 ? items[currentIndex - 1] : nil
+        }
     }
 
     public var nextItem: PlaylistItem? {
-        hasNext ? items[currentIndex + 1] : nil
+        upcomingItem
+    }
+
+    // MARK: - Upcoming Track Determination (Dynamic & Synchronized across all playback modes)
+    public private(set) var nextShuffleIndex: Int? = nil
+
+    public var upcomingItem: PlaylistItem? {
+        guard !items.isEmpty, currentIndex >= 0, currentIndex < items.count else { return nil }
+        switch playbackMode {
+        case .singleLoop:
+            return currentItem
+        case .listLoop:
+            guard items.count > 1 else { return currentItem }
+            let nextIdx = (currentIndex + 1) % items.count
+            return items[nextIdx]
+        case .sequential:
+            if currentIndex < items.count - 1 {
+                return items[currentIndex + 1]
+            }
+            return nil
+        case .shuffle:
+            if items.count == 1 { return currentItem }
+            ensureShuffleCandidate()
+            if let candidate = nextShuffleIndex, candidate >= 0, candidate < items.count {
+                return items[candidate]
+            }
+            let fallbackIdx = (currentIndex + 1) % items.count
+            return items[fallbackIdx]
+        }
+    }
+
+    public func ensureShuffleCandidate() {
+        guard playbackMode == .shuffle, items.count > 1 else {
+            nextShuffleIndex = nil
+            return
+        }
+        if let cand = nextShuffleIndex, cand >= 0, cand < items.count, cand != currentIndex {
+            return
+        }
+        var nextIdx = Int.random(in: 0..<items.count)
+        if nextIdx == currentIndex {
+            nextIdx = (nextIdx + 1) % items.count
+        }
+        nextShuffleIndex = nextIdx
     }
 
     public var displayIndexText: String {
@@ -122,28 +191,105 @@ import Combine
     // MARK: - Navigation
     @discardableResult
     public func moveToNext() -> PlaylistItem? {
-        guard hasNext else { return nil }
-        currentIndex += 1
+        guard !items.isEmpty else { return nil }
+        switch playbackMode {
+        case .shuffle:
+            if items.count == 1 { return currentItem }
+            ensureShuffleCandidate()
+            let targetIdx = nextShuffleIndex ?? ((currentIndex + 1) % items.count)
+            currentIndex = targetIdx
+            nextShuffleIndex = nil
+            ensureShuffleCandidate()
+        case .listLoop:
+            currentIndex = (currentIndex + 1) % items.count
+        case .sequential:
+            guard hasNext else { return nil }
+            currentIndex += 1
+        case .singleLoop:
+            if currentIndex < items.count - 1 {
+                currentIndex += 1
+            } else {
+                currentIndex = 0
+            }
+        }
         saveToStorage()
         return currentItem
     }
 
     @discardableResult
     public func moveToPrevious() -> PlaylistItem? {
-        guard hasPrevious else { return nil }
-        currentIndex -= 1
+        guard !items.isEmpty else { return nil }
+        switch playbackMode {
+        case .shuffle:
+            if items.count == 1 { return currentItem }
+            var prevIdx = Int.random(in: 0..<items.count)
+            if prevIdx == currentIndex {
+                prevIdx = (prevIdx + 1) % items.count
+            }
+            currentIndex = prevIdx
+        case .listLoop:
+            currentIndex = (currentIndex - 1 + items.count) % items.count
+        case .sequential:
+            guard hasPrevious else { return nil }
+            currentIndex -= 1
+        case .singleLoop:
+            if currentIndex > 0 {
+                currentIndex -= 1
+            } else {
+                currentIndex = max(0, items.count - 1)
+            }
+        }
         saveToStorage()
         return currentItem
+    }
+
+    public func togglePlaybackMode() {
+        self.playbackMode = self.playbackMode.next
+        if self.playbackMode == .shuffle {
+            ensureShuffleCandidate()
+        } else {
+            nextShuffleIndex = nil
+        }
+        saveToStorage()
+    }
+
+    public func setPlaybackMode(_ mode: PlaybackMode) {
+        self.playbackMode = mode
+        if self.playbackMode == .shuffle {
+            ensureShuffleCandidate()
+        } else {
+            nextShuffleIndex = nil
+        }
+        saveToStorage()
     }
 
     // MARK: - Natural EOF Navigation
     /// Advances to the next item when the current video ends naturally.
     /// Returns the next item, or nil if at the end of the playlist.
     public func handleNaturalEOF() -> PlaylistItem? {
-        guard hasNext else { return nil }
-        currentIndex += 1
-        saveToStorage()
-        return currentItem
+        guard !items.isEmpty else { return nil }
+        switch playbackMode {
+        case .singleLoop:
+            return currentItem
+        case .shuffle:
+            if items.count == 1 { return currentItem }
+            ensureShuffleCandidate()
+            let targetIdx = nextShuffleIndex ?? ((currentIndex + 1) % items.count)
+            currentIndex = targetIdx
+            saveToStorage()
+            nextShuffleIndex = nil
+            ensureShuffleCandidate()
+            return currentItem
+        case .listLoop:
+            currentIndex = (currentIndex + 1) % items.count
+            saveToStorage()
+            return currentItem
+        case .sequential:
+            guard hasNext else { return nil }
+            currentIndex += 1
+            saveToStorage()
+            return currentItem
+        }
     }
 
     @discardableResult
@@ -185,6 +331,7 @@ import Combine
             let data = try JSONEncoder().encode(items)
             userDefaults.set(data, forKey: itemsStorageKey)
             userDefaults.set(currentIndex, forKey: indexStorageKey)
+            userDefaults.set(playbackMode.rawValue, forKey: modeStorageKey)
         } catch {
             // Silently fail-safe
         }
@@ -193,6 +340,10 @@ import Combine
     @discardableResult
     public func restoreFromStorage() -> Bool {
         guard isPersistenceEnabled else { return false }
+        if let modeRaw = userDefaults.string(forKey: modeStorageKey),
+           let mode = PlaybackMode(rawValue: modeRaw) {
+            self.playbackMode = mode
+        }
         guard let data = userDefaults.data(forKey: itemsStorageKey) else { return false }
         do {
             let decoded = try JSONDecoder().decode([PlaylistItem].self, from: data)
@@ -212,5 +363,6 @@ import Combine
     public func clearStorage() {
         userDefaults.removeObject(forKey: itemsStorageKey)
         userDefaults.removeObject(forKey: indexStorageKey)
+        userDefaults.removeObject(forKey: modeStorageKey)
     }
 }

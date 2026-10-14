@@ -78,7 +78,7 @@ public struct SilkPlaylistDrawerView: View {
         )
         .shadow(color: Color.black.opacity(0.45), radius: 24, x: -6, y: 4)
         .shadow(color: Color.black.opacity(0.20), radius: 6, x: -2, y: 2)
-        .onDrop(of: [.fileURL], isTargeted: $isDrawerDropTargeted) { providers in
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers: providers)
         }
     }
@@ -284,8 +284,12 @@ public struct SilkPlaylistDrawerView: View {
                 }
             }
             let paths = collectedURLs.map { $0.path }
-            let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
-            if !expanded.isEmpty {
+            guard !paths.isEmpty else { return }
+
+            Task.detached(priority: .userInitiated) {
+                let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
+                guard !expanded.isEmpty else { return }
+
                 var newItems: [PlaylistItem] = []
                 for path in expanded {
                     let title = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
@@ -293,11 +297,14 @@ public struct SilkPlaylistDrawerView: View {
                     let item = MediaItem(path: path, title: title, fileSize: size)
                     newItems.append(PlaylistItem(from: item))
                 }
-                let wasEmpty = self.playlist.isEmpty
-                let needsAutoPlay = wasEmpty || !self.player.isLoaded
-                self.playlist.appendItems(newItems)
-                if needsAutoPlay, let first = newItems.first {
-                    self.onSelectPlaylistItem(first)
+
+                await MainActor.run {
+                    let wasEmpty = self.playlist.isEmpty
+                    let needsAutoPlay = wasEmpty || !self.player.isLoaded
+                    self.playlist.appendItems(newItems)
+                    if needsAutoPlay, let first = newItems.first {
+                        self.onSelectPlaylistItem(first)
+                    }
                 }
             }
         }

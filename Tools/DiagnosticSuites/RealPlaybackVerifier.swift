@@ -49,14 +49,15 @@ public final class RealPlaybackVerifier {
             }
         }
 
-        let sdrPath = "/Volumes/HDD2T/影音娱乐/电影/盗亦有道/盗亦有道.2160p.HD中英双字[最新电影www.5266ys.com].mp4"
-        let hdrPath = "/Volumes/HDD2T/影音娱乐/电影/红雀/红雀.Red.Sparrow.2018.2160p.DSNP.WEB-DL.DDP5.1.Atmos.H265.HDR.DV-ParkHD.mkv"
+        let mediaDir = ProcessInfo.processInfo.environment["SILK_TEST_MEDIA_DIR"] ?? "/tmp/silk_test_media"
+        let sdrPath = "\(mediaDir)/sample_4k_sdr.mp4"
+        let hdrPath = "\(mediaDir)/sample_4k_hdr_dv.mkv"
         let screenshotDir = AppSettings.shared.screenshotDirectory
 
         // --------------------------------------------------
-        // TEST 1: 4K SDR 《盗亦有道》 实机加载、黑底防漏光与内存测试
+        // TEST 1: 4K SDR Real Playback & Ink Leakage Prevention
         // --------------------------------------------------
-        print("\n--- Test 1: 4K SDR 《盗亦有道》 Real Playback & Ink Leakage Prevention ---")
+        print("\n--- Test 1: 4K SDR Real Playback & Ink Leakage Prevention ---")
         assertCondition("SDR media file exists on disk", FileManager.default.fileExists(atPath: sdrPath))
 
         let playerSDR = PlayerCore()
@@ -113,9 +114,9 @@ public final class RealPlaybackVerifier {
         await pumpEvents(duration: 0.5)
 
         // --------------------------------------------------
-        // TEST 2: 4K HDR 《红雀》 中文字幕渲染、空格键响应与内存测试
+        // TEST 2: 4K HDR Chinese Subtitles, Spacebar & Memory
         // --------------------------------------------------
-        print("\n--- Test 2: 4K HDR 《红雀》 Chinese Subtitles, Spacebar & Memory ---")
+        print("\n--- Test 2: 4K HDR Chinese Subtitles, Spacebar & Memory ---")
         assertCondition("HDR media file exists on disk", FileManager.default.fileExists(atPath: hdrPath))
 
         let playerHDR = PlayerCore()
@@ -157,7 +158,7 @@ public final class RealPlaybackVerifier {
             let display = track.displayName.lowercased()
             return lang == "zh" || lang == "chi" || lang == "zho" || title.contains("中") || display.contains("中") || title.contains("简") || title.contains("繁")
         }
-        assertCondition("Chinese subtitle track identified in Red Sparrow (zh/chi/zho/简体/繁體)", chineseTrack != nil)
+        assertCondition("Chinese subtitle track identified in test clip (zh/chi/zho/简体/繁體)", chineseTrack != nil)
 
         if let chi = chineseTrack {
             playerHDR.setSubtitleTrack(id: chi.id, notifyOSD: true)

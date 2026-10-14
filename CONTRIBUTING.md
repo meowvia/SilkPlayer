@@ -15,6 +15,14 @@ To build and run tests locally, your development environment must satisfy:
 - **Toolchain**: Xcode 16.0+ or Swift 6.0 command-line tools
 - **Package Manager**: Swift Package Manager (dependencies are resolved automatically via `Package.swift`)
 
+### CoreKit Dependency & Local Development Fallback
+SilkPlayer utilizes `SilkCoreKit` as an isolated binary dependency:
+- **Public Clones**: SwiftPM automatically fetches the precompiled `SilkCoreKit.xcframework.zip` from official GitHub Releases.
+- **Local Development Fallback**: If you are developing locally with a local build of `SilkCoreKit`:
+  1. Build the xcframework from your private `SilkCoreKit` directory (`./build_framework.sh`).
+  2. Place `SilkCoreKit.xcframework` inside the `Packages/` directory (`Packages/SilkCoreKit.xcframework`).
+  3. `Package.swift` automatically detects the local directory and prioritizes it. Alternatively, configure `.binaryTarget(name: "SilkCoreKit", path: "Packages/SilkCoreKit.xcframework")` in `Package.swift`.
+
 No third-party package managers (such as Homebrew) are required to build the core application.
 
 ---

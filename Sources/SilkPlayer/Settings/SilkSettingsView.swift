@@ -572,13 +572,86 @@ public struct SilkSettingsView: View {
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(.primary)
 
-                    Text(L10n.tr("Version 1.0.0 (SilkCoreKit · Apple Silicon)", "版本 1.0.0 (SilkCoreKit · Apple Silicon)"))
+                    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.0"
+                    Text(L10n.tr("Version \(appVersion) (SilkCoreKit · Apple Silicon)", "版本 \(appVersion) (SilkCoreKit · Apple Silicon)"))
                         .font(.system(size: 11.5, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
+
+            // High-Visibility GitHub Repository Update Prompt (更新高亮提示)
+            Button(action: {
+                if let url = URL(string: "https://github.com/meowvia/SilkPlayer/releases") {
+                    NSWorkspace.shared.open(url)
+                }
+            }) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.accentColor.opacity(0.85), Color.blue.opacity(0.70)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(L10n.tr("Check for Updates", "检查更新"))
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.primary)
+
+                            Text("GitHub")
+                                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.accentColor))
+                        }
+
+                        Text(L10n.tr("Visit GitHub repository for latest releases and changelogs", "前往 GitHub 仓库获取最新版本发布与更新日志"))
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 4) {
+                        Text(L10n.tr("Open", "前往"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.accentColor)
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.accentColor)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(Color.accentColor.opacity(0.12))
+                    )
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(nsColor: .controlBackgroundColor).opacity(0.60))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.accentColor.opacity(0.40), lineWidth: 1.2)
+                        )
+                )
+                .shadow(color: Color.accentColor.opacity(0.10), radius: 6, x: 0, y: 2)
+            }
+            .buttonStyle(.plain)
 
             // Architecture Pillars Card
             SettingsCard(title: L10n.tr("Architecture & Specifications", "技术规格与系统架构"), icon: "cpu") {

@@ -19,7 +19,7 @@ public final class MetalPlayerContainerView: NSView {
         self.playerCore = playerCore
         super.init(frame: .zero)
         self.wantsLayer = true
-        self.layer?.backgroundColor = NSColor.black.cgColor
+        self.layer?.backgroundColor = playerCore.isAudioOnly ? NSColor.clear.cgColor : NSColor.black.cgColor
 
         // Register for file drag & drop
         registerForDraggedTypes([.fileURL])
@@ -52,6 +52,14 @@ public final class MetalPlayerContainerView: NSView {
     }
 
     public func applyRenderViewLayout() {
+        if let p = playerCore, p.isAudioOnly {
+            self.layer?.backgroundColor = NSColor.clear.cgColor
+            metalRenderView?.isHidden = true
+            return
+        } else {
+            self.layer?.backgroundColor = NSColor.black.cgColor
+            metalRenderView?.isHidden = false
+        }
         guard let view = playerCore?.playerLayer?.player.view else { return }
         let b = bounds
         guard b.width > 0, b.height > 0 else { return }

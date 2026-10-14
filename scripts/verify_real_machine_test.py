@@ -5,23 +5,18 @@ import time
 import subprocess
 import signal
 
-HOME = os.path.expanduser("~")
+MEDIA_DIR = os.environ.get("SILK_TEST_MEDIA_DIR", "/tmp/silk_test_media")
 VIDEOS = [
-    os.path.join(HOME, "Desktop/test/ToS-4k-1920.mov"),
-    os.path.join(HOME, "Desktop/test/Mystery Box Dolby Vision Profile 5.mp4"),
-    os.path.join(HOME, "Desktop/test/8K_7680x4320_HEVC_150Mbps_10bit.mp4"),
-    os.path.join(HOME, "Desktop/test/jellyfish-120-mbps-4k-uhd-hevc-10bit.mkv")
+    os.path.join(MEDIA_DIR, "sample_tos_4k.mov"),
+    os.path.join(MEDIA_DIR, "sample_dovi_p5.mp4"),
+    os.path.join(MEDIA_DIR, "sample_8k_hevc.mp4"),
+    os.path.join(MEDIA_DIR, "sample_jellyfish_4k.mkv"),
+    os.path.join(MEDIA_DIR, "sample_4k_dv.mkv")
 ]
-SMB_300 = "/Volumes/HDD2T/影音娱乐/电影/巴达300勇士/300.2006.UHD.BluRay.2160p.TrueHD.Atmos.7.1.DV.HEVC.HYBRID.REMUX-FraMeSToR.mkv"
-SMB_KILLERS = "/Volumes/HDD2T/影音娱乐/电影/花月杀手.mkv"
-if os.path.exists(SMB_300):
-    VIDEOS.append(SMB_300)
-if os.path.exists(SMB_KILLERS):
-    VIDEOS.append(SMB_KILLERS)
 
-APP_PATH = "/Applications/SilkPlayer.app/Contents/MacOS/SilkPlayer"
-if not os.path.exists(APP_PATH) and os.path.exists("/Volumes/2T/SilkPlayer/build/SilkPlayer.app/Contents/MacOS/SilkPlayer"):
-    APP_PATH = "/Volumes/2T/SilkPlayer/build/SilkPlayer.app/Contents/MacOS/SilkPlayer"
+APP_PATH = os.environ.get("SILK_APP_PATH", "/Applications/SilkPlayer.app/Contents/MacOS/SilkPlayer")
+if not os.path.exists(APP_PATH) and os.path.exists("build/SilkPlayer.app/Contents/MacOS/SilkPlayer"):
+    APP_PATH = "build/SilkPlayer.app/Contents/MacOS/SilkPlayer"
 TEST_DURATION = 55  # >= 30s as mandated by Core Rule 7
 
 def kill_silkplayer():

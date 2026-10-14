@@ -13,9 +13,10 @@ import subprocess
 import re
 from pathlib import Path
 
-VIDEO_4K_60FPS = "/Volumes/HDD2T/影音娱乐/电影/wp.2160p.60fps.6v电影 地址发布页 www.6v123.net 收藏不迷路/wp.2160p.60fps.国粤双语.HD中字无水印[最新电影www.5266ys.com].mkv"
-VIDEO_4K_NEZHA = "/Volumes/HDD2T/影音娱乐/电影/哪吒之魔童闹海.mkv"
-APP_BINARY = "/Volumes/2T/SilkPlayer/build/SilkPlayer.app/Contents/MacOS/SilkPlayer"
+MEDIA_DIR = os.environ.get("SILK_TEST_MEDIA_DIR", "/tmp/silk_test_media")
+VIDEO_4K_60FPS = os.path.join(MEDIA_DIR, "sample_4k_60fps.mkv")
+VIDEO_4K_NEZHA = os.path.join(MEDIA_DIR, "sample_4k_hdr.mkv")
+APP_BINARY = os.environ.get("SILK_APP_BINARY", "build/SilkPlayer.app/Contents/MacOS/SilkPlayer")
 
 def to_mb(val_str, unit):
     val = float(val_str)
@@ -195,9 +196,9 @@ def run_test_case(video_path, label, duration=15):
 
     return result
 
-STREAM_NETWORK = "http://219.147.245.238:25480/newlive/live/hls/1/live.m3u8"
-SAMPLE_LOCAL_4K = "/Volumes/2T/SilkPlayer/sample_4k60_hevc.mp4"
-DMG_PATH = "/Volumes/2T/SilkPlayer/build/SilkPlayer-0.1.0-beta.1.dmg"
+STREAM_NETWORK = os.environ.get("SILK_TEST_STREAM", "http://127.0.0.1:8080/live/live.m3u8")
+SAMPLE_LOCAL_4K = os.path.join(MEDIA_DIR, "sample_4k60_hevc.mp4")
+DMG_PATH = os.environ.get("SILK_DMG_PATH", "build/SilkPlayer.dmg")
 
 def main():
     if not os.path.exists(APP_BINARY):

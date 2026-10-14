@@ -54,52 +54,53 @@ public final class ObjectiveCarouselStressSuite {
         let initialSystemRSS = getMemoryRSSInMB()
         print(String(format: ">> [System Baseline] Initial Process RSS: %.2f MB", initialSystemRSS))
 
+        let mediaDir = ProcessInfo.processInfo.environment["SILK_TEST_MEDIA_DIR"] ?? "/tmp/silk_test_media"
         let testClips: [MediaClip] = [
             MediaClip(
-                title: "巴达300勇士 (300)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/巴达300勇士/300.2006.UHD.BluRay.2160p.TrueHD.Atmos.7.1.DV.HEVC.HYBRID.REMUX-FraMeSToR.mkv",
+                title: "Sample 4K UHD Remux",
+                path: "\(mediaDir)/sample_4k_remux_dv.mkv",
                 formatCategory: "4K UHD REMUX (53GB) | Dolby Vision / HDR10 | HEVC | TrueHD Atmos",
                 startTimestamp: 300.0,
                 playDuration: 10.0
             ),
             MediaClip(
-                title: "wp.2160p.60fps (高动态)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/wp.2160p.60fps.6v电影 地址发布页 www.6v123.net 收藏不迷路/wp.2160p.60fps.国粤双语.HD中字无水印[最新电影www.5266ys.com].mkv",
+                title: "Sample 4K 60FPS",
+                path: "\(mediaDir)/sample_4k_60fps.mkv",
                 formatCategory: "4K 60FPS High Frame Rate | HEVC | MKV",
                 startTimestamp: 180.0,
                 playDuration: 10.0
             ),
             MediaClip(
-                title: "红雀 (Red Sparrow)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/红雀/红雀.Red.Sparrow.2018.2160p.DSNP.WEB-DL.DDP5.1.Atmos.H265.HDR.DV-ParkHD.mkv",
+                title: "Sample 4K DSNP WEB-DL",
+                path: "\(mediaDir)/sample_4k_dovi.mkv",
                 formatCategory: "4K DSNP WEB-DL (14GB) | Dolby Vision / HDR | HEVC | DDP5.1",
                 startTimestamp: 450.0,
                 playDuration: 10.0
             ),
             MediaClip(
-                title: "盗亦有道 (Goodfellas)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/盗亦有道/盗亦有道.2160p.HD中英双字[最新电影www.5266ys.com].mp4",
+                title: "Sample 4K SDR",
+                path: "\(mediaDir)/sample_4k_sdr.mp4",
                 formatCategory: "4K SDR (11GB) | H.264 High Profile | MP4",
                 startTimestamp: 600.0,
                 playDuration: 10.0
             ),
             MediaClip(
-                title: "麦克白 (Macbeth)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/麦克白/Macbeth.2015.Bluray.1080p.DTS-HDMA5.1.x265.10bit-DreamHD.mkv",
+                title: "Sample 1080p 10-bit",
+                path: "\(mediaDir)/sample_1080p_10bit.mkv",
                 formatCategory: "1080p 10-bit Bluray (6.5GB) | HEVC Main 10 | DTS-HD MA | MKV",
                 startTimestamp: 240.0,
                 playDuration: 10.0
             ),
             MediaClip(
-                title: "两杆大烟枪 (Lock, Stock)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/两杆大烟枪/Lock.Stock.and.Two.Smoking.Barrels.1998.1080p.AMZN.WEB-DL.DDP5.1.H264-MOMOWEB.mkv",
+                title: "Sample 1080p SDR",
+                path: "\(mediaDir)/sample_1080p_sdr.mkv",
                 formatCategory: "1080p SDR (11GB) | H.264 High Profile | MKV",
                 startTimestamp: 360.0,
                 playDuration: 10.0
             ),
             MediaClip(
-                title: "送院途中 (Vital Signs)",
-                path: "/Volumes/HDD2T/影音娱乐/电影/送院途中/送院途中.1080p.BD粤语中字[最新电影www.5266ys.com].mp4",
+                title: "Sample 1080p Baseline",
+                path: "\(mediaDir)/sample_1080p_baseline.mp4",
                 formatCategory: "1080p SDR (1.9GB) | H.264 Baseline/Main | MP4",
                 startTimestamp: 120.0,
                 playDuration: 10.0
