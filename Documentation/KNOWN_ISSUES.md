@@ -9,10 +9,11 @@
 | 缺陷编号 | 缺陷摘要 | 影响模式 / 模块 | 严重程度 | 当前状态 | 发现版本 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | ISSUE-001 | 音频模式下倍速播放未生效 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | Medium | 已登记待修复 | v1.1.0 |
-| ISSUE-002 | 随机播放无记忆抽样与近距离高频重播缺陷 | 播放列表与音频随机 / SilkPlayer (PlaylistManager) | Medium | 已登记待优化 | v1.1.0 |
+| ISSUE-002 | 随机播放无记忆抽样与近距离高频重播缺陷 | 播放列表与音频随机 / SilkPlayer (PlaylistManager) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-003 | 音频模式窗口适配不良与垂直重叠穿模 | 界面布局 / SilkPlayer (AudioArtworkView & PlayerHUDView) | Medium | 已登记待改 | v1.1.0 |
 | ISSUE-004 | 窗口几何与交互管理架构碎片化（改此失彼顽疾） | 核心架构 / PlayerWindowManager & WindowGeometry | High | 深度反思待重构 | v1.1.0 |
 | ISSUE-005 | 视频窗口被物理完全遮挡时 Metal 阻塞导致音频断流 | 渲染与解复用 / SilkCoreKit (SilkMetalRenderView & Engine) | Low | 已登记待下版本修复 | v1.1.0 |
+| ISSUE-006 | 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步 | 引擎解复用与同步 / SilkCoreKit (SilkPlayerEngine) | Medium | 已登记待下版本优化 | v1.1.0 |
 
 ---
 
@@ -286,8 +287,45 @@ public enum WindowPresentationState: Equatable {
      ```
   2. 在 `SilkPlayerEngine` 的 `videoLoop` 中，若检测到窗口完全不可见，保持时间戳基准推进并以丢弃渲染模式消费 `videoPacketQueue`，确保解复用器持续读取音频数据；
 - **交付排期**：
-  纳入下个内核版本（v1.2.0），在 `SilkCoreKit` 独立修改、重新构建 xcframework 并进行遮挡边界测试。
+  纳入下个内核版本（v1.2.0 / v2.0.0），在 `SilkCoreKit` 独立修改、重新构建 xcframework 并进行遮挡边界测试。
 
+---
 
+## ISSUE-006: 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步缺陷 (Network Stream Buffer Starvation & A/V Sync Desync)
 
+### 1. 缺陷现象与实机复现
+- **复现环境**：Mac mini M4 管理机通过 SMB 协议挂载局域网 NAS（Debian 业务机）共享盘播放 4K 影片（如 `/Volumes/HDD2T/影音娱乐/电影/4k.mkv`，HEVC 3840×1608 24fps，E-AC-3 5.1）；
+- **故障特征**：在连续播放至特定进度（如 45分51秒附近）时，画面突然出现类似 PPT 的严重掉帧卡顿，伴随音画脱节；
+- **关键特征**：
+  1. 片源经 VideoToolbox 硬件硬解实测完全健康（0 decode errors，硬解速率达 3.44x~4.02x），且本地拖拽跳转（Seek）秒开流畅毫无卡顿；
+  2. 用户执行暂停 2~3 秒后重新点播放，画面与声音立刻恢复 100% 丝滑同步。
 
+### 2. 根因深度剖析
+
+#### 2.1 极窄视频缓冲池无法吸收 SMB 协议的微观交互延迟
+- 在 [`SilkPlayerEngine.swift`](file:///Volumes/2T/SilkCoreKit/Sources/SilkCoreKit/Engine/SilkPlayerEngine.swift#L105) 中，视频包缓冲上限被硬编码为：
+  `private let maxVideoPackets = 24`
+- 24 个视频包在 24fps 电影中**仅相当于 1.0 秒的数据余量**；
+- 尽管局域网物理带宽高达 2.5Gbps，但 SMB 属于“一问一答（Request-Response RPC）”网络文件系统，加上 NAS 机械硬盘的物理寻道延迟与系统元数据刷新，偶发会出现 100~300 毫秒的网络等待；
+- 1.0 秒的极窄缓冲区瞬间被掏空（`videoPacketQueue.isEmpty`），导致前台视频消费直接断流。
+
+#### 2.2 激进的音画同步追赶逻辑引发恶性连环跳帧（PPT 假象）
+- 在 `SilkPlayerEngine.swift` 的渲染循环中（L972~988）：
+  - 播放器以硬件 CoreAudio 作为主时钟，一旦视频帧因网络等待比音频时钟慢了 `> 40ms`，代码直接执行 `continue` **丢弃当前渲染帧**（试图追赶时间）；
+  - 若落后 `> 250ms`，代码强行调用 `audio.reanchor(to: pts)` 反复重设时钟；
+- 这种粗暴的“落后即扔”机制导致了一旦网络抖动，播放器在一秒内连续扔掉十几张画面，主观视觉直接沦为“一秒只跳两三帧的 PPT”，并且导致声音与画面严重脱节。
+
+#### 2.3 暂停动作具有“重新蓄水与时钟归零对齐”的特殊性
+- 用户点击暂停时，前台停止以 24fps 消耗数据，后台网络解复用线程在数秒内迅速将缓冲池重新打满；
+- 恢复播放时，CoreAudio 声卡时钟执行重置（`AudioDeviceStart -> start time resolved`），将音频硬件时钟与当前视频帧重新强行拉平在同一起跑线，因此暂停后再播能够瞬间自愈。
+
+### 3. 修复方案设计与技术路径 (Planned for Next Release)
+- **内核层优化 (SilkCoreKit)**：
+  1. **引入向前预读大缓冲区 (Buffer Ahead)**：
+     - 将网络流媒体与外挂磁盘的视频包队列从 24 包（1.0 秒）放宽至 **120~240 包（5~10 秒缓冲）**；
+     - 4K HEVC 压缩包 10 秒仅占用约 5~30MB 内存，对 Mac 毫无负担，能 100% 熨平局域网协议抖动与机械硬盘寻道停顿；
+  2. **废除暴力丢帧，引入平滑微调变速追赶 (Rate Shifting)**：
+     - 当视频落后音频 40~150ms 时，不再粗暴丢弃画面，而是采用人耳无法感知的微调变速（如 1.05x 播放速率或帧呈现间隔阻尼调整）平滑追赶时钟；
+  3. **预加载状态指示 (Buffer Health Indicator)**：
+     - 在 HUD 进度条底层支持显示灰色缓冲加载条，让网络加载状态直观可感知。
+- **交付排期**：纳入 v2.0.0 内核 Step 4 / Step 5 集中优化与验收。

@@ -1460,12 +1460,37 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(singleNext?.path == pItem2.path, "Single loop returns identical current item")
     XCTAssert(testModeManager.currentIndex == 1, "Single loop maintains current index")
 
-    // Shuffle EOF invariant (picks valid track in playlist)
+    // Shuffle EOF invariant & Fisher-Yates Shuffle Queue Invariants (ISSUE-002)
     testModeManager.setPlaybackMode(.shuffle)
     testModeManager.selectIndex(0)
     let shuffleNext = testModeManager.handleNaturalEOF()
     XCTAssert(shuffleNext != nil, "Shuffle mode always yields next track")
     XCTAssert(testModeManager.currentIndex >= 0 && testModeManager.currentIndex < 3, "Shuffle index remains within playlist bounds")
+    XCTAssert(testModeManager.hasPrevious == true, "After advancing from index 0, hasPrevious is true")
+    XCTAssert(testModeManager.previousItem?.path == pItem1.path, "previousItem accurately points to index 0 (pItem1)")
+
+    let prevRestored = testModeManager.moveToPrevious()
+    XCTAssert(prevRestored?.path == pItem1.path, "moveToPrevious accurately restores previous item in history")
+    XCTAssert(testModeManager.currentIndex == 0, "Index restored to 0")
+
+    // Multi-step Fisher-Yates cycle: verify every element in an N-item playlist is visited without premature repeat
+    let shuffleManager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+    let fiveItems = (0..<5).map { MediaItem(path: "/media/track\($0).flac", title: "Track \($0)", fileSize: 1000) }
+    shuffleManager.setPlaylist(items: fiveItems, startingAt: fiveItems[0])
+    shuffleManager.setPlaybackMode(.shuffle)
+    XCTAssert(shuffleManager.hasPrevious == false, "Fresh shuffle playlist has no previous history")
+    XCTAssert(shuffleManager.previousItem == nil, "Fresh shuffle previousItem is nil")
+
+    var visitedIndices: [Int] = [shuffleManager.currentIndex]
+    for _ in 1..<5 {
+        if let _ = shuffleManager.moveToNext() {
+            let idx = shuffleManager.currentIndex
+            XCTAssert(!visitedIndices.contains(idx), "Fisher-Yates cycle must not repeat an index within the same cycle")
+            visitedIndices.append(idx)
+        }
+    }
+    XCTAssert(visitedIndices.count == 5, "All 5 items visited exactly once in the shuffle cycle")
+    XCTAssert(Set(visitedIndices) == Set(0..<5), "All unique indices 0..<5 covered in cycle")
 
     // 48. Pure Audio Mode Detection & Discrete Artwork Invariants
     print("\n--- Test 48: Pure Audio Mode Detection & Discrete Artwork Invariants ---")

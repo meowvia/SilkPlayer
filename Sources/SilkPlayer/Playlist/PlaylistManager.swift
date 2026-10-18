@@ -55,7 +55,9 @@ import Combine
     public var hasPrevious: Bool {
         guard !items.isEmpty, currentIndex >= 0 else { return false }
         switch playbackMode {
-        case .shuffle, .listLoop:
+        case .shuffle:
+            return !playHistory.isEmpty
+        case .listLoop:
             return items.count > 1
         case .sequential, .singleLoop:
             return currentIndex > 0
@@ -76,7 +78,10 @@ import Combine
         guard hasPrevious else { return nil }
         switch playbackMode {
         case .shuffle:
-            return nil
+            guard let lastIndex = playHistory.last, lastIndex >= 0, lastIndex < items.count else {
+                return nil
+            }
+            return items[lastIndex]
         case .listLoop:
             let idx = (currentIndex - 1 + items.count) % items.count
             return items[idx]
@@ -89,8 +94,10 @@ import Combine
         upcomingItem
     }
 
-    // MARK: - Upcoming Track Determination (Dynamic & Synchronized across all playback modes)
+    // MARK: - Upcoming Track Determination & Shuffle Deck State
     public private(set) var nextShuffleIndex: Int? = nil
+    private var shuffleQueue: [Int] = []
+    private var playHistory: [Int] = []
 
     public var upcomingItem: PlaylistItem? {
         guard !items.isEmpty, currentIndex >= 0, currentIndex < items.count else { return nil }
@@ -120,16 +127,30 @@ import Combine
     public func ensureShuffleCandidate() {
         guard playbackMode == .shuffle, items.count > 1 else {
             nextShuffleIndex = nil
+            shuffleQueue.removeAll()
             return
         }
-        if let cand = nextShuffleIndex, cand >= 0, cand < items.count, cand != currentIndex {
-            return
+
+        // Clean out invalid indices
+        shuffleQueue.removeAll { $0 < 0 || $0 >= items.count }
+
+        // If queue is exhausted, generate a fresh Fisher-Yates cycle
+        if shuffleQueue.isEmpty {
+            var candidatePool = Array(0..<items.count)
+            if currentIndex >= 0 && currentIndex < items.count {
+                candidatePool.removeAll { $0 == currentIndex }
+            }
+            candidatePool.shuffle()
+            shuffleQueue = candidatePool
         }
-        var nextIdx = Int.random(in: 0..<items.count)
-        if nextIdx == currentIndex {
-            nextIdx = (nextIdx + 1) % items.count
+
+        // Boundary protection: If head of queue matches current track, swap or move to end
+        if let first = shuffleQueue.first, first == currentIndex, shuffleQueue.count > 1 {
+            let dup = shuffleQueue.removeFirst()
+            shuffleQueue.append(dup)
         }
-        nextShuffleIndex = nextIdx
+
+        nextShuffleIndex = shuffleQueue.first
     }
 
     public var displayIndexText: String {
@@ -140,20 +161,32 @@ import Combine
     // MARK: - Playlist Configuration
     public func setPlaylist(items: [MediaItem], startingAt item: MediaItem) {
         self.items = items.map { PlaylistItem(from: $0) }
+        self.playHistory.removeAll()
+        self.shuffleQueue.removeAll()
+        self.nextShuffleIndex = nil
         if let idx = self.items.firstIndex(where: { $0.path == item.path || $0.id == item.id }) {
             self.currentIndex = idx
         } else {
             self.currentIndex = self.items.isEmpty ? -1 : 0
+        }
+        if playbackMode == .shuffle {
+            ensureShuffleCandidate()
         }
         saveToStorage()
     }
 
     public func setPlaylist(playlistItems: [PlaylistItem], startingIndex: Int = 0) {
         self.items = playlistItems
+        self.playHistory.removeAll()
+        self.shuffleQueue.removeAll()
+        self.nextShuffleIndex = nil
         if playlistItems.isEmpty {
             self.currentIndex = -1
         } else {
             self.currentIndex = max(0, min(playlistItems.count - 1, startingIndex))
+        }
+        if playbackMode == .shuffle {
+            ensureShuffleCandidate()
         }
         saveToStorage()
     }
@@ -163,12 +196,18 @@ import Combine
         let item = PlaylistItem(path: path, title: name, duration: duration)
         self.items = [item]
         self.currentIndex = 0
+        self.playHistory.removeAll()
+        self.shuffleQueue.removeAll()
+        self.nextShuffleIndex = nil
         saveToStorage()
     }
 
     public func setSingleItem(_ item: MediaItem) {
         self.items = [PlaylistItem(from: item)]
         self.currentIndex = 0
+        self.playHistory.removeAll()
+        self.shuffleQueue.removeAll()
+        self.nextShuffleIndex = nil
         saveToStorage()
     }
 
@@ -177,6 +216,9 @@ import Combine
         if currentIndex < 0 {
             currentIndex = 0
         }
+        if playbackMode == .shuffle {
+            ensureShuffleCandidate()
+        }
         saveToStorage()
     }
 
@@ -184,6 +226,9 @@ import Combine
         self.items.append(contentsOf: newItems)
         if currentIndex < 0 && !items.isEmpty {
             currentIndex = 0
+        }
+        if playbackMode == .shuffle {
+            ensureShuffleCandidate()
         }
         saveToStorage()
     }
@@ -196,7 +241,16 @@ import Combine
         case .shuffle:
             if items.count == 1 { return currentItem }
             ensureShuffleCandidate()
-            let targetIdx = nextShuffleIndex ?? ((currentIndex + 1) % items.count)
+            if currentIndex >= 0 && currentIndex < items.count {
+                playHistory.append(currentIndex)
+                if playHistory.count > 200 { playHistory.removeFirst() }
+            }
+            let targetIdx: Int
+            if !shuffleQueue.isEmpty {
+                targetIdx = shuffleQueue.removeFirst()
+            } else {
+                targetIdx = nextShuffleIndex ?? ((currentIndex + 1) % items.count)
+            }
             currentIndex = targetIdx
             nextShuffleIndex = nil
             ensureShuffleCandidate()
@@ -222,11 +276,16 @@ import Combine
         switch playbackMode {
         case .shuffle:
             if items.count == 1 { return currentItem }
-            var prevIdx = Int.random(in: 0..<items.count)
-            if prevIdx == currentIndex {
-                prevIdx = (prevIdx + 1) % items.count
+            guard let prevIdx = playHistory.popLast(), prevIdx >= 0, prevIdx < items.count else {
+                return nil
+            }
+            if currentIndex >= 0 && currentIndex < items.count {
+                shuffleQueue.removeAll { $0 == currentIndex }
+                shuffleQueue.insert(currentIndex, at: 0)
             }
             currentIndex = prevIdx
+            nextShuffleIndex = nil
+            ensureShuffleCandidate()
         case .listLoop:
             currentIndex = (currentIndex - 1 + items.count) % items.count
         case .sequential:
@@ -246,9 +305,11 @@ import Combine
     public func togglePlaybackMode() {
         self.playbackMode = self.playbackMode.next
         if self.playbackMode == .shuffle {
+            shuffleQueue.removeAll()
             ensureShuffleCandidate()
         } else {
             nextShuffleIndex = nil
+            shuffleQueue.removeAll()
         }
         saveToStorage()
     }
@@ -256,9 +317,11 @@ import Combine
     public func setPlaybackMode(_ mode: PlaybackMode) {
         self.playbackMode = mode
         if self.playbackMode == .shuffle {
+            shuffleQueue.removeAll()
             ensureShuffleCandidate()
         } else {
             nextShuffleIndex = nil
+            shuffleQueue.removeAll()
         }
         saveToStorage()
     }
@@ -274,7 +337,16 @@ import Combine
         case .shuffle:
             if items.count == 1 { return currentItem }
             ensureShuffleCandidate()
-            let targetIdx = nextShuffleIndex ?? ((currentIndex + 1) % items.count)
+            if currentIndex >= 0 && currentIndex < items.count {
+                playHistory.append(currentIndex)
+                if playHistory.count > 200 { playHistory.removeFirst() }
+            }
+            let targetIdx: Int
+            if !shuffleQueue.isEmpty {
+                targetIdx = shuffleQueue.removeFirst()
+            } else {
+                targetIdx = nextShuffleIndex ?? ((currentIndex + 1) % items.count)
+            }
             currentIndex = targetIdx
             saveToStorage()
             nextShuffleIndex = nil
@@ -295,7 +367,16 @@ import Combine
     @discardableResult
     public func selectIndex(_ index: Int) -> PlaylistItem? {
         guard index >= 0 && index < items.count else { return nil }
+        if currentIndex >= 0 && currentIndex < items.count && currentIndex != index {
+            playHistory.append(currentIndex)
+            if playHistory.count > 200 { playHistory.removeFirst() }
+        }
         currentIndex = index
+        if playbackMode == .shuffle {
+            shuffleQueue.removeAll { $0 == index }
+            nextShuffleIndex = nil
+            ensureShuffleCandidate()
+        }
         saveToStorage()
         return currentItem
     }
@@ -308,6 +389,14 @@ import Combine
     public func removeItem(at index: Int) {
         guard index >= 0 && index < items.count else { return }
         items.remove(at: index)
+        playHistory = playHistory.compactMap { idx in
+            if idx == index { return nil }
+            return idx > index ? idx - 1 : idx
+        }
+        shuffleQueue = shuffleQueue.compactMap { idx in
+            if idx == index { return nil }
+            return idx > index ? idx - 1 : idx
+        }
         if items.isEmpty {
             currentIndex = -1
         } else if index < currentIndex {
@@ -315,12 +404,19 @@ import Combine
         } else if currentIndex >= items.count {
             currentIndex = items.count - 1
         }
+        if playbackMode == .shuffle {
+            nextShuffleIndex = nil
+            ensureShuffleCandidate()
+        }
         saveToStorage()
     }
 
     public func clear() {
         items = []
         currentIndex = -1
+        playHistory.removeAll()
+        shuffleQueue.removeAll()
+        nextShuffleIndex = nil
         saveToStorage()
     }
 
