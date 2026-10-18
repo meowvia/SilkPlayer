@@ -647,7 +647,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowWillResize(_ window: NSWindow, to frameSize: NSSize) -> NSSize {
-        let minW: CGFloat = 640
+        let idleMinW: CGFloat = 640
         let screen = window.screen ?? NSScreen.main
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         let maxSize = screenFrame.size
@@ -660,7 +660,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         // Allow Shift-key freeform resizing without aspect ratio constraints
         if NSEvent.modifierFlags.contains(.shift) {
             let minSide: CGFloat = (player?.isAudioOnly == true) ? 380.0 : 360.0
-            let minWidth: CGFloat = (player?.isAudioOnly == true) ? 380.0 : minW
+            let minWidth: CGFloat = (player?.isAudioOnly == true) ? 380.0 : idleMinW
             return NSSize(
                 width: max(minWidth, min(maxSize.width, frameSize.width)),
                 height: max(minSide, min(maxSize.height, frameSize.height))
@@ -697,13 +697,15 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
                 return frameSize
             }
             return NSSize(
-                width: max(minW, min(maxSize.width, frameSize.width)),
+                width: max(idleMinW, min(maxSize.width, frameSize.width)),
                 height: max(360, min(maxSize.height, frameSize.height))
             )
         }
 
         let baseAspect = player.effectiveAspectRatio
-        let minH = round(minW / max(0.001, baseAspect))
+        let minContentSz = PlayerGeometry.minimumContentSize(for: baseAspect, screenVisibleHeight: screenFrame.height)
+        let minW = minContentSz.width
+        let minH = minContentSz.height
 
         // Video-Adaptive Split Screen Tiling ("播放自适应分屏"):
         // Only trigger when NOT in interactive live resize dragging

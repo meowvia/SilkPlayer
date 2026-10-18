@@ -118,13 +118,16 @@ extension PlayerCore {
     }
 
     public func applyAdaptiveWindowGeometry(animated: Bool = true) {
-        guard AppSettings.shared.autoResizeWindow,
-              self.videoWidth > 0, self.videoHeight > 0,
-              let window = self.hostWindow ?? NSApp.keyWindow,
+        guard let window = self.hostWindow ?? NSApp.keyWindow,
               !isFullscreen,
               !window.styleMask.contains(.fullScreen) else { return }
 
         let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        window.maxSize = screenFrame.size
+        window.contentMaxSize = screenFrame.size
+
+        guard AppSettings.shared.autoResizeWindow,
+              self.videoWidth > 0, self.videoHeight > 0 else { return }
         let aspect = effectiveAspectRatio
         let isVertical = isEffectiveVertical
 

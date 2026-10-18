@@ -1507,7 +1507,6 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     private func detectMetadata(for layer: SilkPlayerLayer? = nil) {
         guard let player = layer?.player ?? playerLayer?.player else { return }
 
-        let wasAudioMode = self.isAudioOnly
         self.isAudioOnly = layer?.isAudioOnly ?? player.isAudioOnly
         if self.isAudioOnly {
             let picData = layer?.attachedPictureData ?? player.attachedPictureData
@@ -1526,9 +1525,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             if isPlaying {
                 startAudioRhythmMonitoring()
             }
-            if !wasAudioMode {
-                applyAudioWindowGeometry(animated: false)
-            }
+            applyAudioWindowGeometry(animated: false)
             return
         }
 

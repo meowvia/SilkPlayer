@@ -10,8 +10,8 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | ISSUE-001 | 音频模式下倍速播放未生效 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | Medium | 已登记待修复 | v1.1.0 |
 | ISSUE-002 | 随机播放无记忆抽样与近距离高频重播缺陷 | 播放列表与音频随机 / SilkPlayer (PlaylistManager) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
-| ISSUE-003 | 音频模式窗口适配不良与垂直重叠穿模 | 界面布局 / SilkPlayer (AudioArtworkView & PlayerHUDView) | Medium | 已登记待改 | v1.1.0 |
-| ISSUE-004 | 窗口几何与交互管理架构碎片化（改此失彼顽疾） | 核心架构 / PlayerWindowManager & WindowGeometry | High | 深度反思待重构 | v1.1.0 |
+| ISSUE-003 | 音频模式窗口适配不良与垂直重叠穿模 | 界面布局 / SilkPlayer (AudioArtworkView & PlayerHUDView) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
+| ISSUE-004 | 窗口几何与交互管理架构碎片化（改此失彼顽疾） | 核心架构 / PlayerWindowManager & WindowGeometry | High | 核心病灶已解除 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-005 | 视频窗口被物理完全遮挡时 Metal 阻塞导致音频断流 | 渲染与解复用 / SilkCoreKit (SilkMetalRenderView & Engine) | Low | 已登记待下版本修复 | v1.1.0 |
 | ISSUE-006 | 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步 | 引擎解复用与同步 / SilkCoreKit (SilkPlayerEngine) | Medium | 已登记待下版本优化 | v1.1.0 |
 

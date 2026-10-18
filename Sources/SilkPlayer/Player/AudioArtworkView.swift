@@ -25,8 +25,11 @@ public struct AudioArtworkView: View {
         GeometryReader { geometry in
             let availableW = geometry.size.width
             let availableH = geometry.size.height
-            let coverCardSize = max(180, min(480, min(availableW * 0.52, availableH * 0.48)))
-            let vinylDiameter = max(240, min(540, min(availableW * 0.65, (availableH - 160) * 0.68)))
+            let topSafeInset: CGFloat = 58.0
+            let bottomSafeInset: CGFloat = 108.0
+            let safeH = max(180, availableH - topSafeInset - bottomSafeInset)
+            let coverCardSize = min(360, min(availableW * 0.52, safeH * 0.52))
+            let vinylDiameter = max(140, min(420, min(availableW * 0.55, safeH * 0.58)))
 
             ZStack {
                 // 1. Native macOS Liquid Glass frosted backdrop
@@ -64,8 +67,8 @@ public struct AudioArtworkView: View {
                     .edgesIgnoringSafeArea(.all)
                     .allowsHitTesting(false)
 
-                // 5. Centered Presentation: Pure Floating Vinyl Disc & Acoustic Resonance Corona
-                VStack(spacing: 28) {
+                // 5. Centered Presentation: Pure Floating Vinyl Disc & Acoustic Resonance Corona (Safe Inset Viewport)
+                VStack(spacing: max(10, min(24, safeH * 0.08))) {
                     if let artwork = player.artworkImage {
                         // Discrete Cover Card with Acoustic Bloom
                         let b0 = player.isPlaying ? (player.audioRhythmLevels.first ?? 0.0) : 0.0
@@ -99,7 +102,7 @@ public struct AudioArtworkView: View {
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                                         .stroke(Color.white.opacity(0.15), lineWidth: 1.0)
-                                )
+                                 )
                                 .shadow(color: .black.opacity(0.55), radius: 26, x: 0, y: 14)
                                 .scaleEffect(player.isPlaying ? (1.0 + CGFloat(bassEnergy) * 0.015) : 1.0)
                                 .animation(.easeOut(duration: 0.08), value: bassEnergy)
@@ -114,7 +117,7 @@ public struct AudioArtworkView: View {
                         )
                     }
 
-                    // Track Title & Next Track Preview (空一行 不对齐正在播放歌名，再空两格预告，下一首：)
+                    // Track Title & Next Track Preview
                     VStack(spacing: 0) {
                         Text(player.mediaTitle)
                             .font(.system(size: 17, weight: .semibold, design: .rounded))
@@ -127,7 +130,7 @@ public struct AudioArtworkView: View {
                         if let nextTitle = nextTrackPreviewTitle {
                             // 空一行
                             Spacer()
-                                .frame(height: 14)
+                                .frame(height: max(6, min(14, safeH * 0.04)))
 
                             // 不对齐正在播放歌名（偏置缩进 18pt），再空两格预告，下一首：
                             HStack(spacing: 0) {
@@ -147,7 +150,9 @@ public struct AudioArtworkView: View {
                         }
                     }
                 }
-                .offset(y: -8)
+                .frame(width: availableW, height: safeH, alignment: .center)
+                .padding(.top, topSafeInset)
+                .padding(.bottom, bottomSafeInset)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

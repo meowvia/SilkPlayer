@@ -34,6 +34,26 @@ public struct AppShellView: View {
         return player.isLoaded || player.playbackState == .loading
     }
 
+    private var rootMinWidth: CGFloat {
+        if player.isAudioOnly {
+            return 380
+        } else if isPlaying || player.isLoaded {
+            return 200
+        } else {
+            return 640
+        }
+    }
+
+    private var rootMinHeight: CGFloat {
+        if player.isAudioOnly {
+            return 380
+        } else if isPlaying || player.isLoaded {
+            return 200
+        } else {
+            return 360
+        }
+    }
+
     public var body: some View {
         GeometryReader { geometry in
             let drawerWidth = PlaylistDrawerDimensions.drawerWidth(for: geometry.size.width, isFullscreen: player.isFullscreen)
@@ -133,7 +153,7 @@ public struct AppShellView: View {
         }
         .preferredColorScheme(settings.appearanceMode.colorScheme)
         .id(settings.appLanguage)
-        .frame(minWidth: 640, minHeight: 360)
+        .frame(minWidth: rootMinWidth, minHeight: rootMinHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             WindowAccessor { window in
@@ -430,6 +450,11 @@ public struct AppShellView: View {
         if isPlaying {
             if !player.isFullscreen {
                 player.applyContentAspectRatioLock()
+                if player.isAudioOnly {
+                    player.applyAudioWindowGeometry(animated: false)
+                } else if AppSettings.shared.autoResizeWindow {
+                    player.applyAdaptiveWindowGeometry(animated: false)
+                }
             }
         } else {
             let emptyMin = NSSize(width: 640, height: 360)
