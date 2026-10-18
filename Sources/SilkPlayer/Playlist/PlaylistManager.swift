@@ -115,9 +115,11 @@ import Combine
             return nil
         case .shuffle:
             if items.count == 1 { return currentItem }
-            ensureShuffleCandidate()
             if let candidate = nextShuffleIndex, candidate >= 0, candidate < items.count {
                 return items[candidate]
+            }
+            if let first = shuffleQueue.first, first >= 0, first < items.count {
+                return items[first]
             }
             let fallbackIdx = (currentIndex + 1) % items.count
             return items[fallbackIdx]
@@ -449,6 +451,9 @@ import Combine
             } else {
                 let savedIndex = userDefaults.integer(forKey: indexStorageKey)
                 self.currentIndex = max(0, min(decoded.count - 1, savedIndex))
+            }
+            if playbackMode == .shuffle {
+                ensureShuffleCandidate()
             }
             return true
         } catch {

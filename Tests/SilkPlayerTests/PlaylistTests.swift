@@ -1492,6 +1492,28 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(visitedIndices.count == 5, "All 5 items visited exactly once in the shuffle cycle")
     XCTAssert(Set(visitedIndices) == Set(0..<5), "All unique indices 0..<5 covered in cycle")
 
+    // Pure read-only upcomingItem invariant: repeated queries must be idempotent and cannot mutate shuffle state
+    let peek1 = shuffleManager.upcomingItem
+    let peek2 = shuffleManager.upcomingItem
+    let peek3 = shuffleManager.nextItem
+    XCTAssert(peek1?.path == peek2?.path, "upcomingItem getter is pure read-only and idempotent across queries")
+    XCTAssert(peek2?.path == peek3?.path, "nextItem and upcomingItem yield identical track candidate")
+
+    // Invariant: restoreFromStorage initializes shuffle candidate immediately
+    let persistSuite = UserDefaults(suiteName: "com.silkplayer.test.shuffle.restore")!
+    persistSuite.removePersistentDomain(forName: "com.silkplayer.test.shuffle.restore")
+    let pManager1 = PlaylistManager(isPersistenceEnabled: true, autoRestore: false, userDefaults: persistSuite)
+    pManager1.setPlaylist(items: fiveItems, startingAt: fiveItems[0])
+    pManager1.setPlaybackMode(.shuffle)
+    let candidateBefore = pManager1.nextShuffleIndex
+    XCTAssert(candidateBefore != nil, "Shuffle candidate generated upon setPlaybackMode")
+
+    let pManager2 = PlaylistManager(isPersistenceEnabled: true, autoRestore: true, userDefaults: persistSuite)
+    XCTAssert(pManager2.playbackMode == .shuffle, "Playback mode restored to shuffle")
+    XCTAssert(pManager2.upcomingItem != nil, "Upcoming item non-nil immediately after cold restore")
+    XCTAssert(pManager2.nextShuffleIndex != nil, "restoreFromStorage automatically ensures shuffle candidate")
+    persistSuite.removePersistentDomain(forName: "com.silkplayer.test.shuffle.restore")
+
     // 48. Pure Audio Mode Detection & Discrete Artwork Invariants
     print("\n--- Test 48: Pure Audio Mode Detection & Discrete Artwork Invariants ---")
     let testPlayer = PlayerCore.shared

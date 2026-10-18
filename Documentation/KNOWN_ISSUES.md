@@ -109,7 +109,8 @@
 
 #### 3.3 交付与回归验证
 1. 在 `PlaylistTests.swift` 中补充针对随机洗牌周期无重复性、相邻防重与上一曲精准回跳的历史栈单元测试；
-2. 验证与现有 `upcomingItem` 提前 0ms 预取和下一曲指示器的完美对齐。
+2. 验证与现有 `upcomingItem` 提前 0ms 预取和下一曲指示器的完美对齐；
+3. 修复在 SwiftUI `@Observable` 视图求值期间调用 `upcomingItem` 误触发 `ensureShuffleCandidate()` 导致的死循环重绘卡死，确立 `upcomingItem` 纯只读幂等属性。
 
 ---
 
