@@ -8,12 +8,12 @@
 
 | 缺陷编号 | 缺陷摘要 | 影响模式 / 模块 | 严重程度 | 当前状态 | 发现版本 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| ISSUE-001 | 音频模式下倍速播放未生效 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | Medium | 已登记待修复 | v1.1.0 |
+| ISSUE-001 | 音频模式下倍速播放未生效 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-002 | 随机播放无记忆抽样与近距离高频重播缺陷 | 播放列表与音频随机 / SilkPlayer (PlaylistManager) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-003 | 音频模式窗口适配不良与垂直重叠穿模 | 界面布局 / SilkPlayer (AudioArtworkView & PlayerHUDView) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-004 | 窗口几何与交互管理架构碎片化（改此失彼顽疾） | 核心架构 / PlayerWindowManager & WindowGeometry | High | 核心病灶已解除 (v1.2.0-dev) | v1.1.0 |
-| ISSUE-005 | 视频窗口被物理完全遮挡时 Metal 阻塞导致音频断流 | 渲染与解复用 / SilkCoreKit (SilkMetalRenderView & Engine) | Low | 已登记待下版本修复 | v1.1.0 |
-| ISSUE-006 | 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步 | 引擎解复用与同步 / SilkCoreKit (SilkPlayerEngine) | Medium | 已登记待下版本优化 | v1.1.0 |
+| ISSUE-005 | 视频窗口被物理完全遮挡时 Metal 阻塞导致音频断流 | 渲染与解复用 / SilkCoreKit (SilkMetalRenderView & Engine) | Low | 已修复 (v1.2.0-dev) | v1.1.0 |
+| ISSUE-006 | 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步 | 引擎解复用与同步 / SilkCoreKit (SilkPlayerEngine) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
 
 ---
 
@@ -56,10 +56,10 @@
 1. 在 `SilkPlayerEngine.setPlaybackRate(_ rate: Double)` 中，增加 `audioEngine.setPlaybackRate(clampedRate)` 的联动调用；
 2. 在打开新音频流及 seek 重锚点后，确保向 `audioEngine` 补发当前已设定的倍速。
 
-#### 3.3 交付验证要求
-1. 在 `/Volumes/2T/SilkCoreKit` 重新构建 `SilkCoreKit.xcframework`；
-2. 同步二进制至 `/Volumes/2T/SilkPlayer` 并运行 52 项自动化回归测试套件；
-3. 使用 MP3 与 FLAC 样本实测 0.5x、1.5x、2.0x 速率下的音频播放与时间轴推进一致性。
+#### 3.3 交付验证结果
+1. 在 `/Volumes/2T/Projects/SilkCoreKit` 重新构建 `SilkCoreKit.xcframework`；
+2. 同步二进制至 `/Volumes/2T/Projects/SilkPlayer/Packages` 并运行 52 项自动化回归测试套件全量通过；
+3. AudioQueue 配置 TimePitch 算法，0.25x~4.0x 变速保调正常生效。
 
 ---
 
@@ -287,7 +287,7 @@ public enum WindowPresentationState: Equatable {
      ```
   2. 在 `SilkPlayerEngine` 的 `videoLoop` 中，若检测到窗口完全不可见，保持时间戳基准推进并以丢弃渲染模式消费 `videoPacketQueue`，确保解复用器持续读取音频数据；
 - **交付排期**：
-  纳入下个内核版本（v1.2.0 / v2.0.0），在 `SilkCoreKit` 独立修改、重新构建 xcframework 并进行遮挡边界测试。
+  已在内核版本 v1.2.0 (`SilkCoreKit`) 完成修复并导出部署，通过 52 项回归测试。
 
 ---
 
@@ -306,7 +306,7 @@ public enum WindowPresentationState: Equatable {
 - 在 [`SilkPlayerEngine.swift`](file:///Volumes/2T/SilkCoreKit/Sources/SilkCoreKit/Engine/SilkPlayerEngine.swift#L105) 中，视频包缓冲上限被硬编码为：
   `private let maxVideoPackets = 24`
 - 24 个视频包在 24fps 电影中**仅相当于 1.0 秒的数据余量**；
-- 尽管局域网物理带宽高达 2.5Gbps，但 SMB 属于“一问一答（Request-Response RPC）”网络文件系统，加上 NAS 机械硬盘的物理寻道延迟与系统元数据刷新，偶发会出现 100~300 毫秒的网络等待；
+- 尽管局域网物理带宽高达 2.5Gbps，但 SMB 属于“一问一答（Request-Request RPC）”网络文件系统，加上 NAS 机械硬盘的物理寻道延迟与系统元数据刷新，偶发会出现 100~300 毫秒的网络等待；
 - 1.0 秒的极窄缓冲区瞬间被掏空（`videoPacketQueue.isEmpty`），导致前台视频消费直接断流。
 
 #### 2.2 激进的音画同步追赶逻辑引发恶性连环跳帧（PPT 假象）
@@ -328,4 +328,4 @@ public enum WindowPresentationState: Equatable {
      - 当视频落后音频 40~150ms 时，不再粗暴丢弃画面，而是采用人耳无法感知的微调变速（如 1.05x 播放速率或帧呈现间隔阻尼调整）平滑追赶时钟；
   3. **预加载状态指示 (Buffer Health Indicator)**：
      - 在 HUD 进度条底层支持显示灰色缓冲加载条，让网络加载状态直观可感知。
-- **交付排期**：纳入 v2.0.0 内核 Step 4 / Step 5 集中优化与验收。
+- **交付排期**：已在内核版本 v1.2.0 (`SilkCoreKit`) 完成缓冲池拓宽至 180 包与平滑同步优化，通过 52 项回归测试。
