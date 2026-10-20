@@ -71,12 +71,12 @@
     - 根因：逗号数量 `>= 9` 即切除前 8 段，未校验 ASS 事件头。
 
 ### 模块四：窗口交互与自适应几何系统审计
-17. **窗口几何与音频穿模 5 处核心病灶 (P0)**：
-    - 病灶 A：`AppShellView.swift` 根视图 `.frame(minWidth: 640)` Auto Layout 强锁；
-    - 病灶 B：`PlayerCore.swift` (L291, L1529) `wasAudioMode` 短路导致音频尺寸自适应失效；
-    - 病灶 C：`PlayerWindowManager.swift` (L650) 视频分支硬编码 `minW = 640` 导致 9:16 竖屏最小高误算为 1138pt 拖拽跳变；
-    - 病灶 D：`AudioArtworkView.swift` 缺乏 HUD 108pt 安全区且盘片下限锁死 240pt 导致歌名穿模；
-    - 病灶 E：`PlayerCore+WindowGeometry.swift` (L121) 切回视频未解锁正方形 `maxSize`。
+17. **窗口几何与音频穿模 5 处代码缺陷定位 (P0)**：
+    - 缺陷 A：`AppShellView.swift` 根视图 `.frame(minWidth: 640)` Auto Layout 强锁；
+    - 缺陷 B：`PlayerCore.swift` (L291, L1529) `wasAudioMode` 短路导致音频尺寸自适应失效；
+    - 缺陷 C：`PlayerWindowManager.swift` (L650) 视频分支硬编码 `minW = 640` 导致 9:16 竖屏最小高误算为 1138pt 拖拽跳变；
+    - 缺陷 D：`AudioArtworkView.swift` 缺乏 HUD 108pt 安全区且盘片下限锁死 240pt 导致歌名穿模；
+    - 缺陷 E：`PlayerCore+WindowGeometry.swift` (L121) 切回视频未解锁正方形 `maxSize`。
 
 ### 模块五：进度条悬停预览系统审计
 18. **竖屏视频缩略图显示错误与“邮票化” (P0)**：

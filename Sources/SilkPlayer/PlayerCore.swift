@@ -199,7 +199,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         renderContainer?.applyRenderViewLayout()
     }
 
-    // MARK: - Audiophile Crossfade Management (歌曲切换淡出淡入)
+    // MARK: - Audio Crossfade Handler (歌曲切换淡出淡入)
     private var fadeTask: Task<Void, Never>?
 
     /// Smoothly fade out current audio playback volume before track switching

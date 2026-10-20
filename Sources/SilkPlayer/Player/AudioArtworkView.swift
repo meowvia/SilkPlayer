@@ -36,7 +36,7 @@ public struct AudioArtworkView: View {
                 VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
                     .edgesIgnoringSafeArea(.all)
 
-                // 2. Translucent dark obsidian cinema tint
+                // 2. Dark background tint overlay
                 Color(red: 0.06, green: 0.07, blue: 0.09).opacity(0.50)
                     .edgesIgnoringSafeArea(.all)
 
@@ -67,7 +67,7 @@ public struct AudioArtworkView: View {
                     .edgesIgnoringSafeArea(.all)
                     .allowsHitTesting(false)
 
-                // 5. Centered Presentation: Pure Floating Vinyl Disc & Acoustic Resonance Corona (Safe Inset Viewport)
+                // 5. Centered Presentation: Vinyl Disc & Audio Visualizer Halo (Safe Inset Viewport)
                 VStack(spacing: max(10, min(24, safeH * 0.08))) {
                     if let artwork = player.artworkImage {
                         // Discrete Cover Card with Acoustic Bloom
@@ -109,7 +109,7 @@ public struct AudioArtworkView: View {
                         }
                         .frame(width: coverCardSize, height: coverCardSize)
                     } else {
-                        // Pure Floating Vinyl Disc with Acoustic Resonance Corona
+                        // Vinyl Disc with Audio Visualizer Halo
                         FloatingVinylDiscView(
                             diameter: vinylDiameter,
                             isPlaying: player.isPlaying,
@@ -159,7 +159,7 @@ public struct AudioArtworkView: View {
     }
 }
 
-// MARK: - Audiophile Acoustic Resonance Corona (高保真黑胶声学环形共振光冕)
+// MARK: - Audio Visualizer Halo View (音频声波律动光环)
 @MainActor
 struct AcousticResonanceCoronaView: View {
     let diameter: CGFloat
@@ -177,7 +177,7 @@ struct AcousticResonanceCoronaView: View {
         let highEnergy = b2 * 0.25 + b3 * 0.75
 
         ZStack {
-            // Layer 1: Deep Core Resonance Bloom (深层低频弥散气场)
+            // Layer 1: Bass glow bloom layer (低频环境光晕)
             Circle()
                 .fill(
                     RadialGradient(
@@ -194,7 +194,7 @@ struct AcousticResonanceCoronaView: View {
                 .frame(width: diameter * (1.10 + CGFloat(bassEnergy) * 0.28), height: diameter * (1.10 + CGFloat(bassEnergy) * 0.28))
                 .blur(radius: 32)
 
-            // Layer 2: Inner Harmonic Resonance Ring (内圈声学谐波光环 - 偏暖金)
+            // Layer 2: Inner visualizer ring (内圈光环)
             Circle()
                 .stroke(
                     LinearGradient(
@@ -213,7 +213,7 @@ struct AcousticResonanceCoronaView: View {
                 )
                 .shadow(color: Color(red: 1.00, green: 0.85, blue: 0.50).opacity(isPlaying ? (Double(bassEnergy) * 0.35) : 0.0), radius: 6)
 
-            // Layer 3: Mid Harmonic Corona Ring (中频光冕环 - 水银白金)
+            // Layer 3: Mid-frequency visualizer ring (中频光环)
             Circle()
                 .stroke(
                     LinearGradient(
@@ -232,7 +232,7 @@ struct AcousticResonanceCoronaView: View {
                 )
                 .shadow(color: Color.white.opacity(isPlaying ? (Double(midEnergy) * 0.25) : 0.0), radius: 4)
 
-            // Layer 4: High-Frequency Shimmer Corona (外圈高频轻灵微光环 - 极细)
+            // Layer 4: High-frequency accent ring (外圈高频描边微光)
             Circle()
                 .stroke(
                     Color(white: 1.00).opacity(isPlaying ? (0.12 + Double(highEnergy) * 0.24) : 0.02),
@@ -290,7 +290,7 @@ final class TurntableAssets {
     }
 }
 
-// MARK: - Pure Floating Audiophile Vinyl Disc (纯净高保真悬浮黑胶 · 丝滑慢速旋转)
+// MARK: - Vinyl Disc View (黑胶唱片视图)
 @MainActor
 struct FloatingVinylDiscView: View {
     let diameter: CGFloat
@@ -301,7 +301,7 @@ struct FloatingVinylDiscView: View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying)) { timeline in
             let angle = (timeline.date.timeIntervalSinceReferenceDate * 18.0).truncatingRemainder(dividingBy: 360.0)
             ZStack {
-                // 1. Acoustic Resonance Corona (Multi-layer harmonic bloom and rings)
+                // 1. Audio Visualizer Halo (Multi-layer ring visualizer)
                 AcousticResonanceCoronaView(
                     diameter: diameter,
                     levels: levels,
@@ -315,7 +315,7 @@ struct FloatingVinylDiscView: View {
                     .blur(radius: 26)
                     .offset(y: 12)
 
-                // 3. High-Precision Circular Vinyl Disc with Concentric Champagne Gold Label
+                // 3. Circular Vinyl Disc Asset with Center Label
                 Group {
                     if let vinylImg = TurntableAssets.shared.vinylImage {
                         Image(nsImage: vinylImg)

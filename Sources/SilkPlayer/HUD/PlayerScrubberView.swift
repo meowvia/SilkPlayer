@@ -117,7 +117,7 @@ public struct PlayerScrubberView: View {
             let currentKnobX = knobCenterX(progress: progress, totalWidth: totalWidth, isExpanded: isExpanded)
 
             ZStack(alignment: .leading) {
-                // 1. Base Track (Pure glass cinema transparency)
+                // 1. Base Track Background
                 Capsule()
                     .fill(Color.black.opacity(0.20))
                     .frame(height: trackHeight)
@@ -175,7 +175,7 @@ public struct PlayerScrubberView: View {
                     }
                 }
 
-                // 4. Chapter Markers (Magnetic ticks accurately aligned with knob center kinematics)
+                // 4. Chapter Markers
                 if clock.duration > 0 && !player.chapters.isEmpty {
                     ForEach(player.chapters) { chapter in
                         let fraction = CGFloat(max(0.0, min(1.0, chapter.time / clock.duration)))
@@ -190,7 +190,7 @@ public struct PlayerScrubberView: View {
                     }
                 }
 
-                // 5. Played Fill Track (Luminous cinema cyan-blue glass ending exactly at knob center)
+                // 5. Played Fill Track
                 Capsule()
                     .fill(
                         LinearGradient(
@@ -204,7 +204,7 @@ public struct PlayerScrubberView: View {
                     )
                     .frame(width: max(0, min(totalWidth, currentKnobX)), height: trackHeight)
 
-                // 6. Scrub Knob (Strictly centered at knobCenterX with sub-pixel precision)
+                // 6. Scrub Knob (Centered at knobCenterX)
                 Circle()
                     .fill(Color.white)
                     .overlay(

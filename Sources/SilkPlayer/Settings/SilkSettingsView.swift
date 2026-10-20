@@ -667,7 +667,7 @@ public struct SilkSettingsView: View {
                         icon: "sun.max.fill",
                         color: .orange,
                         title: L10n.tr("SilkRender Pipeline · Metal 3 & Profile 5", "SilkRender Pipeline 渲染管线"),
-                        desc: L10n.tr("Direct IOSurface zero-copy Metal texture presentation with proprietary Dolby Vision Profile 5 RPU dynamic reshaping.", "基于 IOSurface 零拷贝 Metal 3 纹理直出与专有杜比视界 Profile 5 RPU 动态重塑算法，拒绝偏色偏灰。")
+                        desc: L10n.tr("Hardware-accelerated Metal presentation with Dolby Vision Profile 5 tone mapping, preserving natural colors.", "基于 VideoToolbox 与 Metal 色彩映射渲染单层杜比视界（Profile 5），保持色彩自然通透。")
                     )
                     Divider().opacity(0.2)
                     aboutPillarRow(
@@ -681,7 +681,7 @@ public struct SilkSettingsView: View {
                         icon: "lock.shield.fill",
                         color: .green,
                         title: L10n.tr("Native Architecture & Privacy Protection", "原生架构与隐私保护"),
-                        desc: L10n.tr("Lightweight proprietary core (SilkCoreKit) + LGPL-3.0 dynamic library baseline, offline execution without telemetry.", "专有核心架构 (SilkCoreKit) 结合 LGPL-3.0 动态链接合规基线，完全单机离线运行，无任何网络遥测。")
+                        desc: L10n.tr("Modular core framework (SilkCoreKit) conforming to LGPL-3.0 dynamic linking standards, running completely offline.", "采用独立内核 (SilkCoreKit) 结合 LGPL-3.0 动态链接标准，完全单机离线运行，无任何网络遥测。")
                     )
                 }
             }
@@ -697,7 +697,7 @@ public struct SilkSettingsView: View {
                 }
             }
 
-            Text(L10n.tr("Released under LGPL-3.0 · Powered by SilkCoreKit", "遵循 LGPL-3.0 动态链接合规标准 · 搭载 SilkCoreKit 核心驱动"))
+            Text(L10n.tr("Released under LGPL-3.0 · Powered by SilkCoreKit", "遵循 LGPL-3.0 动态链接合规标准 · 由 SilkCoreKit 核心库提供支持"))
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundColor(.secondary.opacity(0.70))
                 .padding(.bottom, 4)

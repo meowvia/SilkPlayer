@@ -11,9 +11,10 @@
 | ISSUE-001 | 音频模式下倍速播放未生效 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-002 | 随机播放无记忆抽样与近距离高频重播缺陷 | 播放列表与音频随机 / SilkPlayer (PlaylistManager) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-003 | 音频模式窗口适配不良与垂直重叠穿模 | 界面布局 / SilkPlayer (AudioArtworkView & PlayerHUDView) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
-| ISSUE-004 | 窗口几何与交互管理架构碎片化（改此失彼顽疾） | 核心架构 / PlayerWindowManager & WindowGeometry | High | 核心病灶已解除 (v1.2.0-dev) | v1.1.0 |
+| ISSUE-004 | 窗口几何与交互状态机重构（解决多处约束冲突） | 核心架构 / PlayerWindowManager & WindowGeometry | High | 核心约束冲突已解决 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-005 | 视频窗口被物理完全遮挡时 Metal 阻塞导致音频断流 | 渲染与解复用 / SilkCoreKit (SilkMetalRenderView & Engine) | Low | 已修复 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-006 | 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步 | 引擎解复用与同步 / SilkCoreKit (SilkPlayerEngine) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
+| ISSUE-007 | 暂停态音频拖拽 Seek 时钟偏移与硬件采样单调累加缺陷 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | High | 待修复 (规划于 v1.3.0) | v1.2.0 |
 
 ---
 
@@ -153,9 +154,9 @@
 
 ---
 
-## ISSUE-004: 窗口几何与交互管理架构碎片化（“改此失彼”顽疾剖析与统一状态机重构纲领）
+## ISSUE-004: 窗口几何与交互管理架构统一（状态机重构与约束收拢）
 
-### 1. 深度反思：为什么窗口交互一直处于“改这里、丢那里”的恶性循环？
+### 1. 架构复盘：为什么窗口交互需要重构为单一状态机？
 
 回顾项目演进历史，窗口系统经历了多轮分散修补：
 1. 为了支持竖屏视频旋转，增加了朝向尺寸记忆逻辑；
@@ -165,7 +166,7 @@
 5. 为了消除切歌时的黑屏闪烁，又打上了状态保留补丁。
 
 **核心问题**：
-每一次修改都是“针对单一症状打局部补丁”，没有从根源上建立一套严密的、数学自洽的**单一窗口几何状态机（Single Window Geometry State Machine）**。这种“头痛医头、脚痛医脚”的补丁式治理，必然导致修好 A 的同时踩碎 B，顾及了 C 却丢掉了 D，严重透支了稳定性与用户信任。
+每一次修改都是“针对单一症状打局部补丁”，没有从根源上建立一套严密的**单一窗口几何状态机（Single Window Geometry State Machine）**。缺乏统一状态机治理，导致多处约束相互覆盖，破坏了窗口缩放与模式切换的稳定性。
 
 ### 2. 根因剖析：四大系统性架构缺陷
 
@@ -227,7 +228,7 @@ public enum WindowPresentationState: Equatable {
 }
 ```
 每次状态变更（如视频转音频、旋转、退出全屏、进入平铺），统一由状态机执行标准转移函数：
-`transition(to newState: WindowPresentationState, animated: Bool)`，原子级完成窗口尺寸、比例锁、最小尺寸与安全区的同步切换。
+`transition(to newState: WindowPresentationState, animated: Bool)`，同步完成窗口尺寸、比例锁、最小尺寸与安全区的统一切换。
 
 #### 3.3 引入视图安全区总线 (`WindowContentInsets`)
 - 窗口管理器统一计算并向下广播安全区环境值（`EnvironmentValues.playerHUDInsets`）；
@@ -243,9 +244,9 @@ public enum WindowPresentationState: Equatable {
 
 ---
 
-### 4. 第三方深度协同落地机制 (Collaborative Execution Framework)
+### 4. 第三方方案协同落地机制 (Collaborative Execution Framework)
 
-依据用户指令，播放窗口顽疾正式确立“**第三方出谋划策把脉开方 + 本地 AI 交叉评估落地主刀**”的协同推进机制：
+依据用户指令，确立“**外部架构方案评审 + 本地代码定点落地与回归测试**”的协同推进机制：
 
 1. **方案输入与对齐**：
    第三方提供具体修改方案后，全量导入进行交叉比对；
