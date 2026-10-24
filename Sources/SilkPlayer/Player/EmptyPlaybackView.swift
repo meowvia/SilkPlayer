@@ -91,7 +91,6 @@ public struct EmptyPlaybackView: View {
                 dragDropOverlay
             }
         }
-        .frame(minWidth: 640, minHeight: 360)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Native Drag and Drop handling
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in

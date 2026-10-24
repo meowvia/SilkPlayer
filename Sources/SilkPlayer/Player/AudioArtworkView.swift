@@ -75,7 +75,7 @@ public struct AudioArtworkView: View {
                     .allowsHitTesting(false)
 
                 // 5. Centered Presentation: Vinyl Disc & Audio Visualizer Halo (Safe Inset Viewport)
-                VStack(spacing: max(10, min(24, safeH * 0.08))) {
+                VStack(spacing: max(16, min(32, safeH * 0.09))) {
                     if let artwork = player.artworkImage {
                         // Discrete Cover Card with Acoustic Bloom
                         let b0 = player.isPlaying ? (player.audioRhythmLevels.first ?? 0.0) : 0.0
@@ -156,6 +156,7 @@ public struct AudioArtworkView: View {
                             .transition(.opacity)
                         }
                     }
+                    .padding(.top, max(14, min(26, safeH * 0.06)))
                 }
                 .frame(width: availableW, height: safeH, alignment: .center)
                 .padding(.top, topSafeInset)

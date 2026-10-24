@@ -41,10 +41,12 @@ public struct SilkVerticalVolumeBarView: View {
 
             // 2. Real-Time Volume Percentage Badge (Translucent & unobtrusive)
             Text(isMuted ? L10n.muteAudio : (isBoosted ? "\(Int(currentVol))%" : "\(Int(currentVol))%"))
-                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                .font(.system(size: 9.0, weight: .bold, design: .monospaced))
                 .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .foregroundColor(isMuted ? Color(nsColor: .systemRed) : (isBoosted ? .orange : .white.opacity(0.90)))
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 3.5)
                 .padding(.vertical, 2)
                 .background(
                     Capsule().fill(Color.black.opacity(0.18))
@@ -123,9 +125,9 @@ public struct SilkVerticalVolumeBarView: View {
             .frame(width: 24, height: 130)
             .padding(.vertical, 4)
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 5)
         .padding(.vertical, 10)
-        .frame(width: 40)
+        .frame(width: 44)
         .background(
             ZStack {
                 Capsule().fill(.ultraThinMaterial)

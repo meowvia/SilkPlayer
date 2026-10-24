@@ -150,6 +150,7 @@ public struct AppShellView: View {
                     }
                 }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
         }
         .preferredColorScheme(settings.appearanceMode.colorScheme)
         .id(settings.appLanguage)
@@ -180,6 +181,10 @@ public struct AppShellView: View {
                 if let w = player.hostWindow {
                     w.minSize = emptyMin
                     w.contentMinSize = emptyMin
+                    let screen = w.screen ?? NSScreen.main
+                    let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+                    w.maxSize = screenFrame.size
+                    w.contentMaxSize = screenFrame.size
                 }
             }
         }
@@ -233,7 +238,7 @@ public struct AppShellView: View {
         player.isPlaylistDrawerVisible = false
         player.isInspectorVisible = false
         player.stop()
-        withAnimation(appSpringAnimation) {
+        withAnimation(.easeInOut(duration: 0.22)) {
             navigationModel.state = .idle
         }
     }

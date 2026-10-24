@@ -424,6 +424,10 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         isPlaying = false
         isLoaded = false
         playbackState = .idle
+        isAudioOnly = false
+        artworkImage = nil
+        mediaTitle = ""
+        audioRhythmLevels = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         currentTime = 0.0
         duration = 0.0
         cachedDuration = 0.0

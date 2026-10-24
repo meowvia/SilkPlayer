@@ -21,6 +21,7 @@
 | 提案 006 | 音视频双轨独立列表与智能分流管理 (Dual-Track Media Playlist) | 核心需求 2.4 已落地，主界面双轨待落地 | v1.4.0 候选 |
 | 提案 007 | VP9 硬件加速解码与色彩管线 (VP9 Hardware Decoding) | 待落地评估 (未开始) | v1.4.0 候选 |
 | 提案 008 | 外挂字幕自动检索与同名关联推荐 (External Subtitle Auto-Search) | 待落地评估 (未开始) | v1.4.0 候选 |
+| 提案 009 | 杜比视界 Profile 5 动态色调映射与 macOS EDR 管线优化 (Dolby Vision Profile 5 EDR & DTM) | 待落地评估 (未开始) | v1.4.0 候选 |
 
 
 ---
@@ -270,5 +271,25 @@
   2. 常用子目录扫描: 递归检查同级 `Subs/`、`subtitles/`、`Sub/` 子目录；
   3. 语言标签解析: 从文件名提取语言标记（如 `chs`, `cht`, `zh`, `en`, `ja` 等）并展示在字幕轨选择菜单中；
 - 非阻塞异步处理: 在后台线程执行扫描与比对，通过主线程通知 `PlayerCore` 刷新 `subtitleTracks` 列表，绝不阻塞音视频起播链路。
+
+---
+
+## 提案 009: 杜比视界 Profile 5 动态色调映射与 macOS EDR 管线优化 (Dolby Vision Profile 5 EDR & DTM)
+
+### 1. 提案背景与技术价值
+- 现状分析: SilkPlayer 目前已完成基于 FFmpeg RPU 解析与原生 Metal 着色器的基础杜比视界 Profile 5 色彩重构（IPTPQc2 $\to$ LMS $\to$ Display P3），成功实现跨 MP4/MKV/TS 容器的自主可控渲染。但在高动态范围高光映射与苹果 Liquid Retina XDR 屏幕硬件协同上，距离行业高标（如 Infuse 依赖系统闭源管线的表现）仍有提升空间；
+- 优化目标: 在不依赖苹果私有播放器黑盒的前提下，将自主 Metal 渲染管线升级为具备帧级动态色调映射（Dynamic Tone Mapping / DTM）与原生 EDR 硬件动态感知能力的标准级方案。
+
+### 2. 实施方案
+#### 2.1 帧级 L1/L2 动态色调映射（Tone Mapping Engine）
+- 在着色器中接入杜比 L1 动态元数据（`max_pq`, `min_pq`, `avg_pq`）与 L2 显示目标数据；
+- 实现标准 Hermite / Bezier 色调曲线拟合，将 1,000 ~ 4,000 尼特母带高光自适应压缩至目标显示器物理动态范围，消除高光死白与暗场细节丢失。
+
+#### 2.2 macOS 原生 EDR 管线深度适配
+- 配置 `CAMetalLayer` 为 `wantsExtendedDynamicRangeContent = true` 与 `CGColorSpace.extendedLinearDisplayP3` 色彩空间；
+- 监听 `NSScreen.maximumPotentialExtendedDynamicRangeColorComponentValue`，根据屏幕实际 EDR 动态余量动态调节着色器线性光输出倍率。
+
+#### 2.3 工程化合成测试矩阵（Synthetic Test Matrix）
+- 引入开源基准工具 `dovi_tool`，基于短片源自动化合成覆盖 100 ~ 10,000 尼特、多段多项式（1 ~ 8 段）、不同码率与容器封装的极端基准测试样本集，保障极端边缘场景下的渲染鲁棒性。
 
 

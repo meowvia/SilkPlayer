@@ -188,18 +188,20 @@ public struct SilkPlaylistDrawerView: View {
     private var playlistFooterToolbar: some View {
         VStack(spacing: 0) {
             Divider().opacity(0.15)
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Button(action: {
                     addMediaViaPicker()
                 }) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3.5) {
                         Image(systemName: "plus")
-                            .font(.system(size: 10.5, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold))
                         Text(L10n.tr("Add Media...", "添加媒体…"))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 10.5, weight: .medium))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                     .foregroundColor(.white.opacity(0.85))
-                    .padding(.horizontal, 9)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 4.5)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
                 }
@@ -207,7 +209,7 @@ public struct SilkPlaylistDrawerView: View {
                 .focusable(false)
                 .focusEffectDisabled()
 
-                Spacer()
+                Spacer(minLength: 4)
 
                 if !playlist.isEmpty {
                     Button(action: {
@@ -215,14 +217,16 @@ public struct SilkPlaylistDrawerView: View {
                             playlist.clear()
                         }
                     }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 3.5) {
                             Image(systemName: "trash")
-                                .font(.system(size: 10))
+                                .font(.system(size: 9.5))
                             Text(L10n.clearAll)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 10.5, weight: .medium))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
                         .foregroundColor(isFooterClearHovered ? Color(nsColor: .systemRed) : .white.opacity(0.65))
-                        .padding(.horizontal, 9)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 4.5)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
@@ -236,7 +240,7 @@ public struct SilkPlaylistDrawerView: View {
                     .help(L10n.tr("Clear All (Empty Playlist)", "一键清空播放列表"))
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
     }
