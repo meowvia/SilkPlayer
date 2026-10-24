@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import XCTest
+import SilkCoreKit
 @testable import SilkPlayer
 
 final class PlaylistRegressionTests: XCTestCase {
@@ -123,15 +124,8 @@ final class PlaylistRegressionTests: XCTestCase {
         isFinished: true
     )
 
-    func computeResumePosition(for item: MediaItem) -> Double {
-        if item.playbackProgress > 0 && !item.isFinished && item.lastPlayedPosition > 0 {
-            return item.lastPlayedPosition
-        }
-        return 0.0
-    }
-
-    XCTAssert(computeResumePosition(for: partiallyWatched) == 1620.0, "Partially watched video resumes from 1620.0s")
-    XCTAssert(computeResumePosition(for: finishedItem) == 0.0, "Finished video starts from beginning (0.0s)")
+    XCTAssert(partiallyWatched.resumePosition == 1620.0, "Partially watched video resumes from 1620.0s")
+    XCTAssert(finishedItem.resumePosition == 0.0, "Finished video starts from beginning (0.0s)")
 
     // 9. Sequential Natural EOF Navigation & Bounds Safety
     print("\n--- Test 9: Sequential Natural EOF Navigation & Bounds Safety ---")
@@ -148,21 +142,13 @@ final class PlaylistRegressionTests: XCTestCase {
 
     // 10. 3-Second Rewind Threshold for Previous Track
     print("\n--- Test 10: 3-Second Rewind Threshold for Previous Track ---")
-    func simulatePreviousAction(currentPos: Double, mgr: PlaylistManager) -> (action: String, targetItem: PlaylistItem?) {
-        if currentPos > 3.0 {
-            return ("rewind", mgr.currentItem)
-        } else {
-            let prev = mgr.moveToPrevious()
-            return ("previousTrack", prev)
-        }
-    }
     manager.setPlaylist(items: epList, startingAt: item2) // at index 1
-    let rewindAction = simulatePreviousAction(currentPos: 12.5, mgr: manager)
+    let rewindAction = manager.determinePreviousAction(currentTime: 12.5)
     XCTAssert(rewindAction.action == "rewind", "When position > 3.0s, action is rewind")
     XCTAssert(rewindAction.targetItem?.title == "Ep 02", "Rewind keeps same item")
     XCTAssert(manager.currentIndex == 1, "Index remains at 1")
 
-    let prevAction = simulatePreviousAction(currentPos: 1.2, mgr: manager)
+    let prevAction = manager.determinePreviousAction(currentTime: 1.2)
     XCTAssert(prevAction.action == "previousTrack", "When position <= 3.0s, action is previousTrack")
     XCTAssert(prevAction.targetItem?.title == "Ep 01", "Navigated to Ep 01")
     XCTAssert(manager.currentIndex == 0, "Index updated to 0")
@@ -540,18 +526,11 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(chapters[1].time == 300.0, "Second chapter time is 300.0s")
     XCTAssert(ch1 == ChapterItem(id: 1, title: "Prologue", time: 0.0), "ChapterItem equality passes")
 
-    // Verify Magnetic Snapping Threshold Logic
+    // Verify Magnetic Snapping Threshold Logic via PlayerScrubberView
     let totalDur: Double = 1000.0
-    let snapThreshold: Double = max(2.0, totalDur * 0.012) // 12.0s
-    func testSnap(_ t: Double) -> Double {
-        for c in chapters {
-            if abs(t - c.time) <= snapThreshold { return c.time }
-        }
-        return t
-    }
-    XCTAssert(testSnap(295.0) == 300.0, "Time 295.0s snaps to chapter 2 at 300.0s")
-    XCTAssert(testSnap(305.0) == 300.0, "Time 305.0s snaps to chapter 2 at 300.0s")
-    XCTAssert(testSnap(350.0) == 350.0, "Time 350.0s outside threshold remains unsnapped")
+    XCTAssert(PlayerScrubberView.snapTime(295.0, duration: totalDur, chapters: chapters) == 300.0, "Time 295.0s snaps to chapter 2 at 300.0s")
+    XCTAssert(PlayerScrubberView.snapTime(305.0, duration: totalDur, chapters: chapters) == 300.0, "Time 305.0s snaps to chapter 2 at 300.0s")
+    XCTAssert(PlayerScrubberView.snapTime(350.0, duration: totalDur, chapters: chapters) == 350.0, "Time 350.0s outside threshold remains unsnapped")
 
     // Demuxer Cache Watermark Headroom Invariant
     let currentPlayTime: Double = 100.0
@@ -1302,66 +1281,38 @@ final class PlaylistRegressionTests: XCTestCase {
 
     // 44. Progressive Timeline Index & Binary Search Nearest Neighbor Invariants
     print("\n--- Test 44: Progressive Timeline Index & Binary Search Nearest Neighbor Invariants ---")
-    struct MockTimelineItem {
-        let time: Double
-        let label: String
-    }
+    let emptyIndex: [ChapterItem] = []
+    XCTAssert(ChapterItem.findNearest(in: emptyIndex, target: 10.0) == nil, "Empty timeline index safely returns nil")
 
-    func mockFindBest(in items: [MockTimelineItem], target: Double) -> String? {
-        guard !items.isEmpty else { return nil }
-        if items.count == 1 { return items[0].label }
-        if target <= items[0].time { return items[0].label }
-        if target >= items[items.count - 1].time { return items[items.count - 1].label }
-
-        var low = 0
-        var high = items.count - 1
-        while low <= high {
-            let mid = (low + high) / 2
-            let midTime = items[mid].time
-            if midTime == target {
-                return items[mid].label
-            } else if midTime < target {
-                low = mid + 1
-            } else {
-                high = mid - 1
-            }
-        }
-        let prev = items[max(0, high)]
-        let next = items[min(items.count - 1, low)]
-        return abs(prev.time - target) <= abs(next.time - target) ? prev.label : next.label
-    }
-
-    let emptyIndex: [MockTimelineItem] = []
-    XCTAssert(mockFindBest(in: emptyIndex, target: 10.0) == nil, "Empty timeline index safely returns nil")
-
-    let singleIndex = [MockTimelineItem(time: 0.0, label: "Frame0")]
-    XCTAssert(mockFindBest(in: singleIndex, target: 50.0) == "Frame0", "Single frame index always returns only frame")
+    let singleIndex = [ChapterItem(id: 1, title: "Frame0", time: 0.0)]
+    XCTAssert(ChapterItem.findNearest(in: singleIndex, target: 50.0)?.title == "Frame0", "Single frame index always returns only frame")
 
     let indexedTimeline = [
-        MockTimelineItem(time: 0.0, label: "0s"),
-        MockTimelineItem(time: 10.0, label: "10s"),
-        MockTimelineItem(time: 20.0, label: "20s"),
-        MockTimelineItem(time: 30.0, label: "30s"),
-        MockTimelineItem(time: 40.0, label: "40s"),
-        MockTimelineItem(time: 50.0, label: "50s")
+        ChapterItem(id: 1, title: "0s", time: 0.0),
+        ChapterItem(id: 2, title: "10s", time: 10.0),
+        ChapterItem(id: 3, title: "20s", time: 20.0),
+        ChapterItem(id: 4, title: "30s", time: 30.0),
+        ChapterItem(id: 5, title: "40s", time: 40.0),
+        ChapterItem(id: 6, title: "50s", time: 50.0)
     ]
 
     // Boundary conditions
-    XCTAssert(mockFindBest(in: indexedTimeline, target: -5.0) == "0s", "Negative hover time clamps to 0s frame")
-    XCTAssert(mockFindBest(in: indexedTimeline, target: 0.0) == "0s", "Exact 0s matches 0s frame")
-    XCTAssert(mockFindBest(in: indexedTimeline, target: 55.0) == "50s", "Past EOF hover time clamps to 50s frame")
+    XCTAssert(ChapterItem.findNearest(in: indexedTimeline, target: -5.0)?.title == "0s", "Negative hover time clamps to 0s frame")
+    XCTAssert(ChapterItem.findNearest(in: indexedTimeline, target: 0.0)?.title == "0s", "Exact 0s matches 0s frame")
+    XCTAssert(ChapterItem.findNearest(in: indexedTimeline, target: 55.0)?.title == "50s", "Past EOF hover time clamps to 50s frame")
 
     // In-between continuous floating-point nearest neighbor matching
-    XCTAssert(mockFindBest(in: indexedTimeline, target: 11.23847) == "10s", "11.24s matches closest 10s frame")
-    XCTAssert(mockFindBest(in: indexedTimeline, target: 14.99999) == "10s" || mockFindBest(in: indexedTimeline, target: 14.99999) == "20s", "14.99999s resolves safely to nearest neighbor")
-    XCTAssert(mockFindBest(in: indexedTimeline, target: 18.74912) == "20s", "18.75s matches closest 20s frame")
-    XCTAssert(mockFindBest(in: indexedTimeline, target: 20.0) == "20s", "Exact 20s matches 20s frame")
-    XCTAssert(mockFindBest(in: indexedTimeline, target: 34.2) == "30s", "34.2s matches closest 30s frame")
-    XCTAssert(mockFindBest(in: indexedTimeline, target: 36.8) == "40s", "36.8s matches closest 40s frame")
+    XCTAssert(ChapterItem.findNearest(in: indexedTimeline, target: 11.23847)?.title == "10s", "11.24s matches closest 10s frame")
+    let target15 = ChapterItem.findNearest(in: indexedTimeline, target: 14.99999)?.title
+    XCTAssert(target15 == "10s" || target15 == "20s", "14.99999s resolves safely to nearest neighbor")
+    XCTAssert(ChapterItem.findNearest(in: indexedTimeline, target: 18.74912)?.title == "20s", "18.75s matches closest 20s frame")
+    XCTAssert(ChapterItem.findNearest(in: indexedTimeline, target: 20.0)?.title == "20s", "Exact 20s matches 20s frame")
+    XCTAssert(ChapterItem.findNearest(in: indexedTimeline, target: 34.2)?.title == "30s", "34.2s matches closest 30s frame")
+    XCTAssert(ChapterItem.findNearest(in: indexedTimeline, target: 36.8)?.title == "40s", "36.8s matches closest 40s frame")
 
     // Progressive streaming invariant (even if only 0s-20s arrived so far)
     let partialTimeline = Array(indexedTimeline.prefix(3))
-    XCTAssert(mockFindBest(in: partialTimeline, target: 45.0) == "20s", "Partial timeline acts as sticky frame before later frames arrive")
+    XCTAssert(ChapterItem.findNearest(in: partialTimeline, target: 45.0)?.title == "20s", "Partial timeline acts as sticky frame before later frames arrive")
 
     // 45. 8K Tier, Dolby Vision Profile 5 & Tone Curve Invariants
     print("\n--- Test 45: 8K Tier, Dolby Vision Tone Curve & Screenshot Invariants ---")
@@ -1523,25 +1474,22 @@ final class PlaylistRegressionTests: XCTestCase {
     // Verify discrete card dimensions clamp (never stretches to fill full screen)
     let fullScreenWidth: CGFloat = 2560.0
     let fullScreenHeight: CGFloat = 1440.0
-    let computedCard = min(300, max(180, min(fullScreenWidth * 0.48, fullScreenHeight * 0.46)))
-    XCTAssert(computedCard == 300, "On 1440p/4K fullscreen, audio artwork card is bounded at 300pt, avoiding stretched blur")
+    let computedCard = AudioArtworkView.computeCoverCardSize(availableW: fullScreenWidth, availableH: fullScreenHeight)
+    XCTAssert(computedCard == 360, "On 1440p/4K fullscreen, audio artwork card is bounded at 360pt, avoiding stretched blur")
 
     let compactWidth: CGFloat = 400.0
     let compactHeight: CGFloat = 400.0
-    let compactCard = min(300, max(180, min(compactWidth * 0.48, compactHeight * 0.46)))
-    XCTAssert(compactCard == 184.0, "On compact 400x400 window, audio artwork scales proportionally to 184pt")
+    let compactCard = AudioArtworkView.computeCoverCardSize(availableW: compactWidth, availableH: compactHeight)
+    XCTAssert(abs(compactCard - 121.68) < 0.01, "On compact 400x400 window, audio artwork scales proportionally to ~121.68pt")
 
     // 49. Metal Pipeline Nil Defense Invariant
     print("\n--- Test 49: Metal Pipeline Nil Defense Invariant ---")
-    // Mathematical proof: pipeline guard must prevent drawPrimitives when activePipeline is nil
-    func simulateMetalDraw(activePipeline: Any?) -> Bool {
-        guard activePipeline != nil else {
-            return false // Clean endEncoding without drawPrimitives
-        }
-        return true // Safe drawPrimitives execution
-    }
-    XCTAssert(simulateMetalDraw(activePipeline: nil) == false, "Nil pipeline safely skips drawing without crash")
-    XCTAssert(simulateMetalDraw(activePipeline: "ValidPipeline") == true, "Valid pipeline proceeds to drawing")
+    let renderView = SilkMetalRenderView(frame: NSRect(x: 0, y: 0, width: 200, height: 200))
+    XCTAssert(renderView.currentPixelBuffer == nil, "Initial pixel buffer is safely nil")
+    XCTAssert(renderView.isWindowOccluded == false, "Initial window occlusion state is false")
+    renderView.renderCurrentFrameImmediately()
+    renderView.videoRotation = 90
+    XCTAssert(renderView.videoRotation == 90, "Video rotation is set correctly")
 
     // 50. Audio-only Window Resize & 1:1 Proportional (等比) Scaling
     print("\n--- Test 50: Audio-only Window Resize & 1:1 Proportional Scaling ---")
@@ -1586,28 +1534,31 @@ final class PlaylistRegressionTests: XCTestCase {
 
     // 52. Universal Button Retention Across Window Tiers
     print("\n--- Test 52: Universal Button Retention Across Window Tiers ---")
-    // Layout Tier calculation verification
-    func determineTier(width: CGFloat, isFullscreen: Bool) -> HUDLayoutTier {
-        if isFullscreen || width >= 860 { return .expanded }
-        else if width >= 660 { return .standard }
-        else if width >= 480 { return .compact }
-        else { return .minimal }
-    }
-    XCTAssert(determineTier(width: 520, isFullscreen: false) == .compact, "520 width maps to compact tier")
-    XCTAssert(determineTier(width: 400, isFullscreen: false) == .minimal, "400 width maps to minimal tier")
+    XCTAssert(HUDLayoutTier.determine(width: 520, isFullscreen: false) == .compact, "520 width maps to compact tier")
+    XCTAssert(HUDLayoutTier.determine(width: 400, isFullscreen: false) == .minimal, "400 width maps to minimal tier")
+    XCTAssert(HUDLayoutTier.determine(width: 900, isFullscreen: false) == .expanded, "900 width maps to expanded tier")
 
-    // Button presence invariants:
-    // In compact & minimal: Prev/Next track are always present; 5s step buttons are always hidden
-    func hasPrevNextButtons(tier: HUDLayoutTier) -> Bool { true }
-    func hasStep5Buttons(tier: HUDLayoutTier) -> Bool {
-        tier == .expanded || tier == .standard
-    }
-    XCTAssert(hasPrevNextButtons(tier: .compact) == true, "Compact tier retains Prev/Next track buttons")
-    XCTAssert(hasPrevNextButtons(tier: .minimal) == true, "Minimal tier retains Prev/Next track buttons")
-    XCTAssert(hasStep5Buttons(tier: .compact) == false, "Compact tier hides 5s step buttons")
-    XCTAssert(hasStep5Buttons(tier: .minimal) == false, "Minimal tier hides 5s step buttons")
-    XCTAssert(hasStep5Buttons(tier: .standard) == true, "Standard tier shows 5s step buttons")
-    XCTAssert(hasStep5Buttons(tier: .expanded) == true, "Expanded tier shows 5s step buttons")
+    // Button presence invariants via production HUDLayoutTier properties:
+    XCTAssert(HUDLayoutTier.compact.retainsPrevNextButtons == true, "Compact tier retains Prev/Next track buttons")
+    XCTAssert(HUDLayoutTier.minimal.retainsPrevNextButtons == true, "Minimal tier retains Prev/Next track buttons")
+    XCTAssert(HUDLayoutTier.compact.showsStep5Buttons == false, "Compact tier hides 5s step buttons")
+    XCTAssert(HUDLayoutTier.minimal.showsStep5Buttons == false, "Minimal tier hides 5s step buttons")
+    XCTAssert(HUDLayoutTier.standard.showsStep5Buttons == true, "Standard tier shows 5s step buttons")
+    XCTAssert(HUDLayoutTier.expanded.showsStep5Buttons == true, "Expanded tier shows 5s step buttons")
+
+    // 53. Empty Playlist Shuffle First-Track Import (Requirement 2.4)
+    print("\n--- Test 53: Empty Playlist Shuffle First-Track Import ---")
+    let batchShuffleManager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+    batchShuffleManager.setPlaybackMode(.shuffle)
+    let batchItems = [
+        PlaylistItem(path: "/music/track1.mp3", title: "Track 1"),
+        PlaylistItem(path: "/music/track2.mp3", title: "Track 2"),
+        PlaylistItem(path: "/music/track3.mp3", title: "Track 3")
+    ]
+    let chosenItem = batchShuffleManager.appendItems(batchItems)
+    XCTAssert(chosenItem != nil, "Import into empty shuffle playlist returns a chosen track")
+    XCTAssert(batchShuffleManager.currentIndex >= 0 && batchShuffleManager.currentIndex < 3, "Chosen index is valid in pool")
+    XCTAssert(batchShuffleManager.currentItem?.id == chosenItem?.id, "Current item matches chosen item")
 
     testPlayer.isAudioOnly = false
     }

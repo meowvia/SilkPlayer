@@ -21,6 +21,13 @@ public struct AudioArtworkView: View {
         return item.title
     }
 
+    public static func computeCoverCardSize(availableW: CGFloat, availableH: CGFloat) -> CGFloat {
+        let topSafeInset: CGFloat = 58.0
+        let bottomSafeInset: CGFloat = 108.0
+        let safeH = max(180, availableH - topSafeInset - bottomSafeInset)
+        return min(360, min(availableW * 0.52, safeH * 0.52))
+    }
+
     public var body: some View {
         GeometryReader { geometry in
             let availableW = geometry.size.width
@@ -28,7 +35,7 @@ public struct AudioArtworkView: View {
             let topSafeInset: CGFloat = 58.0
             let bottomSafeInset: CGFloat = 108.0
             let safeH = max(180, availableH - topSafeInset - bottomSafeInset)
-            let coverCardSize = min(360, min(availableW * 0.52, safeH * 0.52))
+            let coverCardSize = Self.computeCoverCardSize(availableW: availableW, availableH: availableH)
             let vinylDiameter = max(140, min(420, min(availableW * 0.55, safeH * 0.58)))
 
             ZStack {
@@ -161,7 +168,7 @@ public struct AudioArtworkView: View {
 
 // MARK: - Audio Visualizer Halo View (音频声波律动光环)
 @MainActor
-struct AcousticResonanceCoronaView: View {
+struct AudioVisualizerHaloView: View {
     let diameter: CGFloat
     let levels: [CGFloat]
     let isPlaying: Bool
@@ -276,7 +283,7 @@ final class TurntableAssets {
             if let img = NSImage(contentsOf: url) { return img }
         }
 
-        let devPath = "/Volumes/2T/SilkPlayer/Resources/Turntable/\(named).png"
+        let devPath = "/Volumes/2T/Projects/SilkPlayer/SilkPlayer/Resources/Turntable/\(named).png"
         if FileManager.default.fileExists(atPath: devPath), let img = NSImage(contentsOfFile: devPath) {
             return img
         }
@@ -302,7 +309,7 @@ struct FloatingVinylDiscView: View {
             let angle = (timeline.date.timeIntervalSinceReferenceDate * 18.0).truncatingRemainder(dividingBy: 360.0)
             ZStack {
                 // 1. Audio Visualizer Halo (Multi-layer ring visualizer)
-                AcousticResonanceCoronaView(
+                AudioVisualizerHaloView(
                     diameter: diameter,
                     levels: levels,
                     isPlaying: isPlaying

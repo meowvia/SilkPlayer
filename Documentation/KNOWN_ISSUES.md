@@ -14,7 +14,8 @@
 | ISSUE-004 | 窗口几何与交互状态机重构（解决多处约束冲突） | 核心架构 / PlayerWindowManager & WindowGeometry | High | 核心约束冲突已解决 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-005 | 视频窗口被物理完全遮挡时 Metal 阻塞导致音频断流 | 渲染与解复用 / SilkCoreKit (SilkMetalRenderView & Engine) | Low | 已修复 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-006 | 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步 | 引擎解复用与同步 / SilkCoreKit (SilkPlayerEngine) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
-| ISSUE-007 | 暂停态音频拖拽 Seek 时钟偏移与硬件采样单调累加缺陷 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | High | 待修复 (规划于 v1.3.0) | v1.2.0 |
+| ISSUE-007 | 暂停态音频拖拽 Seek 时钟偏移与硬件采样单调累加缺陷 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | High | 已修复 (v1.3.0) | v1.2.0 |
+| ISSUE-008 | macOS Dock 栏图标边缘暗部与 Dock 底色融合导致视觉偏小 | 视觉设计与图标 / SilkPlayer (Resources) | Medium | 已修复 (v1.3.0) | v1.2.0 |
 
 ---
 
@@ -331,3 +332,46 @@ public enum WindowPresentationState: Equatable {
   3. **预加载状态指示 (Buffer Health Indicator)**：
      - 在 HUD 进度条底层支持显示灰色缓冲加载条，让网络加载状态直观可感知。
 - **交付排期**：已在内核版本 v1.2.0 (`SilkCoreKit`) 完成缓冲池拓宽至 180 包与平滑同步优化，通过 52 项回归测试。
+
+---
+
+## ISSUE-007: 暂停态音频拖拽 Seek 时钟偏移与硬件采样单调累加缺陷
+
+### 1. 缺陷现象
+- 在纯音频播放时，用户在暂停状态下拖拽时间进度条（Seek）至任意位置，松开鼠标或恢复播放后：
+  1. 音频输出位置与进度条指示产生微秒至百毫秒级固定偏移；
+  2. 多次连续拖拽后，时钟基准出现单调累加漂移。
+
+### 2. 根因剖析
+- `SilkAudioEngine` 采用 CoreAudio `AudioQueue` 驱动时钟。在暂停状态下，声卡物理采样时钟 `AudioQueueGetCurrentTime` 并未因暂停而停止流逝；
+- 当执行 `reanchor(to:)`、`decodeAndEnqueue` 或 `notifySeek` 时，代码将目标 PTS 直接绑定为锚点，而未扣除从硬件声卡启动至当前时刻已经流逝的物理硬件采样数（`currentPhysicalSampleTimeElapsed`）；
+- 每次在暂停态 Seek 时，锚点时钟都会叠加一层未扣除的硬件流逝采样偏移；
+- 另外在 `SilkPlayerEngine.performScrubSeek` 中，以 20Hz 极高频率调用 `audioEngine.notifySeek`，导致频繁重置时钟。
+
+### 3. 修复方案 (已在 v1.3.0 落地)
+- **内核层修复 (`SilkAudioEngine.swift`)**：
+  1. 新增 `currentPhysicalSampleTimeElapsedLocked()`，精准读取并返回当前 CoreAudio 硬件队列已流逝的物理采样数；
+  2. 在 `reanchor(to:)`、`decodeAndEnqueue` 与 `notifySeek` 中，将基准时间戳对齐调整为 `pts - (Double(elapsedSamples) / sampleRate)`，彻底扣除硬件声卡物理流逝，确保无论暂停多久拖拽，起播时刻的时间戳与音频硬件输出严格绝对对齐；
+  3. 在 `SilkPlayerEngine.performScrubSeek` 中移除冗余的 20Hz 频繁时钟重设，仅在最终松手 Seek 时执行单次高精度时间对齐。
+- **交付排期**：已在 `SilkCoreKit`（commit `7baeb84`）与 `SilkPlayer` v1.3.0 验证闭环。
+
+---
+
+## ISSUE-008: macOS Dock 栏图标边缘暗部与 Dock 底色融合导致视觉偏小缺陷
+
+### 1. 缺陷现象
+- 用户反馈在 macOS 浅色与深色 Dock 栏中，SilkPlayer 应用图标相较于系统原生应用（如 Safari、Music、Finder）或其他第三方标准应用，在主观视觉上明显偏小。
+
+### 2. 根因深度剖析
+- **几何尺寸完全达标**：实测 `AppIcon.icns` 中包含的各尺寸图标，其实际圆角矩形（Squircle）在 1024×1024 画布下精确占据 824×824 像素，完全符合 Apple macOS Human Interface Guidelines（HIG）标准网格与外包围盒规范；
+- **边缘暗色与低对比度引发光学错觉**：
+  1. SilkPlayer 采用科技深色调设计，Squircle 背景最外层边界的像素亮度极低（RGBA 约为 `[26, 30, 42, 255]`，亮度仅约 30）；
+  2. macOS 深色模式下的 Dock 栏背景亦为磨砂深灰底色（亮度约 20~40）。当二者重叠时，由于图标外圈缺乏足够对比度与轮廓高光，人眼视网膜自动将外层暗区判定为“Dock 背景的一部分”；
+  3. 人眼焦点仅能辨识中央面积约 635×668 的亮色图形部分，直接产生了“图标比其他自带明亮底色或边框高光应用小约 25%”的显著光学错觉。
+
+### 3. 优化方案 (已在 v1.3.0 落地)
+- **视觉设计与材质调校**：
+  1. **内轮廓环境光高光 (Inner Rim Highlight)**：基于标准 824×824 Squircle 物理边界，增加符合 macOS 设计语言的 2~3px 渐变微光内描边（顶部环境光白半透明 ~0.50，底部漫反射微光 ~0.20），平滑抗锯齿过渡；
+  2. **消除与深色 Dock 粘连**：即便在 100% 纯黑背景或暗色磨砂 Dock 栏下，该内轮廓高光依然能清晰勾勒出完整的 824×824 物理圆角矩形边界，使整体视觉光学体量与其他主流应用达成 1:1 的饱满视觉平衡；
+  3. 重建 `Resources/AppIcon_1024.png`，并使用 Apple 原生 `iconutil -c icns` 重新生成覆盖 16x16 至 512x512@2x 全分辨率的 `Resources/AppIcon.icns`。
+- **交付排期**：已在 `SilkPlayer` v1.3.0 落地验证，无需变更任何底层业务代码。

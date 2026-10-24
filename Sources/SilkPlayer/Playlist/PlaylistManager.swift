@@ -224,15 +224,40 @@ import Combine
         saveToStorage()
     }
 
-    public func appendItems(_ newItems: [PlaylistItem]) {
+    @discardableResult
+    public func appendItems(_ newItems: [PlaylistItem]) -> PlaylistItem? {
+        let wasEmpty = items.isEmpty
         self.items.append(contentsOf: newItems)
-        if currentIndex < 0 && !items.isEmpty {
-            currentIndex = 0
-        }
-        if playbackMode == .shuffle {
+        guard !items.isEmpty else { return nil }
+
+        if wasEmpty && playbackMode == .shuffle && items.count > 1 {
+            var pool = Array(0..<items.count)
+            pool.shuffle()
+            let chosenIndex = pool.removeFirst()
+            self.currentIndex = chosenIndex
+            self.shuffleQueue = pool
+            self.nextShuffleIndex = pool.first
+        } else if currentIndex < 0 {
+            self.currentIndex = 0
+            if playbackMode == .shuffle {
+                ensureShuffleCandidate()
+            }
+        } else if playbackMode == .shuffle {
             ensureShuffleCandidate()
         }
         saveToStorage()
+        return currentItem
+    }
+
+    /// Evaluates previous track action against the 3.0s threshold:
+    /// If playback position > 3.0s, rewinds current track; otherwise moves to previous track.
+    public func determinePreviousAction(currentTime: Double) -> (action: String, targetItem: PlaylistItem?) {
+        if currentTime > 3.0 {
+            return ("rewind", currentItem)
+        } else {
+            let prev = moveToPrevious()
+            return ("previousTrack", prev)
+        }
     }
 
     // MARK: - Navigation

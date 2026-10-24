@@ -3,12 +3,31 @@ import AppKit
 import SilkCoreKit
 
 /// Responsive HUD layout density tiers based on available canvas width and presentation mode.
-@MainActor
 public enum HUDLayoutTier: Equatable {
     case expanded      // >= 860: Fullscreen or large desktop window (all 15 controls fully visible)
     case standard      // 660 ..< 860: Standard window (frame steps hidden, more menu active)
     case compact       // 480 ..< 660: Compact window (e.g. 720p 4:3, secondary controls in more menu)
     case minimal       // < 480: Vertical video / ultra-compact window (essential controls only)
+
+    public static func determine(width: CGFloat, isFullscreen: Bool = false) -> HUDLayoutTier {
+        if isFullscreen || width >= 860 {
+            return .expanded
+        } else if width >= 660 {
+            return .standard
+        } else if width >= 480 {
+            return .compact
+        } else {
+            return .minimal
+        }
+    }
+
+    public var showsStep5Buttons: Bool {
+        self == .expanded || self == .standard
+    }
+
+    public var retainsPrevNextButtons: Bool {
+        true
+    }
 }
 
 @MainActor
@@ -95,15 +114,7 @@ public struct PlayerHUDView: View {
     }
 
     private func layoutTier(for width: CGFloat) -> HUDLayoutTier {
-        if player.isFullscreen || width >= 860 {
-            return .expanded
-        } else if width >= 660 {
-            return .standard
-        } else if width >= 480 {
-            return .compact
-        } else {
-            return .minimal
-        }
+        HUDLayoutTier.determine(width: width, isFullscreen: player.isFullscreen)
     }
 
     // MARK: - Top Information Bar
@@ -623,27 +634,29 @@ public struct PlayerHUDView: View {
             .disabled(!playlist.hasNext)
         }
 
-        Divider()
+        if !player.isAudioOnly {
+            Divider()
 
-        // 5. 逐帧微调 (在 standard, compact, minimal 模式)
-        Menu(L10n.frameStep) {
-            Button(L10n.tr("Previous Frame ( [ )", "上一帧 ( [ )")) {
-                player.stepFrame(forward: false)
+            // 5. 逐帧微调 (在 standard, compact, minimal 模式)
+            Menu(L10n.frameStep) {
+                Button(L10n.tr("Previous Frame ( [ )", "上一帧 ( [ )")) {
+                    player.stepFrame(forward: false)
+                }
+                Button(L10n.tr("Next Frame ( ] )", "下一帧 ( ] )")) {
+                    player.stepFrame(forward: true)
+                }
             }
-            Button(L10n.tr("Next Frame ( ] )", "下一帧 ( ] )")) {
-                player.stepFrame(forward: true)
+
+            // 6. 画面旋转 (在 standard, compact, minimal 模式)
+            Button(L10n.tr("Rotate Video", "画面旋转") + " (\(player.videoRotation)°) [R]") {
+                player.rotateVideo()
             }
-        }
 
-        // 6. 画面旋转 (在 standard, compact, minimal 模式)
-        Button(L10n.tr("Rotate Video", "画面旋转") + " (\(player.videoRotation)°) [R]") {
-            player.rotateVideo()
-        }
-
-        // 7. 截屏 (在 compact, minimal 模式)
-        if tier == .compact || tier == .minimal {
-            Button(L10n.tr("Capture Screenshot (Cmd+S)", "截取画面 (Cmd+S)")) {
-                triggerScreenshot()
+            // 7. 截屏 (在 compact, minimal 模式)
+            if tier == .compact || tier == .minimal {
+                Button(L10n.tr("Capture Screenshot (Cmd+S)", "截取画面 (Cmd+S)")) {
+                    triggerScreenshot()
+                }
             }
         }
 

@@ -150,6 +150,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     private var hudAutoHideTimer: Timer?
     private var osdDismissTimer: Timer?
     private var pre2xSpeed: Double = 1.0
+    private var hasHandledNaturalEOF: Bool = false
+    private var shouldAutoPlayOnReady: Bool = true
 
     // MARK: - Real-time Audio Rhythm Metering
     @Published public var audioRhythmLevels: [CGFloat] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -158,6 +160,13 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     // MARK: - Initialization & Teardown
     override public init() {
         super.init()
+        let settings = AppSettings.shared
+        if settings.rememberVolume {
+            self.volume = settings.savedVolume
+        } else {
+            self.volume = 100.0
+        }
+        self.subtitleScale = settings.defaultSubtitleScale
         setupOptions()
         resetHUDAutoHideTimer()
     }
@@ -317,6 +326,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         self.subtitleModel.url = resolvedURL
 
         let shouldAutoPlay = autoPlay ?? AppSettings.shared.autoPlayOnLoad
+        self.shouldAutoPlayOnReady = shouldAutoPlay
+        self.hasHandledNaturalEOF = false
 
         // Open media file asynchronously (0ms MainActor freeze, zero beachball)
         newLayer.openAsync(url: resolvedURL, autoPlay: shouldAutoPlay) { [weak self, weak newLayer] success in
@@ -567,6 +578,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     public func setVolume(_ val: Double, maxLimit: Double = 150.0, showOSD: Bool = true) {
         let clamped = max(0.0, min(maxLimit, val))
         self.volume = clamped
+        if AppSettings.shared.rememberVolume {
+            AppSettings.shared.savedVolume = clamped
+        }
         if isMuted && clamped > 0 {
             isMuted = false
         }
@@ -1042,18 +1056,13 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 }
             }
 
-            // Fallback 2: Window Server composite capture for current video view
+            // Fallback 2: Window / view display caching capture
             if finalCGImage == nil {
                 if let view = self.renderContainer ?? self.playerLayer?.player.view,
-                   let window = view.window, view.bounds.width > 0, view.bounds.height > 0 {
-                    let windowID = CGWindowID(window.windowNumber)
-                    if let windowImg = CGWindowListCreateImage(
-                        .null,
-                        .optionIncludingWindow,
-                        windowID,
-                        [.boundsIgnoreFraming, .bestResolution]
-                    ) {
-                        finalCGImage = windowImg
+                   view.bounds.width > 0, view.bounds.height > 0 {
+                    if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                        view.cacheDisplay(in: view.bounds, to: rep)
+                        finalCGImage = rep.cgImage
                     }
                 }
             }
@@ -1357,16 +1366,21 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     // MARK: - Key Event Handling
     public func handleKeyDown(event: NSEvent) -> NSEvent? {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags.contains(.command) || flags.contains(.control) {
+            return event
+        }
+
         switch event.keyCode {
         case 49: // Space
             togglePlayPause()
             return nil
         case 123: // Left Arrow
-            let stepSec = event.modifierFlags.contains(.shift) ? AppSettings.shared.longSeekStep : AppSettings.shared.shortSeekStep
+            let stepSec = flags.contains(.shift) ? AppSettings.shared.longSeekStep : AppSettings.shared.shortSeekStep
             step(seconds: -stepSec)
             return nil
         case 124: // Right Arrow
-            let stepSec = event.modifierFlags.contains(.shift) ? AppSettings.shared.longSeekStep : AppSettings.shared.shortSeekStep
+            let stepSec = flags.contains(.shift) ? AppSettings.shared.longSeekStep : AppSettings.shared.shortSeekStep
             step(seconds: stepSec)
             return nil
         case 126: // Up Arrow
@@ -1395,6 +1409,21 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             return nil
         case 35: // P
             togglePlaylistDrawer()
+            return nil
+        case 30: // ] Next Frame
+            stepFrame(forward: true)
+            return nil
+        case 33: // [ Previous Frame
+            stepFrame(forward: false)
+            return nil
+        case 6: // Z Subtitle Delay -0.1s
+            adjustSubtitleDelay(by: -0.1)
+            return nil
+        case 7: // X Subtitle Delay +0.1s
+            adjustSubtitleDelay(by: 0.1)
+            return nil
+        case 4: // H Toggle HDR
+            toggleHDR()
             return nil
         case 53: // Escape
             if isPlaylistDrawerVisible || isInspectorVisible {
@@ -1434,7 +1463,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                     self?.seek(to: resume)
                 }
             }
-            if AppSettings.shared.autoPlayOnLoad {
+            let autoPlay = self.shouldAutoPlayOnReady && AppSettings.shared.autoPlayOnLoad
+            if autoPlay {
                 self.playbackState = .playing
                 self.isPlaying = true
             } else {
@@ -1465,7 +1495,10 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         case .playedToTheEnd:
             self.playbackState = .ended
             self.isPlaying = false
-            self.onPlaybackEndedNaturally?()
+            if !self.hasHandledNaturalEOF {
+                self.hasHandledNaturalEOF = true
+                self.onPlaybackEndedNaturally?()
+            }
         case .error:
             self.playbackState = .error
             self.statusMessage = "Playback error"
@@ -1491,7 +1524,10 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         } else {
             self.playbackState = .ended
             self.isPlaying = false
-            self.onPlaybackEndedNaturally?()
+            if !self.hasHandledNaturalEOF {
+                self.hasHandledNaturalEOF = true
+                self.onPlaybackEndedNaturally?()
+            }
         }
     }
 

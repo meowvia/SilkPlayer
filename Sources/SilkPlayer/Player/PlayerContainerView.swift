@@ -39,24 +39,26 @@ public struct PlayerContainerView: View {
                 VideoView(playerCore: player)
                     .edgesIgnoringSafeArea(.all)
                     .contextMenu {
-                        let flipH = player.transform.flipH
-                        let flipV = player.transform.flipV
+                        if !player.isAudioOnly {
+                            let flipH = player.transform.flipH
+                            let flipV = player.transform.flipV
 
-                        Button(L10n.tr("Rotate 90° Clockwise", "顺时针旋转 90°")) {
-                            player.rotateVideo(clockwise: true)
-                        }
-                        Button(L10n.tr("Rotate 90° Counterclockwise", "逆时针旋转 90°")) {
-                            player.rotateVideo(clockwise: false)
-                        }
-                        Button(L10n.tr("Reset Orientation", "复位")) {
-                            player.resetVideoRotation()
-                        }
-                        Divider()
-                        Button(L10n.tr("Flip Horizontal", "水平翻转") + (flipH ? " ✓" : "")) {
-                            player.toggleFlipHorizontal()
-                        }
-                        Button(L10n.tr("Flip Vertical", "垂直翻转") + (flipV ? " ✓" : "")) {
-                            player.toggleFlipVertical()
+                            Button(L10n.tr("Rotate 90° Clockwise", "顺时针旋转 90°")) {
+                                player.rotateVideo(clockwise: true)
+                            }
+                            Button(L10n.tr("Rotate 90° Counterclockwise", "逆时针旋转 90°")) {
+                                player.rotateVideo(clockwise: false)
+                            }
+                            Button(L10n.tr("Reset Orientation", "复位")) {
+                                player.resetVideoRotation()
+                            }
+                            Divider()
+                            Button(L10n.tr("Flip Horizontal", "水平翻转") + (flipH ? " ✓" : "")) {
+                                player.toggleFlipHorizontal()
+                            }
+                            Button(L10n.tr("Flip Vertical", "垂直翻转") + (flipV ? " ✓" : "")) {
+                                player.toggleFlipVertical()
+                            }
                         }
                     }
 

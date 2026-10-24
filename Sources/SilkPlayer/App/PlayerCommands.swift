@@ -29,8 +29,15 @@ public struct PlayerCommands: Commands {
             .keyboardShortcut(",", modifiers: .command)
         }
 
-        // MARK: - File Menu Enhancements (Strictly Single Window)
+        // MARK: - File Menu Enhancements
         CommandGroup(replacing: .newItem) {
+            if !settings.singleWindowMode {
+                Button(L10n.tr("New Window", "新建窗口")) {
+                    windowManager.openNewWindow()
+                }
+                .keyboardShortcut("n", modifiers: .command)
+            }
+
             Button(L10n.openFile + "...") {
                 windowManager.openFilePicker()
             }
@@ -291,6 +298,7 @@ public struct PlayerCommands: Commands {
                 activePlayer?.takeScreenshot()
             }
             .keyboardShortcut("s", modifiers: [.command])
+            .disabled(!isLoaded || activePlayer?.isAudioOnly == true)
 
             Divider()
 
@@ -310,7 +318,7 @@ public struct PlayerCommands: Commands {
                     activePlayer?.setAspectRatio("2.35:1")
                 }
             }
-            .disabled(!isLoaded)
+            .disabled(!isLoaded || activePlayer?.isAudioOnly == true)
 
             Divider()
 
@@ -360,7 +368,7 @@ public struct PlayerCommands: Commands {
                     activePlayer?.setExactRotation(270)
                 }
             }
-            .disabled(!isLoaded)
+            .disabled(!isLoaded || activePlayer?.isAudioOnly == true)
 
             Divider()
 
@@ -368,7 +376,7 @@ public struct PlayerCommands: Commands {
                 activePlayer?.toggleDeband()
             }
             .keyboardShortcut("d", modifiers: [])
-            .disabled(!isLoaded)
+            .disabled(!isLoaded || activePlayer?.isAudioOnly == true)
 
             // Picture Adjustments
             Menu(L10n.pictureAdjustments) {
@@ -397,7 +405,7 @@ public struct PlayerCommands: Commands {
                     activePlayer?.resetPictureAdjustments()
                 }
             }
-            .disabled(!isLoaded)
+            .disabled(!isLoaded || activePlayer?.isAudioOnly == true)
         }
 
         // MARK: - Window Menu

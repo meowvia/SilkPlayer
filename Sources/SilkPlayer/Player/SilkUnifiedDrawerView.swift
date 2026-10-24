@@ -262,8 +262,13 @@ public struct SilkPlaylistDrawerView: View {
                 let wasEmpty = playlist.isEmpty
                 let needsAutoPlay = wasEmpty || !player.isLoaded
                 playlist.appendItems(newItems)
-                if needsAutoPlay, let first = newItems.first {
-                    onSelectPlaylistItem(first)
+                if needsAutoPlay {
+                    let target = (wasEmpty && playlist.playbackMode == .shuffle)
+                        ? (playlist.currentItem ?? newItems.first)
+                        : newItems.first
+                    if let item = target {
+                        onSelectPlaylistItem(item)
+                    }
                 }
             }
         }
@@ -302,8 +307,13 @@ public struct SilkPlaylistDrawerView: View {
                     let wasEmpty = self.playlist.isEmpty
                     let needsAutoPlay = wasEmpty || !self.player.isLoaded
                     self.playlist.appendItems(newItems)
-                    if needsAutoPlay, let first = newItems.first {
-                        self.onSelectPlaylistItem(first)
+                    if needsAutoPlay {
+                        let target = (wasEmpty && self.playlist.playbackMode == .shuffle)
+                            ? (self.playlist.currentItem ?? newItems.first)
+                            : newItems.first
+                        if let item = target {
+                            self.onSelectPlaylistItem(item)
+                        }
                     }
                 }
             }

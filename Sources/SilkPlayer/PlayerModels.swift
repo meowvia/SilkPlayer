@@ -152,6 +152,31 @@ public struct ChapterItem: Identifiable, Sendable, Equatable {
         self.title = title
         self.time = time
     }
+
+    /// Binary search for nearest chapter matching target time.
+    public static func findNearest(in chapters: [ChapterItem], target: Double) -> ChapterItem? {
+        guard !chapters.isEmpty else { return nil }
+        if chapters.count == 1 { return chapters[0] }
+        if target <= chapters[0].time { return chapters[0] }
+        if target >= chapters[chapters.count - 1].time { return chapters[chapters.count - 1] }
+
+        var low = 0
+        var high = chapters.count - 1
+        while low <= high {
+            let mid = (low + high) / 2
+            let midTime = chapters[mid].time
+            if midTime == target {
+                return chapters[mid]
+            } else if midTime < target {
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        let prev = chapters[max(0, high)]
+        let next = chapters[min(chapters.count - 1, low)]
+        return abs(prev.time - target) <= abs(next.time - target) ? prev : next
+    }
 }
 
 public func formatPlaybackTime(_ seconds: Double) -> String {

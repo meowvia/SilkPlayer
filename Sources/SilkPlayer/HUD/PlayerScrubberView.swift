@@ -223,7 +223,8 @@ public struct PlayerScrubberView: View {
                     let activeChapter = player.chapters.last(where: { $0.time <= rawTime })
                     let chapterTitle = activeChapter?.title
 
-                    let cardHalfWidth: CGFloat = player.transform.isPerpendicular ? 42 : 85
+                    let isVertical = player.isEffectiveVertical
+                    let cardHalfWidth: CGFloat = (isVertical || player.transform.isPerpendicular) ? 42 : 85
                     let clampedCenterX = max(cardHalfWidth + 10, min(totalWidth - cardHalfWidth - 10, activeAnchorX))
 
                     ScrubberHoverCardView(
@@ -231,9 +232,10 @@ public struct PlayerScrubberView: View {
                         isLoading: thumbnailEngine.isLoading,
                         time: rawTime,
                         chapterTitle: chapterTitle,
-                        transform: player.transform
+                        transform: player.transform,
+                        isVertical: isVertical
                     )
-                    .position(x: clampedCenterX, y: player.transform.isPerpendicular ? -82 : -68)
+                    .position(x: clampedCenterX, y: (isVertical || player.transform.isPerpendicular) ? -82 : -68)
                     .transition(.opacity.combined(with: .scale(scale: 0.94)))
                 }
             }
@@ -285,18 +287,19 @@ public struct PlayerScrubberView: View {
                         }
                         let dragFraction = fraction(for: value.location.x, totalWidth: geometry.size.width, isExpanded: true)
                         let rawTime = max(0.0, min(clock.duration, dragFraction * clock.duration))
-                        player.updateScrubbing(to: rawTime)
-                        if abs(rawTime - lastHoverRequestedTime) >= 0.05 {
+                        let targetTime = Self.snapTime(rawTime, duration: clock.duration, chapters: player.chapters)
+                        player.updateScrubbing(to: targetTime)
+                        if abs(targetTime - lastHoverRequestedTime) >= 0.05 {
                             let isInitialScrub = (lastHoverRequestedTime < 0)
-                            lastHoverRequestedTime = rawTime
+                            lastHoverRequestedTime = targetTime
                             hoverDebounceTask?.cancel()
                             if isInitialScrub {
-                                thumbnailEngine.requestThumbnail(for: player.currentFilePath, at: rawTime)
+                                thumbnailEngine.requestThumbnail(for: player.currentFilePath, at: targetTime)
                             } else {
                                 hoverDebounceTask = Task { @MainActor in
                                     try? await Task.sleep(nanoseconds: 35_000_000)
                                     guard !Task.isCancelled else { return }
-                                    thumbnailEngine.requestThumbnail(for: player.currentFilePath, at: rawTime)
+                                    thumbnailEngine.requestThumbnail(for: player.currentFilePath, at: targetTime)
                                 }
                             }
                         }
@@ -307,7 +310,8 @@ public struct PlayerScrubberView: View {
                         lastHoverRequestedTime = -1.0
                         let dragFraction = fraction(for: value.location.x, totalWidth: geometry.size.width, isExpanded: true)
                         let rawTime = max(0.0, min(clock.duration, dragFraction * clock.duration))
-                        player.finishScrubbing(to: rawTime)
+                        let targetTime = Self.snapTime(rawTime, duration: clock.duration, chapters: player.chapters)
+                        player.finishScrubbing(to: targetTime)
                         if !isHovered {
                             thumbnailEngine.clearCurrent()
                         }
@@ -348,6 +352,19 @@ public struct PlayerScrubberView: View {
         let time = player.isScrubbing ? player.scrubTime : clock.currentTime
         return CGFloat(max(0, min(1, time / clock.duration)))
     }
+
+    // MARK: - Chapter Snapping Kinematics
+    /// Evaluates magnetic chapter snapping with an adaptive threshold: max(2.0, duration * 0.012).
+    public static func snapTime(_ rawTime: Double, duration: Double, chapters: [ChapterItem]) -> Double {
+        guard duration > 0, !chapters.isEmpty else { return rawTime }
+        let threshold = max(2.0, duration * 0.012)
+        for chapter in chapters {
+            if abs(rawTime - chapter.time) <= threshold {
+                return chapter.time
+            }
+        }
+        return rawTime
+    }
 }
 
 // MARK: - Scrubber Hover Preview Card View
@@ -358,24 +375,27 @@ public struct ScrubberHoverCardView: View {
     let time: Double
     let chapterTitle: String?
     var transform: VideoTransform
+    var isVertical: Bool
 
     public init(
         thumbnail: NSImage?,
         isLoading: Bool,
         time: Double,
         chapterTitle: String?,
-        transform: VideoTransform = VideoTransform()
+        transform: VideoTransform = VideoTransform(),
+        isVertical: Bool = false
     ) {
         self.thumbnail = thumbnail
         self.isLoading = isLoading
         self.time = time
         self.chapterTitle = chapterTitle
         self.transform = transform
+        self.isVertical = isVertical
     }
 
     public var body: some View {
         VStack(spacing: 5) {
-            let isVert = transform.isPerpendicular
+            let isVert = isVertical || transform.isPerpendicular
             let cardW: CGFloat = isVert ? 64 : 156
             let cardH: CGFloat = isVert ? 114 : 88
 
@@ -385,14 +405,26 @@ public struct ScrubberHoverCardView: View {
                     .frame(width: cardW, height: cardH)
 
                 if let img = thumbnail {
-                    Image(nsImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .rotationEffect(.degrees(Double(transform.effectiveRotation)))
-                        .scaleEffect(x: transform.flipH ? -1.0 : 1.0, y: transform.flipV ? -1.0 : 1.0)
-                        .frame(width: cardW, height: cardH)
-                        .clipped()
-                        .cornerRadius(6)
+                    if transform.isPerpendicular {
+                        Image(nsImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: cardH, height: cardW)
+                            .rotationEffect(.degrees(Double(transform.effectiveRotation)))
+                            .scaleEffect(x: transform.flipH ? -1.0 : 1.0, y: transform.flipV ? -1.0 : 1.0)
+                            .frame(width: cardW, height: cardH)
+                            .clipped()
+                            .cornerRadius(6)
+                    } else {
+                        Image(nsImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .rotationEffect(.degrees(Double(transform.effectiveRotation)))
+                            .scaleEffect(x: transform.flipH ? -1.0 : 1.0, y: transform.flipV ? -1.0 : 1.0)
+                            .frame(width: cardW, height: cardH)
+                            .clipped()
+                            .cornerRadius(6)
+                    }
                 } else {
                     ZStack {
                         if isLoading {
@@ -405,7 +437,7 @@ public struct ScrubberHoverCardView: View {
                                 .foregroundColor(.white.opacity(0.30))
                         }
                     }
-                    .frame(width: 156, height: 88)
+                    .frame(width: cardW, height: cardH)
                 }
             }
             .overlay(

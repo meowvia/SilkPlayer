@@ -267,7 +267,11 @@ public struct AppShellView: View {
     }
 
     private func playPrevious() {
-        if let prevItem = playlistManager.moveToPrevious() {
+        let (action, targetItem) = playlistManager.determinePreviousAction(currentTime: player.currentTime)
+        if action == "rewind" {
+            player.seek(to: 0.0)
+            player.play()
+        } else if let prevItem = targetItem {
             playPlaylistItem(prevItem)
         } else {
             player.seek(to: 0.0)
@@ -359,9 +363,13 @@ public struct AppShellView: View {
             guard !newItems.isEmpty else { return }
 
             Task { @MainActor in
+                let wasEmpty = self.playlistManager.isEmpty
                 self.playlistManager.appendItems(newItems)
-                if let first = newItems.first {
-                    self.playPlaylistItem(first)
+                let itemToPlay = (wasEmpty && self.playlistManager.playbackMode == .shuffle)
+                    ? (self.playlistManager.currentItem ?? newItems.first)
+                    : newItems.first
+                if let target = itemToPlay {
+                    self.playPlaylistItem(target)
                 }
             }
         }

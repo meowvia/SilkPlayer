@@ -35,6 +35,14 @@ public struct MediaItem: Identifiable, Hashable, Sendable, Codable {
         return formatPlaybackTime(duration)
     }
 
+    /// Effective resume position respecting playback progress and finished state.
+    public var resumePosition: Double {
+        if playbackProgress > 0 && !isFinished && lastPlayedPosition > 0 {
+            return lastPlayedPosition
+        }
+        return 0.0
+    }
+
     public init(
         id: UUID = UUID(),
         path: String,

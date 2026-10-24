@@ -18,7 +18,9 @@
 | 提案 003 | 极简无感化 SMB 局域网共享 (Native SMB) | 待落地评估 (未开始) | v1.1.0 候选 |
 | 提案 004 | 局域网轻量投屏功能 (DLNA / Screencast) | 待落地评估 (未开始) | v1.1.0 候选 |
 | ~~提案 005~~ | ~~纯音频播放体验与原生极简封面动效 (Audio Artwork & Waveform)~~ | ~~待落地评估 (未开始)~~ **已落地销项** | **v1.1.0** |
-| 提案 006 | 音视频双轨独立列表与智能分流管理 (Dual-Track Media Playlist) | 待落地评估 (未开始) | v1.3.0 候选 |
+| 提案 006 | 音视频双轨独立列表与智能分流管理 (Dual-Track Media Playlist) | 核心需求 2.4 已落地，主界面双轨待落地 | v1.4.0 候选 |
+| 提案 007 | VP9 硬件加速解码与色彩管线 (VP9 Hardware Decoding) | 待落地评估 (未开始) | v1.4.0 候选 |
+| 提案 008 | 外挂字幕自动检索与同名关联推荐 (External Subtitle Auto-Search) | 待落地评估 (未开始) | v1.4.0 候选 |
 
 
 ---
@@ -220,9 +222,9 @@
 - 洗牌卡牌堆（`shuffleQueue`）仅针对当前激活分类构建；
 - 处于音乐模式时，380 首歌曲在自身库内独立洗牌、无放回消费；切歌、下一曲、上一曲绝对不溢出到视频库。
 
-#### 2.4 空列表且随机模式下导入媒体的首曲洗牌优化 (Shuffle-First Import on Empty Playlist)
+#### 2.4 空列表且随机模式下导入媒体的首曲洗牌优化 (Shuffle-First Import on Empty Playlist) [已在 v1.3.0 落地]
 - 痛点: 播放列表为空时，导入媒体/文件夹始终固定播放第一首。若处于随机播放模式，每次导入都强制听第一首，影响测试与日常体验；
-- 优化方案: 当 `playbackMode == .shuffle` 且列表为空时，导入后立即基于洗牌算法随机抽取一首起播，其余曲目无放回入池。
+- 优化方案: 当 `playbackMode == .shuffle` 且列表为空时，导入后立即基于洗牌算法随机抽取一首起播，其余曲目无放回入池。（已在 v1.3.0 落地验证，见 `PlaylistManager.appendItems` 与回归测试 Test 53）。
 
 ### 3. 紧凑原生交互设计 (严格保持现有侧边栏宽度)
 - 宽度规范: 抽屉宽度严格保持现有 200~240pt 原生紧凑尺寸，不因为新增功能改变侧边栏尺寸；
@@ -239,6 +241,34 @@
 - 跨模态唤醒: 播放音乐中途从外部打开视频时，安全挂起音乐断点，切入视频模式；切回音乐时可精准断点续播。
 
 ### 5. 版本规划建议
-- 纳入 **v1.3.0 核心里程碑**进行系统级状态机重构与专项交付。
+- 主界面双轨列表纳入 **v1.4.0 核心里程碑**进行系统级状态机重构与专项交付。
+
+---
+
+## 提案 007: VP9 硬件加速解码与色彩管线 (VP9 Hardware Accelerated Decoding)
+
+### 1. 提案背景与技术价值
+- 现状分析: YouTube、Bilibili 及部分 WebM 封装的 4K/8K 视频广泛使用 VP9 编码。当前解码管线优先走 VideoToolbox 硬件解码器，当遇到部分非标准 VP9 封装时可能回退至软解，引发高分辨率高帧率下的 CPU 负载上升与发热；
+- 优化目标: 在 Apple Silicon 平台上利用系统原生 VideoToolbox `kCMVideoCodecType_VP9` 硬件解码能力，打通基于 IOSurface 的零拷贝直出至 Metal 渲染管线。
+
+### 2. 实施方案
+- 解码器扩展: 在 `SilkCoreKit/SilkVideoToolboxDecoder.swift` 中检测系统对 VP9 硬件解码的支持情况（`VTIsHardwareDecodeSupported(kCMVideoCodecType_VP9)`）；
+- 容器解析支持: 完善 WebM / MKV 容器中 VP9 `Csd`（Codec Private Data）解析，正确构建 `CMFormatDescription`；
+- 色彩管线适配: 适配 VP9 Profile 0（8-bit BT.709）与 Profile 2（10-bit BT.2020 PQ/HLG），无缝复用现有 Metal 色彩转换着色器。
+
+---
+
+## 提案 008: 外挂字幕自动检索与同名关联推荐 (External Subtitle Auto-Search & Matching)
+
+### 1. 提案背景与用户痛点
+- 痛点现状: 用户观影时常有外挂字幕需求（如 `.srt`、`.ass`、`.vtt`）。目前播放器支持同目录同名自动加载以及手动点击“加载外挂字幕...”，但在多字幕文件同目录（如命名带有语言后缀 `.chs.srt`、`.cht.ass`、`.en.srt`）或同级 `Subs/` 目录时，需用户频繁手动选取；
+- 优化目标: 建立标准化同目录与子目录字幕模糊匹配机制，提升外挂字幕加载效率。
+
+### 2. 实施方案
+- 智能扫描策略:
+  1. 同级目录扫描: 当加载媒体 `video.mkv` 时，异步扫描同级目录下所有以 `video.` 开头且扩展名为支持字幕格式的文件；
+  2. 常用子目录扫描: 递归检查同级 `Subs/`、`subtitles/`、`Sub/` 子目录；
+  3. 语言标签解析: 从文件名提取语言标记（如 `chs`, `cht`, `zh`, `en`, `ja` 等）并展示在字幕轨选择菜单中；
+- 非阻塞异步处理: 在后台线程执行扫描与比对，通过主线程通知 `PlayerCore` 刷新 `subtitleTracks` 列表，绝不阻塞音视频起播链路。
 
 

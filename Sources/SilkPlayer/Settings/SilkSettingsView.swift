@@ -49,6 +49,7 @@ public struct SilkSettingsView: View {
         }
         .frame(width: 540, height: 680)
         .preferredColorScheme(settings.appearanceMode.colorScheme)
+        .id(settings.appLanguage)
         .alert(L10n.tr("Playback History Cleared", "播放历史已清除"), isPresented: $showHistoryClearedAlert) {
             Button(L10n.tr("OK", "好"), role: .cancel) { }
         } message: {
@@ -572,7 +573,7 @@ public struct SilkSettingsView: View {
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(.primary)
 
-                    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.0"
+                    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.3.0"
                     Text(L10n.tr("Version \(appVersion) (SilkCoreKit · Apple Silicon)", "版本 \(appVersion) (SilkCoreKit · Apple Silicon)"))
                         .font(.system(size: 11.5, design: .monospaced))
                         .foregroundColor(.secondary)

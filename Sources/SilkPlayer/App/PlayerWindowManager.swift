@@ -92,6 +92,7 @@ extension Notification.Name {
 
     private var keyEventMonitor: Any?
     private var keyUpEventMonitor: Any?
+    private var rightArrowDownTime: TimeInterval = 0.0
     private var windowObservers: [NSObjectProtocol] = []
 
     public init() {
@@ -258,16 +259,19 @@ extension Notification.Name {
             }
 
             // Right Arrow Long-Press Repeat for 2.0x Fast Forward
-            if flags.isEmpty && event.keyCode == 124 && event.isARepeat {
+            if flags.isEmpty && event.keyCode == 124 {
                 let targetWindow = event.window ?? NSApp?.keyWindow
                 if let targetWindow = targetWindow, targetWindow === self.settingsWindow {
                     return event
                 }
-                if let session = (targetWindow != nil ? self.sessions.first(where: { $0.window === targetWindow }) : nil) ?? self.activeSession(preferKey: true) {
-                    if let player = session.player {
-                        player.startFastForward2x()
-                        return nil
+                if event.isARepeat {
+                    if let session = (targetWindow != nil ? self.sessions.first(where: { $0.window === targetWindow }) : nil) ?? self.activeSession(preferKey: true) {
+                        session.player?.startFastForward2x()
                     }
+                    return nil
+                } else {
+                    self.rightArrowDownTime = ProcessInfo.processInfo.systemUptime
+                    return nil
                 }
             }
 
@@ -285,14 +289,26 @@ extension Notification.Name {
 
         if keyUpEventMonitor == nil {
             keyUpEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
-                if let settings = self?.settingsWindow, (event.window === settings || (settings.isKeyWindow && event.window == nil)) {
+                guard let self = self else { return event }
+                if let settings = self.settingsWindow, (event.window === settings || (settings.isKeyWindow && event.window == nil)) {
                     return event
                 }
                 if event.keyCode == 124 {
-                    if let player = self?.activeSession(preferKey: true)?.player, player.isFastForwarding2x {
-                        player.stopFastForward2x()
-                        return nil
+                    let targetWindow = event.window ?? NSApp?.keyWindow
+                    let session = (targetWindow != nil ? self.sessions.first(where: { $0.window === targetWindow }) : nil) ?? self.activeSession(preferKey: true)
+                    if let player = session?.player {
+                        if player.isFastForwarding2x {
+                            player.stopFastForward2x()
+                            self.rightArrowDownTime = 0.0
+                            return nil
+                        } else if self.rightArrowDownTime > 0.0 {
+                            self.rightArrowDownTime = 0.0
+                            let stepSec = AppSettings.shared.shortSeekStep
+                            player.step(seconds: stepSec)
+                            return nil
+                        }
                     }
+                    self.rightArrowDownTime = 0.0
                 }
                 return event
             }
@@ -490,12 +506,22 @@ extension Notification.Name {
     }
 
     // MARK: - Open External Files Scheduling
-    // MARK: - Open External Files Scheduling (Strictly Single Window)
     public func openExternalFiles(_ files: [String]) {
         let expanded = Self.expandFilesAndDirectories(files)
         guard !expanded.isEmpty else { return }
 
-        if let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
+        let singleWindow = AppSettings.shared.singleWindowMode
+        if singleWindow, let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
+            session.openPath(expanded[0])
+            if expanded.count > 1 {
+                session.appendPlaylistPaths(Array(expanded.dropFirst()))
+            }
+            session.window?.makeKeyAndOrderFront(nil)
+            NSApp?.activate(ignoringOtherApps: true)
+        } else if !singleWindow && !sessions.isEmpty {
+            enqueuePendingFiles(expanded)
+            openWindowAction?()
+        } else if let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
             session.openPath(expanded[0])
             if expanded.count > 1 {
                 session.appendPlaylistPaths(Array(expanded.dropFirst()))
@@ -508,11 +534,15 @@ extension Notification.Name {
         }
     }
 
-    // MARK: - Window Spawning & Request (Strictly Single Window)
+    // MARK: - Window Spawning & Request
     public func requestNewWindow() {
-        if let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
-            session.window?.makeKeyAndOrderFront(nil)
-            NSApp?.activate(ignoringOtherApps: true)
+        if AppSettings.shared.singleWindowMode {
+            if let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
+                session.window?.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            } else {
+                openNewWindow()
+            }
         } else {
             openNewWindow()
         }

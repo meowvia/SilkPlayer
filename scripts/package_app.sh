@@ -56,11 +56,17 @@ cp "${RELEASE_BIN}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 
 # Embed dynamic XCFrameworks into Contents/Frameworks
+# Note: SilkCoreKit is statically linked into the main binary, so skip embedding it to avoid bloat
 for xc in "${PROJECT_DIR}/Packages"/*.xcframework; do
     if [[ -d "${xc}" ]]; then
         for fw in "${xc}"/macos*/*.framework; do
             if [[ -d "${fw}" ]]; then
-                echo "  Embedding $(basename "${fw}")..."
+                fw_name="$(basename "${fw}")"
+                if [[ "${fw_name}" == "SilkCoreKit.framework" ]]; then
+                    echo "  Skipping static archive ${fw_name} (already statically linked into executable)..."
+                    continue
+                fi
+                echo "  Embedding ${fw_name}..."
                 cp -R "${fw}" "${APP_BUNDLE}/Contents/Frameworks/"
             fi
         done
