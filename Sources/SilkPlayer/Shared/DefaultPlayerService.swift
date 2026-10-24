@@ -102,23 +102,35 @@ import Observation
         AppSettings.shared.isDefaultVideoPlayer = true
     }
 
-    /// Restores system default media player (QuickTime Player) and removes SilkPlayer from custom handler overrides.
+    /// Native Apple video formats that QuickTime Player supports natively.
+    private static let appleNativeUTIs: [String] = [
+        "public.movie",
+        "public.video",
+        "public.mpeg-4",
+        "com.apple.quicktime-movie",
+        "com.apple.m4v-video",
+        "public.3gpp"
+    ]
+
+    /// Restores system default media player (QuickTime Player for Apple formats,
+    /// and prior third-party player for MKV/WebM/AVI) by removing SilkPlayer overrides.
     public func restoreSystemDefaultPlayer() async {
         guard !isOperating else { return }
         isOperating = true
         defer { isOperating = false }
 
         let qtBundleID = "com.apple.QuickTimePlayerX"
-        let canonicals = Self.canonicalVideoUTIs
+        let appleUTIs = Self.appleNativeUTIs
 
         await Task.detached(priority: .userInitiated) {
-            // 1. Revert core UTIs to QuickTime
-            for uti in canonicals {
+            // 1. Revert Apple native formats to QuickTime
+            for uti in appleUTIs {
                 _ = LSSetDefaultRoleHandlerForContentType(uti as CFString, .viewer, qtBundleID as CFString)
                 _ = LSSetDefaultRoleHandlerForContentType(uti as CFString, .all, qtBundleID as CFString)
             }
 
-            // 2. Clean SilkPlayer entries from LaunchServices secure plist
+            // 2. Clean SilkPlayer entries from LaunchServices secure plist so non-Apple formats
+            // naturally fall back to the user's prior third-party player (e.g. Movist, IINA)
             let path = ("~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist" as NSString).expandingTildeInPath
             if let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
                var plist = try? PropertyListSerialization.propertyList(from: data, options: .mutableContainersAndLeaves, format: nil) as? [String: Any],
