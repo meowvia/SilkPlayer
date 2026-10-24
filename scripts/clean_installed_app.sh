@@ -58,6 +58,31 @@ rm -f "${HOME}/Library/Preferences/silk_test_runner.plist"
 # 4. Flush cfprefsd defaults
 defaults delete "${BUNDLE_ID}" 2>/dev/null || true
 
+# 5. Clean any residual SilkPlayer LaunchServices handler overrides
+python3 -c "
+import os, plistlib
+p = os.path.expanduser('~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist')
+if os.path.exists(p):
+    with open(p, 'rb') as f:
+        d = plistlib.load(f)
+    handlers = d.get('LSHandlers', [])
+    new_handlers = [h for h in handlers if 'silkplayer' not in str(h).lower()]
+    d['LSHandlers'] = new_handlers
+    with open(p, 'wb') as f:
+        plistlib.dump(d, f)
+"
+
+swift -e '
+import Foundation
+import CoreServices
+let qt = "com.apple.QuickTimePlayerX" as CFString
+let utis = ["public.movie", "public.video", "public.mpeg-4", "com.apple.quicktime-movie", "com.apple.m4v-video"]
+for u in utis {
+    _ = LSSetDefaultRoleHandlerForContentType(u as CFString, .viewer, qt)
+    _ = LSSetDefaultRoleHandlerForContentType(u as CFString, .all, qt)
+}
+' 2>/dev/null || true
+
 echo "=================================================="
 echo " SilkPlayer test environment completely clean!"
 echo "=================================================="

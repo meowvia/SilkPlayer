@@ -56,11 +56,6 @@ public struct SilkSettingsView: View {
         } message: {
             Text(L10n.tr("All media playback positions and history have been cleared.", "所有媒体的历史进度与断点记忆已被清除。"))
         }
-        .onAppear {
-            Task {
-                await defaultPlayerService.checkStatus()
-            }
-        }
     }
 
     // MARK: - Top Tab Bar
