@@ -10,7 +10,6 @@ import AppKit
 /// 4. 关于 (About SilkPlayer) - Brand Emblem, Engine Architecture, Privacy Manifesto
 public struct SilkSettingsView: View {
     @Bindable var settings = AppSettings.shared
-    @State private var defaultPlayerService = DefaultPlayerService.shared
     @State private var selectedTab: Int = 0
     @State private var showHistoryClearedAlert: Bool = false
 
@@ -129,31 +128,6 @@ public struct SilkSettingsView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 210)
                     }
-                }
-            }
-
-            // Default Video Player Card
-            SettingsCard(title: L10n.tr("Default Video Player", "默认视频播放器"), icon: "play.tv.fill") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle(L10n.tr("Set as Default Video Player", "设为系统默认视频播放器"), isOn: Binding(
-                        get: { settings.isDefaultVideoPlayer },
-                        set: { enabled in
-                            settings.isDefaultVideoPlayer = enabled
-                            Task {
-                                if enabled {
-                                    await defaultPlayerService.setAsDefaultVideoPlayer()
-                                } else {
-                                    await defaultPlayerService.restoreSystemDefaultPlayer()
-                                }
-                            }
-                        }
-                    ))
-                    .disabled(defaultPlayerService.isOperating)
-
-                    Text(L10n.tr("When enabled, SilkPlayer becomes the default player for all common video formats (MP4, MKV, MOV, WebM, AVI, TS, FLV, WMV, etc.). Audio formats remain completely untouched.", "开启后将所有常见视频格式 (MP4, MKV, MOV, WebM, AVI, TS, FLV, WMV 等) 关联至 SilkPlayer；严格保持音频格式独立，不侵入本地音频应用。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 

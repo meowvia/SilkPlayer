@@ -350,6 +350,12 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 self.playbackState = .paused
             }
         }
+
+        // Format association prompt (first time opening this format, video only, once per format)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self = self else { return }
+            DefaultPlayerPromptService.shared.checkAndPromptIfNeeded(for: resolvedURL, in: self.hostWindow)
+        }
     }
 
     public func play() {

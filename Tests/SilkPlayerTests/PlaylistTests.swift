@@ -1560,34 +1560,29 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(batchShuffleManager.currentIndex >= 0 && batchShuffleManager.currentIndex < 3, "Chosen index is valid in pool")
     XCTAssert(batchShuffleManager.currentItem?.id == chosenItem?.id, "Current item matches chosen item")
 
-    // 54. Default Video Player Association & Audio Isolation Invariants
-    print("\n--- Test 54: Default Video Player Association & Audio Isolation Invariants ---")
-    let videoExts = Set(DefaultPlayerService.videoExtensions)
+    // 54. Media File Classification & Audio Isolation Invariants
+    print("\n--- Test 54: Media File Classification & Audio Isolation Invariants ---")
+    let videoExts = MediaFileClassifier.videoExtensions
     let expectedVideoExts: Set<String> = [
         "mp4", "m4v", "mov", "mkv", "webm", "avi",
         "ts", "m2ts", "mts", "wmv", "asf", "flv",
         "f4v", "rmvb", "rm", "vob", "mpg", "mpeg",
         "m2v", "3gp", "3g2", "ogv", "divx"
     ]
-    XCTAssert(expectedVideoExts.isSubset(of: videoExts), "DefaultPlayerService includes all standard modern & legacy video formats")
+    XCTAssert(expectedVideoExts.isSubset(of: videoExts), "MediaFileClassifier includes all standard modern & legacy video formats")
 
-    // Strict boundary constraint: Absolutely NO audio formats can be hijacked
+    // Strict boundary constraint: Absolutely NO audio formats can be classified as video
     for audioExt in MediaFileClassifier.audioExtensions {
-        XCTAssertFalse(videoExts.contains(audioExt), "Audio format '\(audioExt)' MUST NEVER be hijacked by DefaultPlayerService")
+        XCTAssertFalse(videoExts.contains(audioExt), "Audio format '\(audioExt)' MUST NEVER be classified as video")
     }
 
-    // Canonical UTIs check
-    let canonicals = DefaultPlayerService.canonicalVideoUTIs
-    XCTAssert(canonicals.contains("public.movie"), "Canonical UTIs contain public.movie")
-    XCTAssert(canonicals.contains("public.video"), "Canonical UTIs contain public.video")
-    XCTAssertFalse(canonicals.contains("public.audio"), "Canonical UTIs MUST NOT contain public.audio")
-
-    // Switch state and persistence invariants
-    let appSettings = AppSettings.shared
-    let originalState = appSettings.isDefaultVideoPlayer
-    appSettings.isDefaultVideoPlayer = false
-    XCTAssertFalse(appSettings.isDefaultVideoPlayer, "Default player setting starts false on clean install")
-    appSettings.isDefaultVideoPlayer = originalState
+    // DefaultPlayerPromptService Invariants
+    let promptService = DefaultPlayerPromptService.shared
+    promptService.resetPromptedFormats()
+    XCTAssertFalse(promptService.promptedFormats.contains("mkv"), "Reset clears prompted formats")
+    promptService.markPrompted(for: "mkv")
+    XCTAssertTrue(promptService.promptedFormats.contains("mkv"), "Marking format records it permanently")
+    promptService.resetPromptedFormats()
 
     testPlayer.isAudioOnly = false
     }
