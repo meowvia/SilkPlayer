@@ -497,9 +497,12 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     // MARK: - Seeking & Scrubbing
+    private var pendingSeekTarget: Double? = nil
+
     public func seek(to seconds: Double) {
         guard let layer = playerLayer else { return }
         let clamped = max(0.0, min(duration > 0 ? duration : seconds, seconds))
+        self.pendingSeekTarget = clamped
         self.currentTime = clamped
         layer.seek(time: clamped, autoPlay: isPlaying, completion: { _ in })
         _ = self.subtitleModel.subtitle(currentTime: clamped)
@@ -511,7 +514,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     public func step(seconds: Double) {
         guard duration > 0 else { return }
-        let target = max(0.0, min(duration, currentTime + seconds))
+        let base = pendingSeekTarget ?? currentTime
+        let target = max(0.0, min(duration, base + seconds))
         seek(to: target)
         showSeekOSD(targetTime: target, offset: seconds, duration: duration)
     }
@@ -1513,7 +1517,14 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     public func player(layer: SilkPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {
         if !self.isScrubbing {
-            self.currentTime = currentTime
+            if let pending = self.pendingSeekTarget {
+                if abs(currentTime - pending) <= 0.6 {
+                    self.pendingSeekTarget = nil
+                    self.currentTime = currentTime
+                }
+            } else {
+                self.currentTime = currentTime
+            }
         }
         self.duration = totalTime
         self.cachedDuration = totalTime
