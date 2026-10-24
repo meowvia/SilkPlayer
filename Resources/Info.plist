@@ -56,7 +56,7 @@
             <key>CFBundleTypeRole</key>
             <string>Viewer</string>
             <key>LSHandlerRank</key>
-            <string>Default</string>
+            <string>Alternate</string>
             <key>LSItemContentTypes</key>
             <array>
                 <string>public.movie</string>

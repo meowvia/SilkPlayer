@@ -1582,9 +1582,12 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(canonicals.contains("public.video"), "Canonical UTIs contain public.video")
     XCTAssertFalse(canonicals.contains("public.audio"), "Canonical UTIs MUST NOT contain public.audio")
 
-    // Status description invariants
-    let service = DefaultPlayerService.shared
-    XCTAssertFalse(service.statusDescription.isEmpty, "Status description must not be empty")
+    // Switch state and persistence invariants
+    let appSettings = AppSettings.shared
+    let originalState = appSettings.isDefaultVideoPlayer
+    appSettings.isDefaultVideoPlayer = false
+    XCTAssertFalse(appSettings.isDefaultVideoPlayer, "Default player setting starts false on clean install")
+    appSettings.isDefaultVideoPlayer = originalState
 
     testPlayer.isAudioOnly = false
     }

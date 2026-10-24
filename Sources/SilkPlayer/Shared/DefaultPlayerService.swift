@@ -1,25 +1,18 @@
 import Foundation
-import AppKit
-import UniformTypeIdentifiers
 import CoreServices
+import UniformTypeIdentifiers
 import Observation
 
 /// Service managing system default video player role and video format associations.
-/// Adheres strictly to the user privacy principle:
+/// Adheres strictly to the user privacy and experience principles:
 /// - Only manages video formats (modern and legacy).
 /// - Never touches or hijacks audio formats (.mp3, .flac, .wav, .m4a, etc.).
-/// - Never prompts user on launch; operates only on explicit user request in Settings.
+/// - Uses pure LaunchServices C-API (LSSetDefaultRoleHandlerForContentType) to associate
+///   formats silently without triggering intrusive system confirmation dialogs.
+/// - Never runs automatically on install or cold start; operates solely on explicit user toggle.
 @MainActor
 @Observable public final class DefaultPlayerService {
     public static let shared = DefaultPlayerService()
-
-    public enum Status: Equatable, Sendable {
-        case unknown
-        case checking
-        case allDefault
-        case partiallyDefault(matched: Int, total: Int)
-        case notDefault
-    }
 
     /// All target video file extensions to associate (strictly video only, zero audio formats).
     public static let videoExtensions: [String] = [
@@ -32,120 +25,115 @@ import Observation
     /// Canonical system video UTIs.
     public static let canonicalVideoUTIs: [String] = [
         "public.movie",
-        "public.video"
+        "public.video",
+        "public.mpeg-4",
+        "com.apple.quicktime-movie",
+        "com.apple.m4v-video",
+        "public.avi",
+        "org.matroska.mkv",
+        "org.webmproject.webm",
+        "public.mpeg-2-transport-stream",
+        "public.avchd-mpeg-2-transport-stream",
+        "com.microsoft.windows-media-wmv",
+        "com.microsoft.advanced-systems-format",
+        "com.adobe.flash.video",
+        "com.real.realmedia",
+        "com.real.realmedia-vbr",
+        "public.mpeg",
+        "public.mpeg-2-video",
+        "public.3gpp",
+        "public.3gpp2",
+        "org.xiph.ogv"
     ]
 
-    public private(set) var status: Status = .unknown
-    public private(set) var isSetting: Bool = false
+    public private(set) var isOperating: Bool = false
 
     private init() {}
-
-    /// Target application bundle URL
-    private var targetAppURL: URL {
-        if Bundle.main.bundleURL.pathExtension == "app" {
-            return Bundle.main.bundleURL
-        }
-        let installedURL = URL(fileURLWithPath: "/Applications/SilkPlayer.app")
-        if FileManager.default.fileExists(atPath: installedURL.path) {
-            return installedURL
-        }
-        return Bundle.main.bundleURL
-    }
 
     private var targetBundleID: String {
         Bundle.main.bundleIdentifier ?? "com.silkplayer.SilkPlayer"
     }
 
-    /// Checks current default player status across all video formats.
+    /// Verifies if SilkPlayer is set as the default viewer for core video formats.
     public func checkStatus() async {
-        status = .checking
-
-        let exts = Self.videoExtensions
         let bundleID = targetBundleID
-
-        // Run check off main thread to prevent any UI hitch
-        let (matched, total) = await Task.detached(priority: .userInitiated) {
-            var m = 0
-            var t = 0
-            for ext in exts {
-                guard let uti = UTType(filenameExtension: ext) else { continue }
-                t += 1
-                if let handlerURL = NSWorkspace.shared.urlForApplication(toOpen: uti) {
-                    let id = Bundle(url: handlerURL)?.bundleIdentifier
-                    if id == bundleID || handlerURL.lastPathComponent.contains("SilkPlayer") {
-                        m += 1
-                    }
+        let isDefault = await Task.detached(priority: .userInitiated) {
+            let checkUTIs = ["public.mpeg-4", "com.apple.quicktime-movie", "public.movie"]
+            var matchCount = 0
+            for u in checkUTIs {
+                if let handler = LSCopyDefaultRoleHandlerForContentType(u as CFString, .viewer)?.takeRetainedValue() as String?,
+                   handler.lowercased() == bundleID.lowercased() {
+                    matchCount += 1
                 }
             }
-            return (m, t)
+            return matchCount >= 2
         }.value
 
-        if total > 0 && matched == total {
-            status = .allDefault
-        } else if matched > 0 {
-            status = .partiallyDefault(matched: matched, total: total)
-        } else {
-            status = .notDefault
-        }
+        AppSettings.shared.isDefaultVideoPlayer = isDefault
     }
 
-    /// Associates all video formats with SilkPlayer.
+    /// Associates all video formats with SilkPlayer silently without modal confirmation popups.
     /// Strictly ignores any audio formats.
-    @discardableResult
-    public func setAsDefaultVideoPlayer() async -> Bool {
-        guard !isSetting else { return false }
-        isSetting = true
-        defer { isSetting = false }
+    public func setAsDefaultVideoPlayer() async {
+        guard !isOperating else { return }
+        isOperating = true
+        defer { isOperating = false }
 
-        let appURL = targetAppURL
         let bundleID = targetBundleID
         let exts = Self.videoExtensions
         let canonicals = Self.canonicalVideoUTIs
 
-        await withTaskGroup(of: Void.self) { group in
-            // 1. Register file extension UTTypes
+        await Task.detached(priority: .userInitiated) {
+            // 1. Register canonical video UTIs
+            for uti in canonicals {
+                _ = LSSetDefaultRoleHandlerForContentType(uti as CFString, .viewer, bundleID as CFString)
+                _ = LSSetDefaultRoleHandlerForContentType(uti as CFString, .all, bundleID as CFString)
+            }
+
+            // 2. Register file extension UTTypes
             for ext in exts {
-                guard let uti = UTType(filenameExtension: ext) else { continue }
-                group.addTask {
-                    await withCheckedContinuation { continuation in
-                        NSWorkspace.shared.setDefaultApplication(at: appURL, toOpen: uti) { _ in
-                            continuation.resume()
-                        }
-                    }
-                    LSSetDefaultRoleHandlerForContentType(uti.identifier as CFString, .viewer, bundleID as CFString)
+                if let uti = UTType(filenameExtension: ext)?.identifier {
+                    _ = LSSetDefaultRoleHandlerForContentType(uti as CFString, .viewer, bundleID as CFString)
+                    _ = LSSetDefaultRoleHandlerForContentType(uti as CFString, .all, bundleID as CFString)
                 }
             }
+        }.value
 
-            // 2. Register canonical video UTIs
-            for canonical in canonicals {
-                group.addTask {
-                    if let uti = UTType(canonical) {
-                        await withCheckedContinuation { continuation in
-                            NSWorkspace.shared.setDefaultApplication(at: appURL, toOpen: uti) { _ in
-                                continuation.resume()
-                            }
-                        }
-                    }
-                    LSSetDefaultRoleHandlerForContentType(canonical as CFString, .viewer, bundleID as CFString)
-                }
-            }
-        }
-
-        await checkStatus()
-        return status == .allDefault
+        AppSettings.shared.isDefaultVideoPlayer = true
     }
 
-    /// User-facing status string
-    public var statusDescription: String {
-        switch status {
-        case .unknown, .checking:
-            return L10n.tr("Checking default player status...", "正在检测默认播放器状态…")
-        case .allDefault:
-            return L10n.tr("SilkPlayer is the default video player", "SilkPlayer 已作为系统默认视频播放器")
-        case .partiallyDefault(let matched, let total):
-            return L10n.tr("Partially associated (\(matched)/\(total) formats)", "已关联部分视频格式 (\(matched)/\(total))")
-        case .notDefault:
-            return L10n.tr("Not set as default video player", "尚未设为系统默认视频播放器")
-        }
+    /// Restores system default media player (QuickTime Player) and removes SilkPlayer from custom handler overrides.
+    public func restoreSystemDefaultPlayer() async {
+        guard !isOperating else { return }
+        isOperating = true
+        defer { isOperating = false }
+
+        let qtBundleID = "com.apple.QuickTimePlayerX"
+        let canonicals = Self.canonicalVideoUTIs
+
+        await Task.detached(priority: .userInitiated) {
+            // 1. Revert core UTIs to QuickTime
+            for uti in canonicals {
+                _ = LSSetDefaultRoleHandlerForContentType(uti as CFString, .viewer, qtBundleID as CFString)
+                _ = LSSetDefaultRoleHandlerForContentType(uti as CFString, .all, qtBundleID as CFString)
+            }
+
+            // 2. Clean SilkPlayer entries from LaunchServices secure plist
+            let path = ("~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist" as NSString).expandingTildeInPath
+            if let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+               var plist = try? PropertyListSerialization.propertyList(from: data, options: .mutableContainersAndLeaves, format: nil) as? [String: Any],
+               let handlers = plist["LSHandlers"] as? [[String: Any]] {
+                let filtered = handlers.filter { dict in
+                    let s = "\(dict)".lowercased()
+                    return !s.contains("silkplayer")
+                }
+                plist["LSHandlers"] = filtered
+                if let outData = try? PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0) {
+                    try? outData.write(to: URL(fileURLWithPath: path))
+                }
+            }
+        }.value
+
+        AppSettings.shared.isDefaultVideoPlayer = false
     }
 }

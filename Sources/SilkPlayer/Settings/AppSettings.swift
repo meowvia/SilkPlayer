@@ -166,6 +166,11 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             UserDefaults.standard.set(singleWindowMode, forKey: "singleWindowMode")
         }
     }
+    public var isDefaultVideoPlayer: Bool {
+        didSet {
+            UserDefaults.standard.set(isDefaultVideoPlayer, forKey: "isDefaultVideoPlayer")
+        }
+    }
 
     // MARK: - 2. Playback (播放)
     public var autoPlayOnLoad: Bool {
@@ -307,6 +312,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         self.screenshotFormat = UserDefaults.standard.string(forKey: "screenshotFormat") ?? "png"
 
         self.singleWindowMode = UserDefaults.standard.object(forKey: "singleWindowMode") as? Bool ?? true
+        self.isDefaultVideoPlayer = UserDefaults.standard.object(forKey: "isDefaultVideoPlayer") as? Bool ?? false
 
         // 2. Playback
         self.autoPlayOnLoad = UserDefaults.standard.object(forKey: "autoPlayOnLoad") as? Bool ?? true

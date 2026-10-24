@@ -139,36 +139,23 @@ public struct SilkSettingsView: View {
 
             // Default Video Player Card
             SettingsCard(title: L10n.tr("Default Video Player", "默认视频播放器"), icon: "play.tv.fill") {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(statusIndicatorColor)
-                            .frame(width: 8, height: 8)
-
-                        Text(defaultPlayerService.statusDescription)
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundColor(.primary)
-
-                        Spacer()
-
-                        Button(action: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(L10n.tr("Set as Default Video Player", "设为系统默认视频播放器"), isOn: Binding(
+                        get: { settings.isDefaultVideoPlayer },
+                        set: { enabled in
+                            settings.isDefaultVideoPlayer = enabled
                             Task {
-                                await defaultPlayerService.setAsDefaultVideoPlayer()
-                            }
-                        }) {
-                            if defaultPlayerService.isSetting {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .padding(.horizontal, 8)
-                            } else {
-                                Text(defaultPlayerService.status == .allDefault ? L10n.tr("Re-apply", "重新关联") : L10n.tr("Set as Default", "设为默认播放器"))
+                                if enabled {
+                                    await defaultPlayerService.setAsDefaultVideoPlayer()
+                                } else {
+                                    await defaultPlayerService.restoreSystemDefaultPlayer()
+                                }
                             }
                         }
-                        .controlSize(.small)
-                        .disabled(defaultPlayerService.isSetting)
-                    }
+                    ))
+                    .disabled(defaultPlayerService.isOperating)
 
-                    Text(L10n.tr("Associates all common video formats (MP4, MKV, MOV, WebM, AVI, TS, FLV, WMV, etc.) with SilkPlayer. Audio files remain untouched.", "全量接管所有新老主流视频格式 (MP4, MKV, MOV, WebM, AVI, TS, FLV, WMV 等)；严格保持音频格式独立，不侵入本地音频应用。"))
+                    Text(L10n.tr("When enabled, SilkPlayer becomes the default player for all common video formats (MP4, MKV, MOV, WebM, AVI, TS, FLV, WMV, etc.). Audio formats remain completely untouched.", "开启后将所有常见视频格式 (MP4, MKV, MOV, WebM, AVI, TS, FLV, WMV 等) 关联至 SilkPlayer；严格保持音频格式独立，不侵入本地音频应用。"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -779,19 +766,6 @@ public struct SilkSettingsView: View {
                     .foregroundColor(.secondary)
                     .lineSpacing(2)
             }
-        }
-    }
-
-    private var statusIndicatorColor: Color {
-        switch defaultPlayerService.status {
-        case .allDefault:
-            return .green
-        case .partiallyDefault:
-            return .orange
-        case .notDefault:
-            return .secondary.opacity(0.6)
-        case .unknown, .checking:
-            return .cyan.opacity(0.8)
         }
     }
 
