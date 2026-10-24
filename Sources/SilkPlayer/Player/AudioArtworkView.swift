@@ -36,7 +36,7 @@ public struct AudioArtworkView: View {
             let bottomSafeInset: CGFloat = 108.0
             let safeH = max(180, availableH - topSafeInset - bottomSafeInset)
             let coverCardSize = Self.computeCoverCardSize(availableW: availableW, availableH: availableH)
-            let vinylDiameter = max(140, min(420, min(availableW * 0.55, safeH * 0.58)))
+            let vinylDiameter = max(120, min(320, min(availableW * 0.44, safeH * 0.44)))
 
             ZStack {
                 // 1. Native macOS Liquid Glass frosted backdrop
@@ -75,7 +75,7 @@ public struct AudioArtworkView: View {
                     .allowsHitTesting(false)
 
                 // 5. Centered Presentation: Vinyl Disc & Audio Visualizer Halo (Safe Inset Viewport)
-                VStack(spacing: max(16, min(32, safeH * 0.09))) {
+                VStack(spacing: max(10, min(22, safeH * 0.045))) {
                     if let artwork = player.artworkImage {
                         // Discrete Cover Card with Acoustic Bloom
                         let b0 = player.isPlaying ? (player.audioRhythmLevels.first ?? 0.0) : 0.0
@@ -156,7 +156,6 @@ public struct AudioArtworkView: View {
                             .transition(.opacity)
                         }
                     }
-                    .padding(.top, max(14, min(26, safeH * 0.06)))
                 }
                 .frame(width: availableW, height: safeH, alignment: .center)
                 .padding(.top, topSafeInset)
@@ -340,7 +339,7 @@ struct FloatingVinylDiscView: View {
                     }
                 }
             }
-            .frame(width: diameter, height: diameter)
+            .frame(width: diameter * 1.24, height: diameter * 1.24)
         }
     }
 }

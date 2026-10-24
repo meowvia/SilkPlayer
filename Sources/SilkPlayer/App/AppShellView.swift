@@ -40,7 +40,7 @@ public struct AppShellView: View {
         } else if isPlaying || player.isLoaded {
             return 200
         } else {
-            return 640
+            return 200
         }
     }
 
@@ -50,7 +50,7 @@ public struct AppShellView: View {
         } else if isPlaying || player.isLoaded {
             return 200
         } else {
-            return 360
+            return 200
         }
     }
 
@@ -185,6 +185,15 @@ public struct AppShellView: View {
                     let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
                     w.maxSize = screenFrame.size
                     w.contentMaxSize = screenFrame.size
+                    // If current window is smaller than emptyMin, expand smoothly so trailing pull tab is never clipped offscreen
+                    let currentFrame = w.frame
+                    if currentFrame.width < emptyMin.width || currentFrame.height < emptyMin.height {
+                        let newWidth = max(currentFrame.width, emptyMin.width)
+                        let newHeight = max(currentFrame.height, emptyMin.height)
+                        let newY = currentFrame.origin.y - (newHeight - currentFrame.height)
+                        let newFrame = NSRect(x: currentFrame.origin.x, y: newY, width: newWidth, height: newHeight)
+                        w.setFrame(newFrame, display: true, animate: true)
+                    }
                 }
             }
         }
