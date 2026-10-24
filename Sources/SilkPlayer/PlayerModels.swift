@@ -18,8 +18,8 @@ public enum PlaybackState: String, Sendable {
 
 public struct MediaFileClassifier: Sendable {
     public static let videoExtensions: Set<String> = [
-        "mp4", "mkv", "mov", "m4v", "ts", "m2ts", "webm", "avi",
-        "flv", "wmv", "3gp", "mpg", "mpeg", "vob", "iso", "rmvb", "ogv"
+        "mp4", "mkv", "mov", "m4v", "ts", "m2ts", "mts", "webm", "avi",
+        "flv", "f4v", "wmv", "asf", "3gp", "3g2", "mpg", "mpeg", "m2v", "vob", "iso", "rmvb", "rm", "ogv", "divx"
     ]
     
     public static let subtitleExtensions: Set<String> = [

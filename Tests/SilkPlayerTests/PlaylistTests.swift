@@ -1560,6 +1560,32 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(batchShuffleManager.currentIndex >= 0 && batchShuffleManager.currentIndex < 3, "Chosen index is valid in pool")
     XCTAssert(batchShuffleManager.currentItem?.id == chosenItem?.id, "Current item matches chosen item")
 
+    // 54. Default Video Player Association & Audio Isolation Invariants
+    print("\n--- Test 54: Default Video Player Association & Audio Isolation Invariants ---")
+    let videoExts = Set(DefaultPlayerService.videoExtensions)
+    let expectedVideoExts: Set<String> = [
+        "mp4", "m4v", "mov", "mkv", "webm", "avi",
+        "ts", "m2ts", "mts", "wmv", "asf", "flv",
+        "f4v", "rmvb", "rm", "vob", "mpg", "mpeg",
+        "m2v", "3gp", "3g2", "ogv", "divx"
+    ]
+    XCTAssert(expectedVideoExts.isSubset(of: videoExts), "DefaultPlayerService includes all standard modern & legacy video formats")
+
+    // Strict boundary constraint: Absolutely NO audio formats can be hijacked
+    for audioExt in MediaFileClassifier.audioExtensions {
+        XCTAssertFalse(videoExts.contains(audioExt), "Audio format '\(audioExt)' MUST NEVER be hijacked by DefaultPlayerService")
+    }
+
+    // Canonical UTIs check
+    let canonicals = DefaultPlayerService.canonicalVideoUTIs
+    XCTAssert(canonicals.contains("public.movie"), "Canonical UTIs contain public.movie")
+    XCTAssert(canonicals.contains("public.video"), "Canonical UTIs contain public.video")
+    XCTAssertFalse(canonicals.contains("public.audio"), "Canonical UTIs MUST NOT contain public.audio")
+
+    // Status description invariants
+    let service = DefaultPlayerService.shared
+    XCTAssertFalse(service.statusDescription.isEmpty, "Status description must not be empty")
+
     testPlayer.isAudioOnly = false
     }
 }

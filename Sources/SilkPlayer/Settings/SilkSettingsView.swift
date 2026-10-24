@@ -10,6 +10,7 @@ import AppKit
 /// 4. 关于 (About SilkPlayer) - Brand Emblem, Engine Architecture, Privacy Manifesto
 public struct SilkSettingsView: View {
     @Bindable var settings = AppSettings.shared
+    @State private var defaultPlayerService = DefaultPlayerService.shared
     @State private var selectedTab: Int = 0
     @State private var showHistoryClearedAlert: Bool = false
 
@@ -55,6 +56,11 @@ public struct SilkSettingsView: View {
         } message: {
             Text(L10n.tr("All media playback positions and history have been cleared.", "所有媒体的历史进度与断点记忆已被清除。"))
         }
+        .onAppear {
+            Task {
+                await defaultPlayerService.checkStatus()
+            }
+        }
     }
 
     // MARK: - Top Tab Bar
@@ -71,34 +77,26 @@ public struct SilkSettingsView: View {
     }
 
     // MARK: - Tab Content Container
-    // General Tab presents fully in one view without scrolling; others use standard ScrollView
     private var tabContainer: some View {
-        Group {
-            if selectedTab == 0 {
-                generalSection
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 16)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            } else {
-                ScrollView(.vertical, showsIndicators: true) {
-                    Group {
-                        switch selectedTab {
-                        case 1:
-                            playbackSection
-                        case 2:
-                            audioSubtitleSection
-                        case 3:
-                            shortcutsSection
-                        case 4:
-                            aboutSection
-                        default:
-                            EmptyView()
-                        }
-                    }
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 16)
+        ScrollView(.vertical, showsIndicators: true) {
+            Group {
+                switch selectedTab {
+                case 0:
+                    generalSection
+                case 1:
+                    playbackSection
+                case 2:
+                    audioSubtitleSection
+                case 3:
+                    shortcutsSection
+                case 4:
+                    aboutSection
+                default:
+                    EmptyView()
                 }
             }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 16)
         }
         .frame(width: 540, height: 585)
     }
@@ -136,6 +134,44 @@ public struct SilkSettingsView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 210)
                     }
+                }
+            }
+
+            // Default Video Player Card
+            SettingsCard(title: L10n.tr("Default Video Player", "默认视频播放器"), icon: "play.tv.fill") {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(statusIndicatorColor)
+                            .frame(width: 8, height: 8)
+
+                        Text(defaultPlayerService.statusDescription)
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundColor(.primary)
+
+                        Spacer()
+
+                        Button(action: {
+                            Task {
+                                await defaultPlayerService.setAsDefaultVideoPlayer()
+                            }
+                        }) {
+                            if defaultPlayerService.isSetting {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .padding(.horizontal, 8)
+                            } else {
+                                Text(defaultPlayerService.status == .allDefault ? L10n.tr("Re-apply", "重新关联") : L10n.tr("Set as Default", "设为默认播放器"))
+                            }
+                        }
+                        .controlSize(.small)
+                        .disabled(defaultPlayerService.isSetting)
+                    }
+
+                    Text(L10n.tr("Associates all common video formats (MP4, MKV, MOV, WebM, AVI, TS, FLV, WMV, etc.) with SilkPlayer. Audio files remain untouched.", "全量接管所有新老主流视频格式 (MP4, MKV, MOV, WebM, AVI, TS, FLV, WMV 等)；严格保持音频格式独立，不侵入本地音频应用。"))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -743,6 +779,19 @@ public struct SilkSettingsView: View {
                     .foregroundColor(.secondary)
                     .lineSpacing(2)
             }
+        }
+    }
+
+    private var statusIndicatorColor: Color {
+        switch defaultPlayerService.status {
+        case .allDefault:
+            return .green
+        case .partiallyDefault:
+            return .orange
+        case .notDefault:
+            return .secondary.opacity(0.6)
+        case .unknown, .checking:
+            return .cyan.opacity(0.8)
         }
     }
 
