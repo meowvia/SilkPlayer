@@ -687,8 +687,8 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return frameSize
         }
 
-        // Allow Shift-key freeform resizing without aspect ratio constraints
-        if NSEvent.modifierFlags.contains(.shift) {
+        // Allow Shift-key freeform resizing without aspect ratio constraints during interactive dragging
+        if window.inLiveResize && NSEvent.modifierFlags.contains(.shift) {
             let minSide: CGFloat = (player?.isAudioOnly == true) ? 380.0 : 360.0
             let minWidth: CGFloat = (player?.isAudioOnly == true) ? 380.0 : idleMinW
             return NSSize(

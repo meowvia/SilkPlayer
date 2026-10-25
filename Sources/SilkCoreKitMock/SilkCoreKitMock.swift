@@ -91,6 +91,7 @@ public class SilkMetalRenderView: NSView {
     public var transformUniforms = MetalTransformUniforms()
     public var videoRotation: Int = 0
     public var currentPixelBuffer: CVPixelBuffer? = nil
+    public var isWindowOccluded: Bool = false
 
     public func renderCurrentFrameImmediately() {}
     public func updateColorPipeline() {}
@@ -523,10 +524,6 @@ public final class SilkThumbnailEngine: ObservableObject {
     public func captureScreenshot(for filePath: String?, at time: Double) async -> NSImage? { nil }
     public func captureScreenshotCGImage(for filePath: String?, at time: Double) async -> CGImage? { nil }
     public func captureScreenshotSync(for filePath: String?, at time: Double) -> NSImage? { nil }
-}
-
-public enum SilkMediaFormatHelper {
-    public static func resolutionText(width: Int, height: Int) -> String { "\(width)x\(height)" }
 }
 
 extension SilkPlayerEngine: @unchecked Sendable {}
