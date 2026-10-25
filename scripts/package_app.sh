@@ -21,11 +21,8 @@ echo "=================================================="
 echo " Packaging ${APP_NAME} (${VERSION}) -> ${DMG_PATH}"
 echo "=================================================="
 
-# 1. Clean previous build staging, old test DMGs, and wipe old installed app version
-echo "[1/5] Cleaning previous build artifacts and old installed test versions..."
-if [[ -x "${SCRIPT_DIR}/clean_installed_app.sh" ]]; then
-    "${SCRIPT_DIR}/clean_installed_app.sh"
-fi
+# 1. Clean previous build staging and destination DMG
+echo "[1/5] Cleaning previous build artifacts..."
 
 if [[ "${VERSION}" != *"-test"* && -f "${DMG_PATH}" ]]; then
     echo "Error: Release ${DMG_PATH} already exists! To prevent accidental overwrite of finalized versions, delete it manually or bump version." >&2
@@ -136,15 +133,9 @@ fi
 hdiutil detach "${MOUNT_DIR}" -quiet
 rm -rf "${MOUNT_DIR}"
 
-# Guarantee test environment has no residual stale version
-if [[ -x "${SCRIPT_DIR}/clean_installed_app.sh" ]]; then
-    "${SCRIPT_DIR}/clean_installed_app.sh"
-fi
-
 echo "=================================================="
 echo " Packaged successfully!"
 echo " App: ${APP_BUNDLE}"
 echo " DMG: ${DMG_PATH}"
-echo " Environment: Completely clean & ready for fresh testing"
 echo "=================================================="
 

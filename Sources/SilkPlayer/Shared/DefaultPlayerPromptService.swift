@@ -42,7 +42,10 @@ public final class DefaultPlayerPromptService {
         guard let appURL = NSWorkspace.shared.urlForApplication(toOpen: uti) else { return false }
         let currentID = Bundle(url: appURL)?.bundleIdentifier ?? ""
         let targetID = Bundle.main.bundleIdentifier ?? "com.silkplayer.SilkPlayer"
-        return currentID.lowercased() == targetID.lowercased()
+        if !currentID.isEmpty && currentID.lowercased() == targetID.lowercased() {
+            return true
+        }
+        return appURL.lastPathComponent.lowercased().contains("silkplayer")
     }
 
     /// Evaluates if the opened file should prompt for default player assignment
@@ -55,14 +58,14 @@ public final class DefaultPlayerPromptService {
         let ext = fileURL.pathExtension.lowercased()
         guard !ext.isEmpty else { return }
 
-        // 2. If already prompted for this format, never ask again
-        if promptedFormats.contains(ext) {
+        // 2. If SilkPlayer is already default for this format, mark and silently return
+        if isAlreadyDefault(for: ext) {
+            markPrompted(for: ext)
             return
         }
 
-        // 3. If SilkPlayer is already default for this format, mark and return
-        if isAlreadyDefault(for: ext) {
-            markPrompted(for: ext)
+        // 3. If already prompted for this format (whether user clicked Yes or No before), silently return
+        if promptedFormats.contains(ext) {
             return
         }
 
@@ -104,9 +107,9 @@ public final class DefaultPlayerPromptService {
 
     /// Associates ONLY this single format with SilkPlayer
     public func associateSingleFormat(_ format: String) {
-        guard let uti = UTType(filenameExtension: format)?.identifier else { return }
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.silkplayer.SilkPlayer"
-        _ = LSSetDefaultRoleHandlerForContentType(uti as CFString, .viewer, bundleID as CFString)
-        _ = LSSetDefaultRoleHandlerForContentType(uti as CFString, .all, bundleID as CFString)
+        guard Bundle.main.bundleURL.pathExtension == "app" else { return }
+        guard let uti = UTType(filenameExtension: format) else { return }
+        let appURL = Bundle.main.bundleURL
+        NSWorkspace.shared.setDefaultApplication(at: appURL, toOpen: uti) { _ in }
     }
 }

@@ -46,43 +46,13 @@ rm -rf "${HOME}/Applications/${APP_NAME}.app"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "/Applications/${APP_NAME}.app" 2>/dev/null || true
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "${HOME}/Applications/${APP_NAME}.app" 2>/dev/null || true
 
-# 3. Clean application support and caches
-echo "-> Cleaning application support, caches, and preferences..."
+# 5. Clean transient runtime caches
+echo "-> Cleaning application support and runtime caches..."
 rm -rf "${HOME}/Library/Application Support/${APP_NAME}"
 rm -rf "${HOME}/Library/Caches/${APP_NAME}"
 rm -rf "${HOME}/Library/Saved Application State/${BUNDLE_ID}.savedState"
 rm -rf "${HOME}/Library/Saved Application State/${APP_NAME}.savedState"
-rm -f "${HOME}/Library/Preferences/${BUNDLE_ID}.plist"
-rm -f "${HOME}/Library/Preferences/silk_test_runner.plist"
-
-# 4. Flush cfprefsd defaults
-defaults delete "${BUNDLE_ID}" 2>/dev/null || true
-
-# 5. Clean any residual SilkPlayer LaunchServices handler overrides
-python3 -c "
-import os, plistlib
-p = os.path.expanduser('~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist')
-if os.path.exists(p):
-    with open(p, 'rb') as f:
-        d = plistlib.load(f)
-    handlers = d.get('LSHandlers', [])
-    new_handlers = [h for h in handlers if 'silkplayer' not in str(h).lower()]
-    d['LSHandlers'] = new_handlers
-    with open(p, 'wb') as f:
-        plistlib.dump(d, f)
-"
-
-swift -e '
-import Foundation
-import CoreServices
-let qt = "com.apple.QuickTimePlayerX" as CFString
-let utis = ["public.movie", "public.video", "public.mpeg-4", "com.apple.quicktime-movie", "com.apple.m4v-video"]
-for u in utis {
-    _ = LSSetDefaultRoleHandlerForContentType(u as CFString, .viewer, qt)
-    _ = LSSetDefaultRoleHandlerForContentType(u as CFString, .all, qt)
-}
-' 2>/dev/null || true
 
 echo "=================================================="
-echo " SilkPlayer test environment completely clean!"
+echo " SilkPlayer installation bundle removed cleanly!"
 echo "=================================================="
