@@ -344,17 +344,17 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 if fadeInOnStart {
                     self.performFadeIn(targetVolume: targetVolume, duration: 0.38)
                 }
+
+                // Format association prompt (first time opening this format, video only, once per format)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                    guard let self = self else { return }
+                    DefaultPlayerPromptService.shared.checkAndPromptIfNeeded(for: resolvedURL, in: self.hostWindow)
+                }
             } else {
                 layer.pause()
                 self.isPlaying = false
                 self.playbackState = .paused
             }
-        }
-
-        // Format association prompt (first time opening this format, video only, once per format)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            guard let self = self else { return }
-            DefaultPlayerPromptService.shared.checkAndPromptIfNeeded(for: resolvedURL, in: self.hostWindow)
         }
     }
 
