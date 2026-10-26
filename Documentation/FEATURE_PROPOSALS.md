@@ -23,6 +23,7 @@
 | 提案 008 | 外挂字幕自动检索与同名关联推荐 (External Subtitle Auto-Search) | 待落地评估 (未开始) | v1.4.0 候选 |
 | 提案 009 | 杜比视界 Profile 5 动态色调映射与 macOS EDR 管线优化 (Dolby Vision Profile 5 EDR & DTM) | 待落地评估 (未开始) | v1.4.0 候选 |
 | 提案 010 | 私有自用增强分支与端侧离线听译/网络流沙盒 (Personal Edition & On-Device ASR/Radio Pipeline) | 需求立项 (自用验证中) | 自用专用分支 / 待成熟毕业 |
+| 提案 011 | 非原生预览格式文稿图标与品牌 Logo 占位替换 (Document Types Iconography & Fallback Branding) | 正式立项 (下个版本解决) | **v1.4.0 核心排期** |
 
 
 ---
@@ -323,6 +324,40 @@
 ### 4. 自用网络广播与内网流媒体
 - 仅在自用环境挂载预设的国内外精选高音质音乐电台，以及直连 Homelab 自建 IPTV（如 `http://192.168.100.234:35455/live.m3u`）；
 - 公开发布版严格遵循“纯中立播放器原则”，绝不内置任何预设频道。
+
+---
+
+## 提案 011: 非原生预览格式文稿图标与品牌 Logo 占位替换 (Document Types Iconography & Fallback Branding)
+
+### 1. 提案背景与用户痛点
+- 痛点现状:
+  - macOS 系统的 QuickLook 仅对苹果原生支持的封装与编码（如 `.mp4`, `.mov`, `.m4v`）自动解码抽帧生成视频画面缩略图；
+  - 对于海量非苹果原生格式（如 `.mkv`, `.webm`, `.flv`, `.avi`, `.ts`, `.rmvb`, `.wmv`），系统无法生成画面缩略图，Finder 会自动回退展示默认打开该文件的 App 所提供的“文稿图标（Document Icon）”；
+  - SilkPlayer 当前 `Resources/Info.plist` 的 `CFBundleDocumentTypes` 与 `UTImportedTypeDeclarations` 中完全缺失 `CFBundleTypeIconFile`、`CFBundleTypeIconSystemGenerated` 与 `UTTypeIconFile` 声明，且资源目录缺失专注文档图标文件；
+  - 导致用户将 SilkPlayer 设为系统默认播放器后，所有非原生格式在 Finder 中全部降级显示为 macOS 最底层的“空白白纸”无特征图标，严重削弱了产品的视觉品质感，让用户产生“文件损坏或未被正确识别”的负面心理。
+- 目标定位:
+  - **纳入 v1.4.0 核心排期解决**；
+  - 凡被 SilkPlayer 设为默认打开的媒体格式，若系统本身不具备画面缩略图/预览图，在 Finder 中一律强制使用 SilkPlayer 品牌 Logo / 规范折角文稿图标进行占位替换。
+
+### 2. 实施方案与技术路径
+#### 2.1 现代 macOS 原生文稿图标系统合成 (`CFBundleTypeIconSystemGenerated`)
+- 在 `Resources/Info.plist` 的 `CFBundleDocumentTypes`（针对 `Video Media` 与 `Audio Media`）中添加并激活：
+  ```xml
+  <key>CFBundleTypeIconSystemGenerated</key>
+  <true/>
+  ```
+- 启用后，macOS 11~15+ 系统渲染器会自动以 Apple 规范的拟物折角文稿纸为基底，将 SilkPlayer 官方 AppIcon 居中置入，并在右下角带上规范的扩展名文字标签（如 MKV, AVI, FLV），实现系统级自然融合。
+
+#### 2.2 专有文稿图标资产与声明绑定 (`CFBundleTypeIconFile` & `UTTypeIconFile`)
+- 在 `Resources/` 目录中打包标准高清文稿图标资产 `DocumentIcon.icns`（带微弧光泽与播放器胶卷质感）；
+- 在 `CFBundleDocumentTypes` 中显式绑定 `<key>CFBundleTypeIconFile</key><string>DocumentIcon</string>`；
+- 在 `UTImportedTypeDeclarations` 的每个非原生媒体声明中（`org.matroska.mkv`, `org.webmproject.webm`, `com.adobe.flash.video`, `public.avi` 等）同步补充 `<key>UTTypeIconFile</key><string>DocumentIcon</string>`，确保所有回退链路 100% 封闭覆盖。
+
+### 3. 验收标准
+1. 在全新机器或测试环境中安装构建的 SilkPlayer 并执行“设为默认播放器”；
+2. 检查桌面与下载目录下的 `.mkv`, `.flv`, `.webm`, `.avi`, `.wmv` 等文件；
+3. 验证所有无原生视频缩略图的文件在 Finder 各种视图（图标、列表、分栏、画廊）下，均整齐划一展示带有 SilkPlayer Logo 的高清晰度文稿图标，彻底杜绝“空白白纸文稿”现象。
+
 
 
 
