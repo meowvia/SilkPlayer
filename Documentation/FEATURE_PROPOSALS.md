@@ -14,7 +14,7 @@
 | 提案编号 | 提案名称 | 状态 | 目标版本 |
 | :--- | :--- | :--- | :--- |
 | 提案 001 | 办公室防打扰模式 (摸鱼模式 / Boss Key) | 待落地评估 (未开始) | v1.1.0 候选 |
-| 提案 002 | 设置为默认播放器与格式关联管理 (Default Player) | 待落地评估 (未开始) | v1.1.0 候选 |
+| ~~提案 002~~ | ~~设置为默认播放器与格式关联管理 (Default Player)~~ | ~~待落地评估 (未开始)~~ **已落地销项** | **v1.3.0** |
 | 提案 003 | 极简无感化 SMB 局域网共享 (Native SMB) | 待落地评估 (未开始) | v1.1.0 候选 |
 | 提案 004 | 局域网轻量投屏功能 (DLNA / Screencast) | 待落地评估 (未开始) | v1.1.0 候选 |
 | ~~提案 005~~ | ~~纯音频播放体验与原生极简封面动效 (Audio Artwork & Waveform)~~ | ~~待落地评估 (未开始)~~ **已落地销项** | **v1.1.0** |
@@ -64,7 +64,7 @@
 
 ---
 
-## 提案 002: 设置为默认播放器与格式关联管理 (Default Player & Format Associations)
+## ~~提案 002: 设置为默认播放器与格式关联管理 (Default Player & Format Associations)~~ [已在 v1.3.0 落地销项]
 
 ### 1. 提案背景与设计哲学
 - 零侵扰原则: 严禁在应用冷启动或更新时弹窗强行索要默认播放器权限。弹窗索权是国产流氓软件的典型特征，极易引起 macOS 核心用户群体的反感与卸载。
@@ -96,9 +96,9 @@
   - LSSetDefaultRoleHandlerForContentType: 为每个目标媒体 UTI 设置默认 Viewer 角色为 com.silkplayer.SilkPlayer；
   - LSCopyDefaultRoleHandlerForContentType: 用于打开设置页面时读取当前每类格式的实际默认处理器，并反显状态。
 
-### 4. 版本规划建议
-- 纳入 v1.1.0 偏好设置进阶功能规划。
-- 优先完成 Info.plist 完整扩展名声明与打包配置，随后在 Settings 模块落地 UI 与一键关联逻辑。
+### 4. 落地销项记录
+- **落地版本**: **v1.3.0**；
+- **落地验证**: 核心服务 `FormatAssociationService` 已全面打通 `LSSetDefaultRoleHandlerForContentType` 批量绑定，`SilkSettingsView` 支持实时检测与按需点击关联，`LSHandlerRank` 设为 `Alternate` 确保对系统纯净零侵扰；冷启动默认播放器提示弹窗成功拦截并收拢为显式意图。相关单元测试与 CI 流水线全绿跑通。
 
 ---
 
