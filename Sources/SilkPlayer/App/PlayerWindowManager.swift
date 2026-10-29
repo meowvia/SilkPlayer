@@ -994,6 +994,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowWillEnterFullScreen(_ notification: Notification) {
+        player?.isFullscreenTransitioning = true
         if let window = notification.object as? NSWindow {
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
@@ -1002,11 +1003,19 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
     public func windowDidEnterFullScreen(_ notification: Notification) {
         player?.setFullscreenState(true)
+        player?.isFullscreenTransitioning = false
+        player?.renderCurrentFrameImmediately()
+    }
+
+    public func windowWillExitFullScreen(_ notification: Notification) {
+        player?.isFullscreenTransitioning = true
     }
 
     public func windowDidExitFullScreen(_ notification: Notification) {
         player?.setFullscreenState(false)
         player?.applyContentAspectRatioLock()
+        player?.isFullscreenTransitioning = false
+        player?.renderCurrentFrameImmediately()
     }
 
     public func windowWillClose(_ notification: Notification) {

@@ -77,6 +77,9 @@ public final class MetalPlayerContainerView: NSView {
                 rawHeight: p.displayVideoHeight > 0 ? p.displayVideoHeight : p.videoHeight,
                 ratioSetting: p.videoAspectRatio
             )
+            if !p.isPlaying {
+                metalView.renderCurrentFrameImmediately()
+            }
         }
 
         view.autoresizingMask = [.width, .height]
@@ -312,10 +315,14 @@ public final class MetalPlayerContainerView: NSView {
                     return
                 }
                 // Double-click strictly on the top bar in windowed mode: toggle maximize to visibleFrame
-                if !isFullscreen && event.clickCount >= 2 {
+                if !isFullscreen && event.clickCount == 2 {
                     pendingSingleClickWorkItem?.cancel()
                     pendingSingleClickWorkItem = nil
                     PlayerWindowManager.shared.toggleMaximize(window: window)
+                    return
+                } else if !isFullscreen && event.clickCount > 2 {
+                    pendingSingleClickWorkItem?.cancel()
+                    pendingSingleClickWorkItem = nil
                     return
                 }
             }
@@ -338,7 +345,7 @@ public final class MetalPlayerContainerView: NSView {
         }
 
         // 3. Double-Click Handling (strictly on playback canvas):
-        if event.clickCount >= 2 {
+        if event.clickCount == 2 {
             // Cancel pending single click task immediately - 100% zero playback glitch or stutter!
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
@@ -351,6 +358,11 @@ public final class MetalPlayerContainerView: NSView {
                 }
             }
             self.handleDoubleClickAction()
+            return
+        } else if event.clickCount > 2 {
+            // Ignore click counts > 2 to prevent re-entrant event flooding or window state deadlock
+            pendingSingleClickWorkItem?.cancel()
+            pendingSingleClickWorkItem = nil
             return
         }
 

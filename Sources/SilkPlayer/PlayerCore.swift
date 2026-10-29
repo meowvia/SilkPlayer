@@ -1191,12 +1191,27 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     // MARK: - Window & UI Navigation
+    public var isFullscreenTransitioning: Bool = false
+    private var lastFullscreenToggleTime: TimeInterval = 0
+
     public func toggleFullscreen() {
         guard let window = hostWindow ?? NSApp.keyWindow else { return }
+        let now = CACurrentMediaTime()
+        guard !isFullscreenTransitioning, (now - lastFullscreenToggleTime) > 0.6 else {
+            return
+        }
+        lastFullscreenToggleTime = now
+        isFullscreenTransitioning = true
         if !isFullscreen {
             isPlaylistDrawerVisible = false
         }
         window.toggleFullScreen(nil)
+    }
+
+    public func renderCurrentFrameImmediately() {
+        if let renderView = (renderContainer?.metalRenderView ?? (playerLayer?.player.view as? SilkMetalRenderView)) {
+            renderView.renderCurrentFrameImmediately()
+        }
     }
 
     public func setFullscreenState(_ fullscreen: Bool) {

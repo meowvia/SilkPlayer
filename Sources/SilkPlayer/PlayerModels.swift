@@ -291,6 +291,8 @@ public protocol PlayerControllable: AnyObject {
     func togglePlaylistDrawer()
     func applyContentAspectRatioLock()
     func setFullscreenState(_ fullscreen: Bool)
+    var isFullscreenTransitioning: Bool { get set }
+    func renderCurrentFrameImmediately()
     func stop()
     func closePlaybackOrReturnToEmpty()
     func stopAndReturnToLibrary()
@@ -305,6 +307,11 @@ public extension PlayerControllable {
     var selectedSubtitleTrackId: Int { -1 }
 
     var transform: VideoTransform { VideoTransform() }
+    var isFullscreenTransitioning: Bool {
+        get { false }
+        set {}
+    }
+    func renderCurrentFrameImmediately() {}
     func applyContentAspectRatioLock() {}
     func setFullscreenState(_ fullscreen: Bool) {}
     func setExactRotation(_ angle: Int) {}
