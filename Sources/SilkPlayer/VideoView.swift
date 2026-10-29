@@ -336,10 +336,16 @@ public final class MetalPlayerContainerView: NSView {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
 
+            let isTopControlArea = (loc.y >= b.height - 70.0)
+            if isTopControlArea {
+                // Double-click on top bar: maximize to visibleFrame without covering status bar or Dock
+                PlayerWindowManager.shared.toggleMaximize(window: window)
+                return
+            }
+
             if let player = playerCore, player.isHUDVisible {
                 let isBottomControlArea = (loc.y <= 112.0)
-                let isTopControlArea = (loc.y >= b.height - 70.0)
-                if isBottomControlArea || isTopControlArea {
+                if isBottomControlArea {
                     return
                 }
             }

@@ -120,6 +120,17 @@ public struct PlayerHUDView: View {
     // MARK: - Top Information Bar
     private func topBar(tier: HUDLayoutTier) -> some View {
         ZStack(alignment: .center) {
+            // Background double-click target for titlebar maximize (toggles visibleFrame without covering dock/menubar)
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(
+                    TapGesture(count: 2).onEnded {
+                        if let win = NSApp.keyWindow {
+                            PlayerWindowManager.shared.toggleMaximize(window: win)
+                        }
+                    }
+                )
+
             // 1. Base Layer: Leading Spec Badges + Trailing Quick Actions
             HStack(alignment: .center, spacing: 10) {
                 specBadgesRow(tier: tier)
@@ -483,6 +494,18 @@ public struct PlayerHUDView: View {
                     triggerScreenshot()
                 }
                 .accessibilityLabel(L10n.tr("Capture Screenshot", "截取画面"))
+
+                // 2.5 画质增强 (SDR-to-EDR / HDR 动态重塑，位于截屏旁边，优化控制栏视觉平衡)
+                HUDTransportButton(
+                    icon: player.isHDREnabled ? "sparkles.tv.fill" : "sparkles.tv",
+                    size: 14,
+                    weight: .medium,
+                    color: player.isHDREnabled ? .cyan : .white.opacity(0.90),
+                    helpText: L10n.tr("HDR Remastering (H)", "画质增强 (H)")
+                ) {
+                    player.toggleHDR()
+                }
+                .accessibilityLabel(L10n.tr("HDR Remastering", "画质增强"))
             }
         }
     }
@@ -521,20 +544,6 @@ public struct PlayerHUDView: View {
                 HUDMoreMenuButton {
                     moreMenuContent(tier: tier)
                 }
-            }
-
-            // 4.5 画质增强 (SDR-to-EDR / HDR 动态重塑)
-            if !player.isAudioOnly && (tier == .expanded || tier == .standard) {
-                HUDTransportButton(
-                    icon: player.isHDREnabled ? "sparkles.tv.fill" : "sparkles.tv",
-                    size: 14,
-                    weight: .medium,
-                    color: player.isHDREnabled ? .cyan : .white.opacity(0.90),
-                    helpText: L10n.tr("HDR Remastering (H)", "画质增强 (H)")
-                ) {
-                    player.toggleHDR()
-                }
-                .accessibilityLabel(L10n.tr("HDR Remastering", "画质增强"))
             }
 
             // 5. 偏好设置 (仅 expanded 模式直显，其余模式在“更多”菜单中)

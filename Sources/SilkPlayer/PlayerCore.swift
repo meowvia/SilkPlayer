@@ -109,7 +109,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     // MARK: - HDR, Color & Picture Controls
     @Published public var isDebandEnabled: Bool = false
     @Published public var isHDRContent: Bool = false
-    @Published public var isHDREnabled: Bool = true
+    @Published public var isHDREnabled: Bool = false
     @Published public var isDolbyVision: Bool = false
     @Published public var hdrFormatString: String = ""
     @Published public var sharpen: Double = 0.0

@@ -971,11 +971,15 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         // If window already fills visibleFrame, restore previous frame
         if abs(window.frame.width - screenFrame.width) <= 4.0 &&
            abs(window.frame.height - screenFrame.height) <= 4.0 {
-            if let prev = savedPreZoomFrame {
-                window.setFrame(prev, display: true, animate: true)
-                savedPreZoomFrame = nil
-                return
-            }
+            let restoreFrame = savedPreZoomFrame ?? NSRect(
+                x: screenFrame.midX - 480,
+                y: screenFrame.midY - 270,
+                width: 960,
+                height: 540
+            )
+            window.setFrame(restoreFrame, display: true, animate: true)
+            savedPreZoomFrame = nil
+            return
         }
 
         // Save current frame for restore

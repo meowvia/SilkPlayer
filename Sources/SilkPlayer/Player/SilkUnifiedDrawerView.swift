@@ -761,6 +761,7 @@ private struct PlaylistItemRowView: View {
             .buttonStyle(.plain)
             .focusable(false)
             .focusEffectDisabled()
+            .help(rawFileName)
 
             // Trailing hover quick actions (Show in Finder & Delete)
             if isHovered {
@@ -774,39 +775,49 @@ private struct PlaylistItemRowView: View {
         .onHover { onHoverChange($0) }
     }
 
+    private var rawFileName: String {
+        let fn = (item.path as NSString).lastPathComponent
+        return fn.isEmpty ? item.title : fn
+    }
+
     private var sanitizedTitle: SanitizedMediaTitle {
         MediaFilenameSanitizer.sanitize(item.title)
     }
 
     private var leadingIndicator: some View {
-        ZStack {
+        HStack(spacing: 3) {
             if isCurrent {
                 if isPlaying {
                     DrawerEqualizerWaveform(isPlaying: true)
                 } else {
                     Image(systemName: "pause.fill")
-                        .font(.system(size: 9.5, weight: .bold))
+                        .font(.system(size: 8.5, weight: .bold))
                         .foregroundColor(.cyan)
                 }
-            } else if let badge = sanitizedTitle.episodeBadge {
+            }
+
+            if let badge = sanitizedTitle.episodeBadge {
                 Text(badge)
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 9.5, weight: isCurrent ? .bold : .semibold, design: .monospaced))
                     .monospacedDigit()
-                    .foregroundColor(.cyan.opacity(0.85))
+                    .foregroundColor(isCurrent ? .cyan : .cyan.opacity(0.88))
                     .lineLimit(1)
-            } else {
+                    .fixedSize(horizontal: true, vertical: false)
+            } else if !isCurrent {
                 Text(String(format: "%02d", index + 1))
                     .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundColor(.white.opacity(0.38))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
-        .frame(width: sanitizedTitle.episodeBadge != nil ? 32 : 20, alignment: .center)
+        .frame(minWidth: sanitizedTitle.episodeBadge != nil ? (isCurrent ? 58 : 46) : 20, alignment: .leading)
     }
 
     private var titleAndMeta: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(sanitizedTitle.cleanTitle)
+            Text(sanitizedTitle.displayTitle)
                 .font(.system(size: 11.5, weight: isCurrent ? .semibold : .regular))
                 .foregroundColor(isCurrent ? .cyan : .white.opacity(0.90))
                 .lineLimit(1)
@@ -818,7 +829,6 @@ private struct PlaylistItemRowView: View {
                     .foregroundColor(.white.opacity(0.40))
             }
         }
-        .help(item.path.isEmpty ? item.title : item.path)
     }
 
     private var hoverActions: some View {

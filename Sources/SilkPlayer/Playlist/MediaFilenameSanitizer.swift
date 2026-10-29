@@ -7,12 +7,15 @@ public struct SanitizedMediaTitle: Equatable, Sendable {
     public let episodeBadge: String?
     /// Cleaned title without advertising noise or redundant encoding parameters.
     public let cleanTitle: String
+    /// Compact display title intelligently optimized for drawer rows and sidebar lists.
+    public let displayTitle: String
     /// Original raw title or filename.
     public let rawTitle: String
 
-    public init(episodeBadge: String?, cleanTitle: String, rawTitle: String) {
+    public init(episodeBadge: String?, cleanTitle: String, displayTitle: String? = nil, rawTitle: String) {
         self.episodeBadge = episodeBadge
         self.cleanTitle = cleanTitle
+        self.displayTitle = displayTitle ?? cleanTitle
         self.rawTitle = rawTitle
     }
 }
@@ -112,12 +115,68 @@ public enum MediaFilenameSanitizer: Sendable {
 
         // Fallback: If clean title is empty or single punctuation, use baseName
         let finalTitle = cleaned.isEmpty ? baseName : cleaned
+        let displayTitle = computeDisplayTitle(cleanTitle: finalTitle, episodeBadge: episodeBadge, rawTitle: rawTitle)
 
         return SanitizedMediaTitle(
             episodeBadge: episodeBadge,
             cleanTitle: finalTitle,
+            displayTitle: displayTitle,
             rawTitle: rawTitle
         )
+    }
+
+    /// Intelligently computes an optimized compact display title for series with episode subtitles,
+    /// collapsing redundant bilingual translations so the episode name is never crowded out in narrow sidebars.
+    private static func computeDisplayTitle(cleanTitle: String, episodeBadge: String?, rawTitle: String) -> String {
+        guard let badge = episodeBadge, !badge.isEmpty else { return cleanTitle }
+
+        let ns = rawTitle as NSString
+        guard let match = seasonEpisodeRegex.firstMatch(in: rawTitle, range: NSRange(location: 0, length: ns.length)) ??
+                          episodeOnlyRegex.firstMatch(in: rawTitle, range: NSRange(location: 0, length: ns.length)) ??
+                          chineseEpisodeRegex.firstMatch(in: rawTitle, range: NSRange(location: 0, length: ns.length)) else {
+            return cleanTitle
+        }
+
+        let preRaw = ns.substring(to: match.range.location)
+        let postRaw = ns.substring(from: match.range.location + match.range.length)
+
+        // Clean noise from postRaw (remove codec tags, ads, etc.)
+        var cleanPost = adBracketsRegex.stringByReplacingMatches(in: postRaw, range: NSRange(location: 0, length: (postRaw as NSString).length), withTemplate: " ")
+        cleanPost = mediaTokensRegex.stringByReplacingMatches(in: cleanPost, range: NSRange(location: 0, length: (cleanPost as NSString).length), withTemplate: " ")
+        cleanPost = cleanPost.replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: "_", with: " ")
+        let postWords = cleanPost.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        let epSubtitle = postWords.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: " -_:;,./|"))
+
+        guard !epSubtitle.isEmpty else {
+            return cleanTitle
+        }
+
+        // Clean preRaw
+        var cleanPre = adBracketsRegex.stringByReplacingMatches(in: preRaw, range: NSRange(location: 0, length: (preRaw as NSString).length), withTemplate: " ")
+        cleanPre = cleanPre.replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: "_", with: " ")
+        let preWords = cleanPre.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        let preTitle = preWords.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: " -_:;,./|"))
+
+        // Check if preTitle has Chinese characters: if so, extract Chinese portion to keep it concise alongside the episode subtitle
+        let hasChinese = preTitle.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }
+        if hasChinese {
+            var cnChars = ""
+            for char in preTitle {
+                if ("\u{4e00}"..."\u{9fa5}").contains(char) || ("0"..."9").contains(char) {
+                    cnChars.append(char)
+                } else if !cnChars.isEmpty {
+                    break
+                }
+            }
+            if !cnChars.isEmpty {
+                return "\(cnChars) · \(epSubtitle)"
+            }
+        }
+
+        if !preTitle.isEmpty {
+            return "\(preTitle) · \(epSubtitle)"
+        }
+        return epSubtitle
     }
 
     // MARK: - Level 1: Episode Badge Extraction
