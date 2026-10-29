@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # SilkPlayer Release Packaging Script
-# Target: macOS 14.0+, Apple Silicon arm64
+# Target: macOS 14.0+, Apple Silicon (arm64) / Intel (x86_64)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -11,18 +11,25 @@ cd "${PROJECT_DIR}"
 
 APP_NAME="SilkPlayer"
 VERSION="${1:-1.0.0}"
+ARCH="${2:-arm64}"
+
+if [[ "${ARCH}" != "arm64" && "${ARCH}" != "x86_64" ]]; then
+    echo "Error: Unsupported architecture '${ARCH}'. Supported: arm64, x86_64." >&2
+    exit 1
+fi
+
 BUILD_DIR="${PROJECT_DIR}/build"
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
-DMG_NAME="${APP_NAME}-${VERSION}.dmg"
+DMG_NAME="${APP_NAME}-${VERSION}-${ARCH}.dmg"
 DMG_PATH="${BUILD_DIR}/${DMG_NAME}"
 STAGING_DIR="${BUILD_DIR}/dmg_staging"
 
 echo "=================================================="
-echo " Packaging ${APP_NAME} (${VERSION}) -> ${DMG_PATH}"
+echo " Packaging ${APP_NAME} (${VERSION} - ${ARCH}) -> ${DMG_PATH}"
 echo "=================================================="
 
 # 1. Clean previous build staging and destination DMG
-echo "[1/5] Cleaning previous build artifacts..."
+echo "[1/6] Cleaning previous build artifacts..."
 
 if [[ "${VERSION}" != *"-test"* && -f "${DMG_PATH}" ]]; then
     echo "Error: Release ${DMG_PATH} already exists! To prevent accidental overwrite of finalized versions, delete it manually or bump version." >&2
@@ -33,13 +40,19 @@ rm -rf "${APP_BUNDLE}" "${STAGING_DIR}" "${DMG_PATH}" "${HOME}/Desktop/SilkPlaye
 mkdir -p "${BUILD_DIR}"
 
 # 2. Release compilation
-echo "[2/5] Compiling release binary..."
+echo "[2/6] Compiling release binary for ${ARCH}..."
 
-swift build -c release
+swift build -c release --triple "${ARCH}-apple-macosx14.0"
 
 RELEASE_BIN="${PROJECT_DIR}/.build/release/${APP_NAME}"
 if [[ ! -f "${RELEASE_BIN}" ]]; then
     echo "Error: Release binary not found at ${RELEASE_BIN}" >&2
+    exit 1
+fi
+
+BIN_ARCH=$(lipo -archs "${RELEASE_BIN}")
+if [[ "${BIN_ARCH}" != *"${ARCH}"* ]]; then
+    echo "Error: Binary architecture mismatch! Expected ${ARCH}, got ${BIN_ARCH}" >&2
     exit 1
 fi
 
@@ -63,8 +76,17 @@ for xc in "${PROJECT_DIR}/Packages"/*.xcframework; do
                     echo "  Skipping static archive ${fw_name} (already statically linked into executable)..."
                     continue
                 fi
-                echo "  Embedding ${fw_name}..."
+                echo "  Embedding ${fw_name} (thinning to ${ARCH})..."
                 cp -R "${fw}" "${APP_BUNDLE}/Contents/Frameworks/"
+                
+                fw_bin="${APP_BUNDLE}/Contents/Frameworks/${fw_name}/Versions/A/${fw_name%.framework}"
+                if [[ -f "${fw_bin}" ]]; then
+                    if lipo -info "${fw_bin}" | grep -q "Architectures in the fat file"; then
+                        lipo -thin "${ARCH}" "${fw_bin}" -output "${fw_bin}.thin"
+                        mv "${fw_bin}.thin" "${fw_bin}"
+                        chmod +x "${fw_bin}"
+                    fi
+                fi
             fi
         done
     fi
@@ -92,7 +114,7 @@ find "${PROJECT_DIR}/.build" -path "*/Release/*.bundle" -type d | while read -r 
     cp -R "${b}" "${APP_BUNDLE}/Contents/Resources/"
 done
 
-# 4. Ad-hoc inside-out code signing for Apple Silicon
+# 4. Ad-hoc inside-out code signing
 echo "[4/6] Applying ad-hoc inside-out codesign with entitlements..."
 for fw in "${APP_BUNDLE}/Contents/Frameworks"/*.framework; do
     if [[ -d "${fw}" ]]; then
