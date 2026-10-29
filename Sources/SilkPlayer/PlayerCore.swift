@@ -157,6 +157,56 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var audioRhythmLevels: [CGFloat] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     private var audioRhythmTimer: Timer?
 
+    // MARK: - Power Assertion & Sleep Management
+    private var playbackActivity: NSObjectProtocol? = nil
+    private var sleepObserver: NSObjectProtocol? = nil
+    private var wakeObserver: NSObjectProtocol? = nil
+
+    private func setupSleepObservation() {
+        sleepObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self, self.isPlaying else { return }
+                self.pause()
+            }
+        }
+
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.releasePlaybackActivity()
+            }
+        }
+    }
+
+    private func acquirePlaybackActivity() {
+        releasePlaybackActivity()
+        if isAudioOnly {
+            playbackActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.idleSystemSleepDisabled, .userInitiated],
+                reason: "SilkPlayer Audio Playback"
+            )
+        } else {
+            playbackActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.idleDisplaySleepDisabled, .userInitiated],
+                reason: "SilkPlayer Video Playback"
+            )
+        }
+    }
+
+    private func releasePlaybackActivity() {
+        if let activity = playbackActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            playbackActivity = nil
+        }
+    }
+
     // MARK: - Initialization & Teardown
     override public init() {
         super.init()
@@ -168,6 +218,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         }
         self.subtitleScale = settings.defaultSubtitleScale
         setupOptions()
+        setupSleepObservation()
         resetHUDAutoHideTimer()
     }
 
@@ -363,6 +414,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         layer.play()
         isPlaying = true
         playbackState = .playing
+        acquirePlaybackActivity()
         resetHUDAutoHideTimer()
         startAudioRhythmMonitoring()
     }
@@ -372,6 +424,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         layer.pause()
         isPlaying = false
         playbackState = .paused
+        releasePlaybackActivity()
         isHUDVisible = true
         hudAutoHideTimer?.invalidate()
         stopAudioRhythmMonitoring()
@@ -410,6 +463,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func stop(resetUI: Bool) {
+        releasePlaybackActivity()
         stopAudioRhythmMonitoring()
         if let path = currentFilePath, currentTime > 0 {
             onProgressUpdate?(path, currentTime, duration)
@@ -1342,6 +1396,14 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         stop()
         hudAutoHideTimer?.invalidate()
         osdDismissTimer?.invalidate()
+        if let obs = sleepObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(obs)
+            sleepObserver = nil
+        }
+        if let obs = wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(obs)
+            wakeObserver = nil
+        }
     }
 
     // MARK: - Drag and Drop Handling

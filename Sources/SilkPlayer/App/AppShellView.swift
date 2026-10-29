@@ -295,12 +295,12 @@ public struct AppShellView: View {
 
     private func handlePlaybackEndedNaturally() {
         guard settings.autoPlayNextItem else {
-            stopPlayback()
+            player.pause()
             return
         }
 
         guard let nextItem = playlistManager.handleNaturalEOF() else {
-            stopPlayback()
+            player.pause()
             return
         }
         playPlaylistItem(nextItem, forceStartFromBeginning: true)

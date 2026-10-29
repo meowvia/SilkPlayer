@@ -363,6 +363,19 @@ extension Notification.Name {
         activeSession(preferKey: true)?.player?.fitWindow(scale: scale)
     }
 
+    public func toggleMaximize(window: NSWindow? = nil) {
+        let win = window ?? activeSession(preferKey: true)?.window ?? NSApp?.keyWindow
+        guard let targetWin = win else { return }
+        if let session = activeSession(preferKey: true), let delegate = session.windowDelegate {
+            delegate.toggleMaximize(window: targetWin)
+        } else {
+            let screen = targetWin.screen ?? NSScreen.main
+            if let screenFrame = screen?.visibleFrame {
+                targetWin.setFrame(screenFrame, display: true, animate: true)
+            }
+        }
+    }
+
     public func closePlaybackOrReturnToEmpty() {
         guard let session = activeSession(preferKey: true) ?? sessions.first else {
             NSApp?.keyWindow?.performClose(nil)
@@ -649,6 +662,8 @@ private final class WindowObserverView: NSView {
 public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public weak var session: PlayerWindowSession?
     public weak var player: (any PlayerControllable)?
+    private var isAdjustingWindowFrame: Bool = false
+    private var savedPreZoomFrame: NSRect? = nil
 
     public init(session: PlayerWindowSession? = nil, player: (any PlayerControllable)? = nil) {
         self.session = session
@@ -874,6 +889,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowDidResize(_ notification: Notification) {
+        guard !isAdjustingWindowFrame else { return }
         guard let window = notification.object as? NSWindow,
               !window.styleMask.contains(.fullScreen) else { return }
 
@@ -882,6 +898,9 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         if window.inLiveResize {
             return
         }
+
+        isAdjustingWindowFrame = true
+        defer { isAdjustingWindowFrame = false }
 
         let screen = window.screen ?? NSScreen.main
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
@@ -942,8 +961,32 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         return defaultFrame
     }
 
+    public func toggleMaximize(window: NSWindow) {
+        let screen = window.screen ?? NSScreen.main
+        guard let screenFrame = screen?.visibleFrame else { return }
+
+        isAdjustingWindowFrame = true
+        defer { isAdjustingWindowFrame = false }
+
+        // If window already fills visibleFrame, restore previous frame
+        if abs(window.frame.width - screenFrame.width) <= 4.0 &&
+           abs(window.frame.height - screenFrame.height) <= 4.0 {
+            if let prev = savedPreZoomFrame {
+                window.setFrame(prev, display: true, animate: true)
+                savedPreZoomFrame = nil
+                return
+            }
+        }
+
+        // Save current frame for restore
+        savedPreZoomFrame = window.frame
+        window.setFrame(screenFrame, display: true, animate: true)
+    }
+
     public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
-        return true
+        // Safe custom toggle-maximize to prevent recursive setFrame crash
+        toggleMaximize(window: window)
+        return false
     }
 
     public func windowWillEnterFullScreen(_ notification: Notification) {

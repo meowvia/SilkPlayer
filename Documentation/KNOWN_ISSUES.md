@@ -16,6 +16,7 @@
 | ISSUE-006 | 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步 | 引擎解复用与同步 / SilkCoreKit (SilkPlayerEngine) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-007 | 暂停态音频拖拽 Seek 时钟偏移与硬件采样单调累加缺陷 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | High | 已修复 (v1.3.0) | v1.2.0 |
 | ISSUE-008 | macOS Dock 栏图标边缘暗部与 Dock 底色融合导致视觉偏小 | 视觉设计与图标 / SilkPlayer (Resources) | Medium | 已修复 (v1.3.0) | v1.2.0 |
+| ISSUE-009 | 外置存储 (ORICO/USB/SMB/NAS) 播放 4K 10-bit HEVC 拖拽后音画不同步与饥饿重锚失效缺陷 | 解复用与主时钟同步 / SilkCoreKit (SilkAudioEngine & SilkPlayerEngine) | High | 方案已设计待落地 | v1.3.0 |
 
 ---
 
@@ -375,3 +376,138 @@ public enum WindowPresentationState: Equatable {
   2. **消除与深色 Dock 粘连**：即便在 100% 纯黑背景或暗色磨砂 Dock 栏下，该内轮廓高光依然能清晰勾勒出完整的 824×824 物理圆角矩形边界，使整体视觉光学体量与其他主流应用达成 1:1 的饱满视觉平衡；
   3. 重建 `Resources/AppIcon_1024.png`，并使用 Apple 原生 `iconutil -c icns` 重新生成覆盖 16x16 至 512x512@2x 全分辨率的 `Resources/AppIcon.icns`。
 - **交付排期**：已在 `SilkPlayer` v1.3.0 落地验证，无需变更任何底层业务代码。
+
+---
+
+## ISSUE-009: 外置存储 (ORICO/USB/SMB/NAS) 播放 4K 10-bit HEVC 拖拽后音画不同步与饥饿重锚失效缺陷 (External Storage 4K HEVC A/V Desync & Starvation Re-anchor Bug)
+
+### 1. 缺陷现象与环境表现
+
+- **报障环境**：用户使用外置硬盘（如 ORICO 硬盘盒通过 USB 直连，或局域网 NAS 通过 SMB/NFS 挂载至 macOS `/Volumes/<Share>`）播放 4K 10-bit HEVC 高码率视频片源（如 50~100 Mbps REMUX / Web-DL）；
+- **用户行为与复合触发诱因**：
+  1. 用户在视频起播初期拖动进度条（Seek）跳转跳过片头；
+  2. 随后用户静置观看，因播放器未向 macOS 申请电源断言（参见 ISSUE-010 / 电源管理缺陷），Mac 闲置 2~5 分钟后自动进入屏幕休眠与锁屏；
+  3. 系统锁屏引发外置 USB 硬盘进入 APM 低功耗休眠或盘片停转，导致解复用 I/O 瞬间彻底中断；
+  4. 用户唤醒电脑并解锁屏幕后，外置磁盘重新起转伴随数秒 I/O 挂起，此时画面与声音发生数十秒甚至数分钟的严重固定时间差（音画完全不同步）。
+- **对比排查结论（为何作者本地 SMB 环境无法复现）**：
+  - 作者本地测试环境（Mac mini M4 经 2.5Gbps 全双工连通 PVE 宿主机 VM102 NAS）吞吐极高、且测试过程始终处于交互活跃态，屏幕从未进入锁屏休眠；
+  - 局域网千兆/2.5G 高速网络下，音频队列缓冲水位始终充裕，从未发生缓冲区打空断水（Starvation，即 `freeBuffers.count == buffers.count`）；
+  - 因此，作者环境从未触发过“断流后重新拉起声卡”的异常路径，现有管线在正常连续播放与交互拖拽下表现稳定丝滑；该缺陷高度依赖“系统休眠锁屏 / 外置磁盘停转 -> 音频缓冲打空断流 -> 唤醒后异常恢复”这一特定复合工况。
+
+---
+
+### 2. 根因深度剖析
+
+#### 2.1 饥饿恢复重锚逻辑被拦截 (isAnchorPtsSet 守卫副作用)
+- 在内核 `SilkAudioEngine.swift` 中，前期提交（commit `7cf51c8`）为了防止 seek 过程中 pre-roll 解码出的连续音频包反复污染 `startPts`，增加了 `isAnchorPtsSet` 布尔守卫；
+- 然而在 `decodeAndEnqueue(packet:)` 中：
+  ```swift
+  let shouldStart = isPlayingState && !isAudioQueueStarted && (queued >= 4)
+  if shouldStart {
+      isAudioQueueStarted = true
+      if !isAnchorPtsSet {
+          if let elapsed = currentPhysicalSampleTimeElapsedLocked() {
+              startPts = pts - elapsed
+          } else {
+              startPts = pts
+          }
+          isAnchorPtsSet = true
+      }
+  }
+  ```
+- **关键缺陷**：当用户 Mac 锁屏休眠或外置盘停转唤醒导致音频缓冲彻底耗尽（Starvation，即 `freeBuffers.count == buffers.count`）后，`isAudioQueueStarted` 被置为 `false`；
+- 当解复用器恢复读取并灌入新音频数据时，`shouldStart` 再次为 `true`。但由于 `isAnchorPtsSet` 仍为起播/拖拽时置下的 `true`，**重锚逻辑被直接拦截跳过**；
+- `startPts` 依然保持着锁屏或休眠前的陈旧时间戳，而硬件声卡时钟 `currentPhysicalSampleTimeElapsedLocked()` 已单调累加了休眠与停顿期间的物理流逝；
+- 导致 `currentAudioTime` 计算值与实际写入硬件队列的音频帧 PTS 彻底脱节，产生等同于 I/O 停顿物理时长的永久时间偏差。
+
+#### 2.2 起播与 Seek 预冲刺双端门禁失衡 (Dual-Readiness Barrier 缺失)
+- 4K 10-bit HEVC 视频关键帧数据量庞大（单个 I 帧及伴随 NALU 往往达到 500KB~2MB），在容器内与音频流交织距离较远；
+- 在 `SilkPlayerEngine.performExactSeek` 中：
+  1. 解复用器向后检索视频关键帧并循环读取最多 120 个 packet；
+  2. 在外置盘机械寻道或 SMB RPC 往返延迟下，前 120 个包中解析到的有效音频包极少（不足 4 个 buffer，未达到起播门槛 `queued >= 4`）；
+  3. `performExactSeek` 完成关键帧落地后，立即将 `clockState.isSeeking` 置为 `false`，视频渲染循环 `videoRenderLoop` 随即全速运转；
+  4. 此时音频硬件队列尚未启动（`audio.hasAudioOutputStarted == false`），视频主时钟降级为本地系统墙上时钟（`wallClockStart`），视频帧开始按照绝对物理时间推进渲染；
+  5. 数百毫秒后外置盘完成解复用并填满 4 个音频 buffer，音频硬件队列正式启动，`hasAudioOutputStarted` 突变为 `true`；
+  6. 视频渲染循环的主时钟瞬间从已推进数百毫秒的系统墙上时钟强行切换回刚刚起步的 `audio.currentAudioTime`；
+  7. 视频时钟差值 `diff = (pts - masterTime)` 瞬间产生 `+0.300s ~ +0.800s` 的正向跳变；
+  8. 视频渲染循环进入 `while diff > 0.002` 的微秒等待，因单次最多等待 240ms 超时推出，导致视频连续多帧严重丢帧降速（类似慢动作），直到视频与音频被动拉扯对齐，造成强烈的卡顿与失步感知。
+
+#### 2.3 音轨切换未联动文件指针微距重寻 (selectTrack 物理偏移)
+- 在 `SilkPlayerEngine.selectTrack(id:mediaType:)` 中，切换音频轨时：
+  ```swift
+  demuxer.selectTrack(id: id, mediaType: mediaType)
+  if mediaType == .audio, let aPar = demuxer.audioCodecParameters {
+      let curTime = self.currentTime
+      audioEngine.close()
+      _ = audioEngine.open(codecParameters: aPar, timeBase: demuxer.audioTimeBase)
+      audioEngine.notifySeek(targetTime: curTime)
+      if isPlaying { audioEngine.play() }
+  }
+  ```
+- **核心缺陷**：该逻辑仅重置了音频解码器与 AudioQueue，**完全没有通知底层的 FFmpeg `AVFormatContext` 重新定位物理文件读取位置**；
+- 解复用器仍然停留在前一个音轨的流读取位置之后，导致新音轨解码到的首批 packet 并非位于 `curTime`，而是处于流中不可预测的物理偏移点，造成切换多音轨后的物理时延失步。
+
+---
+
+### 3. 多介质挂载环境特征矩阵分析
+
+针对用户可能采用的不同挂载方式，其底层 I/O 特征与对播放引擎的冲击评估如下：
+
+| 挂载类型 | 典型场景 | I/O 特征与延迟分布 | 播放引擎主要受挫点 |
+| :--- | :--- | :--- | :--- |
+| **直连外置移动硬盘 (USB/Type-C)** | ORICO/绿联等硬盘盒（SATA/NVMe） | 吞吐高（100~1000MB/s），但伴随硬盘休眠（APM Spin-down）唤醒延迟（2~4秒）及 USB 控制芯片队列抖动 | Seek 时触发物理盘起转，`av_read_frame` 瞬间阻塞 1~3 秒；极易触发音频队列 Starvation。 |
+| **局域网网络存储 (SMB/CIFS)** | macOS Finder 挂载局域网 NAS 共享目录 | 单次 `fseek`/`fread` 受 SMB2/3 RPC 往返时延（RTT 1~10ms）与 Wi-Fi 抖动影响；无系统级预取缓存 | 4K HEVC 关键帧检索需频繁随机 seek，网络 I/O 抖动导致视频包到达不均，音频队列频繁断水。 |
+| **网络文件系统 (NFS)** | 极客级局域网 NFSv4 挂载 | RPC 吞吐稳定，但在高并发或瞬时断连时呈阻塞式挂起 | 需具备严格的中断回调（`interrupt_callback`）与缓冲水位弹性熔断机制。 |
+| **片头拖拽 Seek (Early Scrub)** | 播放初始 5~15 秒内拖拽进度条 | 容器元数据刚解析完毕，系统文件缓存尚未建立，解复用与 VideoToolbox 解码器处于冷启动状态 | 视频关键帧落地迅速但音频交织包尚未读足，极易触发视频先跑、音频晚起的时钟撕裂。 |
+
+---
+
+### 4. 修复方案设计与技术路径（极简微创原则）
+
+为了防止“过度重构破坏现有稳定管线”，本修复方案严格奉行**定点微创（Minimal Invasive Surgery）**原则：绝对不重构正常的视频主渲染循环与成熟的快速 Scrub 解码逻辑，仅在断流恢复点与前端生命周期处注入针对性防护。
+
+#### 4.1 前端切断诱发源：接入电源断言阻止闲置锁屏 (`PlayerCore.swift`)
+- **根因切除**：彻底解决用户静置观看时 macOS 自动锁屏与外置硬盘 APM 停转休眠问题；
+- **实现方案**：
+  1. 在 `PlayerCore.play()` 时，申请系统活动断言：
+     - 视频模式：`ProcessInfo.processInfo.beginActivity([.idleDisplaySleepDisabled, .userInitiated], reason: "SilkPlayer Video Playback")`；
+     - 纯音频模式：`ProcessInfo.processInfo.beginActivity([.idleSystemSleepDisabled, .userInitiated], reason: "SilkPlayer Audio Playback")`；
+  2. 在 `PlayerCore.pause()` / `stop()` 时即刻释放断言；
+  3. 从根本上切断“播放中无人触碰 -> 自动锁屏黑屏 -> 硬盘休眠停转”的始发链条。
+
+#### 4.2 内核引入饥饿状态机与隔离重锚 (`SilkAudioEngine.swift`)
+- **原则**：100% 保留 commit `7cf51c8` 对 Seek pre-roll 重复赋值的保护，仅对“完全断流打空”的异常场景开放重锚；
+- **实现方案**：
+  1. 增加显式饥饿标识 `private var isStarved: Bool = false`；
+  2. 当且仅当缓冲区全部打空（`freeBuffers.count == buffers.count`，即发生物理断流）时，置 `isStarved = true` 与 `isAudioQueueStarted = false`；
+  3. 当新音频数据注满触发 `shouldStart` 时，执行条件判定：
+     ```swift
+     if !isAnchorPtsSet || isStarved {
+         if let elapsed = currentPhysicalSampleTimeElapsedLocked() {
+             startPts = pts - elapsed
+         } else {
+             startPts = pts
+         }
+         seekAnchorPts = pts
+         isAnchorPtsSet = true
+         isStarved = false
+     }
+     ```
+  4. **零回归保证**：正常连续播放与正常 Seek 时 `isStarved` 恒为 `false`，完全走原有经过验证的高速通路；仅当遭遇休眠唤醒或外置盘严重卡顿时，才触发该自愈重锚逻辑，使声卡时钟与新帧 PTS 瞬间拉平。
+
+#### 4.3 音轨切换强制微距 Seek 重定位 (`SilkPlayerEngine.swift`)
+- 在 `selectTrack(id:mediaType:)` 切换音频轨时，强制调用 `self.requestSeek(to: self.currentTime, exact: true)`；
+- 刷新底层 `AVFormatContext` 读取指针，确保新音轨物理对齐，仅在用户主动切音轨时触发一次，对正常回放零侵入。
+
+---
+
+### 5. 验收标准与测试矩阵
+
+1. **外置磁盘 Seek 验证**：
+   - 使用 USB 外置机械盘/移动 SSD 播放 4K 10-bit HEVC 片源；
+   - 在片头 5 秒、片中各处连续执行 5 次拖拽跳转，要求音频与视频在 0.3 秒内同步出声出画，口型完全一致，无慢动作卡顿；
+2. **多音轨无缝切换验证**：
+   - 播放双音轨/多音轨片源，在播放过程中快速切换音轨，验证声音切换平滑且音画保持绝对同步；
+   - 验证切换后播放器时间轴无不可逆漂移；
+3. **全量自动化测试基线**：
+   - 运行 `./scripts/run_tests.sh` 确保现存 54 项全量测试 100% 保持全绿通过。
