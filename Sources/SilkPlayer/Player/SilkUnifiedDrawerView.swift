@@ -85,27 +85,48 @@ public struct SilkPlaylistDrawerView: View {
 
     // MARK: - Header Bar
     private var headerBar: some View {
-        HStack(alignment: .center, spacing: 6) {
-            Spacer()
-
-            Text(L10n.playlist)
-                .font(.system(size: 13.5, weight: .bold))
-                .foregroundColor(.white)
-
-            if playlist.count > 0 {
-                Text("\(playlist.count)")
-                    .font(.system(size: 10.5, weight: .bold, design: .monospaced))
-                    .foregroundColor(.cyan)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1.5)
-                    .background(Capsule().fill(Color.cyan.opacity(0.18)))
-            }
-
-            Spacer()
+        HStack(alignment: .center, spacing: 4) {
+            categoryTab(for: .video, count: playlist.videoCount)
+            categoryTab(for: .audio, count: playlist.audioCount)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+    }
+
+    private func categoryTab(for category: MediaCategory, count: Int) -> some View {
+        let isSelected = playlist.activeCategory == category
+        return Button {
+            withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                playlist.switchCategory(category)
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: category.iconName)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                Text(category.title)
+                    .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundColor(isSelected ? .cyan : .white.opacity(0.40))
+                        .padding(.horizontal, 4.5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(isSelected ? Color.cyan.opacity(0.20) : Color.white.opacity(0.08)))
+                }
+            }
+            .foregroundColor(isSelected ? .cyan : .white.opacity(0.65))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(isSelected ? Color.white.opacity(0.12) : Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
     }
 
     // MARK: - Empty Placeholder
@@ -116,14 +137,14 @@ public struct SilkPlaylistDrawerView: View {
                 Circle()
                     .fill(Color.white.opacity(0.05))
                     .frame(width: 52, height: 52)
-                Image(systemName: "film.stack")
+                Image(systemName: playlist.activeCategory == .video ? "film.stack" : "music.note.list")
                     .font(.system(size: 22))
                     .foregroundColor(.white.opacity(0.35))
             }
-            Text(L10n.emptyPlaylist)
+            Text(playlist.activeCategory == .video ? L10n.tr("Video Playlist Empty", "视频列表为空") : L10n.tr("Music Playlist Empty", "音乐列表为空"))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white.opacity(0.75))
-            Text(L10n.tr("Drop video files or folders here to add", "拖拽视频文件或文件夹至此处即可添加"))
+            Text(playlist.activeCategory == .video ? L10n.tr("Drop video files or folders here to add", "拖拽视频文件或文件夹至此处即可添加") : L10n.tr("Drop audio files or folders here to add", "拖拽音频文件或文件夹至此处即可添加"))
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.40))
                 .multilineTextAlignment(.center)
@@ -753,6 +774,10 @@ private struct PlaylistItemRowView: View {
         .onHover { onHoverChange($0) }
     }
 
+    private var sanitizedTitle: SanitizedMediaTitle {
+        MediaFilenameSanitizer.sanitize(item.title)
+    }
+
     private var leadingIndicator: some View {
         ZStack {
             if isCurrent {
@@ -763,6 +788,12 @@ private struct PlaylistItemRowView: View {
                         .font(.system(size: 9.5, weight: .bold))
                         .foregroundColor(.cyan)
                 }
+            } else if let badge = sanitizedTitle.episodeBadge {
+                Text(badge)
+                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundColor(.cyan.opacity(0.85))
+                    .lineLimit(1)
             } else {
                 Text(String(format: "%02d", index + 1))
                     .font(.system(size: 10.5, weight: .medium, design: .monospaced))
@@ -770,16 +801,16 @@ private struct PlaylistItemRowView: View {
                     .foregroundColor(.white.opacity(0.38))
             }
         }
-        .frame(width: 20, alignment: .center)
+        .frame(width: sanitizedTitle.episodeBadge != nil ? 32 : 20, alignment: .center)
     }
 
     private var titleAndMeta: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(item.title)
+            Text(sanitizedTitle.cleanTitle)
                 .font(.system(size: 11.5, weight: isCurrent ? .semibold : .regular))
                 .foregroundColor(isCurrent ? .cyan : .white.opacity(0.90))
                 .lineLimit(1)
-                .truncationMode(.middle)
+                .truncationMode(.tail)
 
             if item.duration > 0 {
                 Text(formatPlaybackTime(item.duration))
@@ -787,6 +818,7 @@ private struct PlaylistItemRowView: View {
                     .foregroundColor(.white.opacity(0.40))
             }
         }
+        .help(item.path.isEmpty ? item.title : item.path)
     }
 
     private var hoverActions: some View {

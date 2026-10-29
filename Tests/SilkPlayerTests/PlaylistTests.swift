@@ -1584,6 +1584,58 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssertTrue(promptService.promptedFormats.contains("mkv"), "Marking format records it permanently")
     promptService.resetPromptedFormats()
 
+    // 55. MediaFilenameSanitizer Four-Tier Pipeline Invariants
+    print("\n--- Test 55: MediaFilenameSanitizer Four-Tier Pipeline Invariants ---")
+    let rawMandalorian = "[最新电影www.dyg7.com]曼达洛人.The.Mandalorian.S03E01.1080p.WEB-DL.x265.AAC.mkv"
+    let sanitizedMando = MediaFilenameSanitizer.sanitize(rawMandalorian)
+    XCTAssertEqual(sanitizedMando.episodeBadge, "S03E01", "S03E01 episode badge accurately extracted")
+    XCTAssertTrue(!sanitizedMando.cleanTitle.contains("dyg7"), "Ad banner stripped")
+    XCTAssertTrue(!sanitizedMando.cleanTitle.contains("1080p"), "Resolution tag stripped")
+    XCTAssertTrue(!sanitizedMando.cleanTitle.contains("x265"), "Codec tag stripped")
+    XCTAssertEqual(sanitizedMando.cleanTitle, "曼达洛人 The Mandalorian", "Clean title cleanly preserved")
+
+    let rawChineseEp = "进击的巨人.第04集.Attack.on.Titan.1080p.HEVC.mkv"
+    let sanitizedChinese = MediaFilenameSanitizer.sanitize(rawChineseEp)
+    XCTAssertEqual(sanitizedChinese.episodeBadge, "第04集", "Chinese 第xx集 episode badge accurately extracted")
+    XCTAssertEqual(sanitizedChinese.cleanTitle, "进击的巨人 Attack on Titan", "Clean title preserved")
+
+    let rawEp1 = "Friends.S01E05.The.One.with.the.East.German.Laundry.Detergent.1080p.BluRay.x264.mkv"
+    let sanitizedEp1 = MediaFilenameSanitizer.sanitize(rawEp1)
+    XCTAssertEqual(sanitizedEp1.episodeBadge, "E05", "S01E05 formatted cleanly as E05")
+    XCTAssertEqual(sanitizedEp1.cleanTitle, "Friends The One with the East German Laundry Detergent")
+
+    let rawAudio = "Taylor Swift - Cruel Summer.flac"
+    let sanitizedAudio = MediaFilenameSanitizer.sanitize(rawAudio)
+    XCTAssertNil(sanitizedAudio.episodeBadge, "Audio song has no episode badge")
+    XCTAssertEqual(sanitizedAudio.cleanTitle, "Taylor Swift - Cruel Summer")
+
+    // 56. Dual-Track Media Playlist Invariants
+    print("\n--- Test 56: Dual-Track Media Playlist Invariants ---")
+    let dualManager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+    let sampleVideo1 = PlaylistItem(path: "/media/movie1.mp4", title: "Movie 1", duration: 5400.0)
+    let sampleVideo2 = PlaylistItem(path: "/media/movie2.mkv", title: "Movie 2", duration: 6200.0)
+    let sampleAudio1 = PlaylistItem(path: "/music/song1.flac", title: "Song 1", duration: 240.0)
+    let sampleAudio2 = PlaylistItem(path: "/music/song2.mp3", title: "Song 2", duration: 180.0)
+
+    dualManager.appendItems([sampleVideo1, sampleVideo2, sampleAudio1, sampleAudio2])
+    XCTAssertEqual(dualManager.videoCount, 2, "Video track contains exactly 2 video items")
+    XCTAssertEqual(dualManager.audioCount, 2, "Audio track contains exactly 2 audio items")
+    XCTAssertEqual(dualManager.activeCategory, .video, "Active category defaults to video when video items exist")
+    XCTAssertEqual(dualManager.items.count, 2, "Active items reflect video items count")
+
+    dualManager.switchCategory(.audio)
+    XCTAssertEqual(dualManager.activeCategory, .audio, "Category switched to audio")
+    XCTAssertEqual(dualManager.items.count, 2, "Active items reflect audio items count")
+    XCTAssertEqual(dualManager.items[0].title, "Song 1", "Active item is audio song 1")
+
+    // Clear active track (audio) - video track must be preserved
+    dualManager.clear()
+    XCTAssertEqual(dualManager.audioCount, 0, "Audio track is cleared")
+    XCTAssertEqual(dualManager.videoCount, 2, "Video track remains 100% preserved")
+
+    dualManager.switchCategory(.video)
+    XCTAssertEqual(dualManager.items.count, 2, "Video track items intact upon switching back")
+
     testPlayer.isAudioOnly = false
     }
 }
