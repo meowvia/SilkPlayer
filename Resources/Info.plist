@@ -24,9 +24,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.3.0</string>
+    <string>1.4.0</string>
     <key>CFBundleVersion</key>
-    <string>1.3.0</string>
+    <string>1.4.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
@@ -57,6 +57,10 @@
             <string>Viewer</string>
             <key>LSHandlerRank</key>
             <string>Alternate</string>
+            <key>CFBundleTypeIconSystemGenerated</key>
+            <true/>
+            <key>CFBundleTypeIconFile</key>
+            <string>AppIcon</string>
             <key>LSItemContentTypes</key>
             <array>
                 <string>public.movie</string>
@@ -88,6 +92,10 @@
             <string>Viewer</string>
             <key>LSHandlerRank</key>
             <string>None</string>
+            <key>CFBundleTypeIconSystemGenerated</key>
+            <true/>
+            <key>CFBundleTypeIconFile</key>
+            <string>AppIcon</string>
             <key>LSItemContentTypes</key>
             <array>
                 <string>public.audio</string>
@@ -105,6 +113,8 @@
             <string>org.matroska.mkv</string>
             <key>UTTypeDescription</key>
             <string>Matroska Video</string>
+            <key>UTTypeIconFile</key>
+            <string>AppIcon</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>public.movie</string>
@@ -126,6 +136,8 @@
             <string>org.webmproject.webm</string>
             <key>UTTypeDescription</key>
             <string>WebM Video</string>
+            <key>UTTypeIconFile</key>
+            <string>AppIcon</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>public.movie</string>
@@ -147,6 +159,8 @@
             <string>com.microsoft.windows-media-wmv</string>
             <key>UTTypeDescription</key>
             <string>Windows Media Video</string>
+            <key>UTTypeIconFile</key>
+            <string>AppIcon</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>public.movie</string>
@@ -164,6 +178,8 @@
             <string>com.microsoft.advanced-systems-format</string>
             <key>UTTypeDescription</key>
             <string>Advanced Systems Format</string>
+            <key>UTTypeIconFile</key>
+            <string>AppIcon</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>public.movie</string>
@@ -181,6 +197,8 @@
             <string>com.adobe.flash.video</string>
             <key>UTTypeDescription</key>
             <string>Flash Video</string>
+            <key>UTTypeIconFile</key>
+            <string>AppIcon</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>public.movie</string>
@@ -199,6 +217,8 @@
             <string>com.real.realmedia</string>
             <key>UTTypeDescription</key>
             <string>RealMedia Video</string>
+            <key>UTTypeIconFile</key>
+            <string>AppIcon</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>public.movie</string>
@@ -216,6 +236,8 @@
             <string>com.real.realmedia-vbr</string>
             <key>UTTypeDescription</key>
             <string>RealMedia Variable Bitrate Video</string>
+            <key>UTTypeIconFile</key>
+            <string>AppIcon</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>public.movie</string>
@@ -233,6 +255,8 @@
             <string>org.xiph.ogv</string>
             <key>UTTypeDescription</key>
             <string>Ogg Video</string>
+            <key>UTTypeIconFile</key>
+            <string>AppIcon</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>public.movie</string>
@@ -250,6 +274,8 @@
             <string>public.mpeg-2-transport-stream</string>
             <key>UTTypeDescription</key>
             <string>MPEG-2 Transport Stream</string>
+            <key>UTTypeIconFile</key>
+            <string>AppIcon</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>public.movie</string>
@@ -267,6 +293,8 @@
             <string>public.avchd-mpeg-2-transport-stream</string>
             <key>UTTypeDescription</key>
             <string>AVCHD MPEG-2 Transport Stream</string>
+            <key>UTTypeIconFile</key>
+            <string>AppIcon</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>public.movie</string>
