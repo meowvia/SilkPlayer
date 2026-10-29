@@ -373,6 +373,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         newLayer.player.playbackVolume = fadeInOnStart ? 0.0 : targetVolume
         newLayer.player.isMuted = self.isMuted
         newLayer.player.playbackRate = Float(self.speed)
+        newLayer.isQualityEnhancementEnabled = self.isHDREnabled
 
         self.subtitleModel.url = resolvedURL
 
@@ -918,13 +919,24 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         detectMetadata()
     }
 
+    public func applyQualityEnhancement() {
+        playerLayer?.isQualityEnhancementEnabled = isHDREnabled
+        if let renderView = (renderContainer?.metalRenderView ?? (playerLayer?.player.view as? SilkMetalRenderView)) {
+            renderView.isQualityEnhancementEnabled = isHDREnabled
+            renderView.renderCurrentFrameImmediately()
+        }
+    }
+
     public func toggleHDR() {
         isHDREnabled.toggle()
-        showOSD(.pictureAdjustment(name: "HDR", value: isHDREnabled ? "Enabled" : "Disabled"))
+        applyQualityEnhancement()
+        let valStr = isHDREnabled ? L10n.tr("Enabled", "开启") : L10n.tr("Disabled", "关闭")
+        showOSD(.pictureAdjustment(name: L10n.tr("HDR Remastering", "画质增强"), value: valStr))
     }
 
     public func setHDREnabled(_ enabled: Bool) {
         isHDREnabled = enabled
+        applyQualityEnhancement()
     }
 
     public func toggleDeband() {

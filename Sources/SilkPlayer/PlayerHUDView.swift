@@ -523,6 +523,20 @@ public struct PlayerHUDView: View {
                 }
             }
 
+            // 4.5 画质增强 (SDR-to-EDR / HDR 动态重塑)
+            if !player.isAudioOnly && (tier == .expanded || tier == .standard) {
+                HUDTransportButton(
+                    icon: player.isHDREnabled ? "sparkles.tv.fill" : "sparkles.tv",
+                    size: 14,
+                    weight: .medium,
+                    color: player.isHDREnabled ? .cyan : .white.opacity(0.90),
+                    helpText: L10n.tr("HDR Remastering (H)", "画质增强 (H)")
+                ) {
+                    player.toggleHDR()
+                }
+                .accessibilityLabel(L10n.tr("HDR Remastering", "画质增强"))
+            }
+
             // 5. 偏好设置 (仅 expanded 模式直显，其余模式在“更多”菜单中)
             if tier == .expanded {
                 HUDTransportButton(
@@ -657,6 +671,11 @@ public struct PlayerHUDView: View {
                 Button(L10n.tr("Capture Screenshot (Cmd+S)", "截取画面 (Cmd+S)")) {
                     triggerScreenshot()
                 }
+            }
+
+            // 7.5 画质增强
+            Button(L10n.tr("HDR Remastering (H)", "画质增强 (H)") + (player.isHDREnabled ? " ✓" : "")) {
+                player.toggleHDR()
             }
         }
 
