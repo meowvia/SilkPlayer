@@ -304,11 +304,18 @@ public final class MetalPlayerContainerView: NSView {
             // Top information bar interactive buttons:
             // Trailing quick action buttons (Close, Pin, Inspector) occupy trailing ~160pt.
             // Leading traffic lights occupy leading 70pt in windowed mode.
-            if player.isHUDVisible && loc.y >= b.height - 70 {
+            if player.isHUDVisible && loc.y >= b.height - 44.0 {
                 let isTrailingActionArea = loc.x >= b.width - 160.0
                 let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
                 if isTrailingActionArea || isLeadingTrafficArea {
                     super.mouseDown(with: event)
+                    return
+                }
+                // Double-click strictly on the top bar in windowed mode: toggle maximize to visibleFrame
+                if !isFullscreen && event.clickCount >= 2 {
+                    pendingSingleClickWorkItem?.cancel()
+                    pendingSingleClickWorkItem = nil
+                    PlayerWindowManager.shared.toggleMaximize(window: window)
                     return
                 }
             }
@@ -330,22 +337,16 @@ public final class MetalPlayerContainerView: NSView {
             window.makeFirstResponder(self)
         }
 
-        // 3. Double-Click Handling:
+        // 3. Double-Click Handling (strictly on playback canvas):
         if event.clickCount >= 2 {
             // Cancel pending single click task immediately - 100% zero playback glitch or stutter!
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
 
-            let isTopControlArea = (loc.y >= b.height - 70.0)
-            if isTopControlArea {
-                // Double-click on top bar: maximize to visibleFrame without covering status bar or Dock
-                PlayerWindowManager.shared.toggleMaximize(window: window)
-                return
-            }
-
             if let player = playerCore, player.isHUDVisible {
                 let isBottomControlArea = (loc.y <= 112.0)
-                if isBottomControlArea {
+                let isTopControlArea = (loc.y >= b.height - 44.0)
+                if isBottomControlArea || isTopControlArea {
                     return
                 }
             }
@@ -405,7 +406,7 @@ public final class MetalPlayerContainerView: NSView {
             let loc = self.convert(event.locationInWindow, from: nil)
             let b = bounds
             let isBottomControlArea = (loc.y <= 112.0)
-            let isTopControlArea = (loc.y >= b.height - 70.0)
+            let isTopControlArea = (loc.y >= b.height - 44.0)
             if isBottomControlArea || isTopControlArea {
                 return
             }

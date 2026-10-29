@@ -120,17 +120,6 @@ public struct PlayerHUDView: View {
     // MARK: - Top Information Bar
     private func topBar(tier: HUDLayoutTier) -> some View {
         ZStack(alignment: .center) {
-            // Background double-click target for titlebar maximize (toggles visibleFrame without covering dock/menubar)
-            Color.clear
-                .contentShape(Rectangle())
-                .gesture(
-                    TapGesture(count: 2).onEnded {
-                        if let win = NSApp.keyWindow {
-                            PlayerWindowManager.shared.toggleMaximize(window: win)
-                        }
-                    }
-                )
-
             // 1. Base Layer: Leading Spec Badges + Trailing Quick Actions
             HStack(alignment: .center, spacing: 10) {
                 specBadgesRow(tier: tier)
@@ -175,9 +164,10 @@ public struct PlayerHUDView: View {
                 }
             }
 
-            // 2. Center Overlay: Active Media Title (Strictly centered to entire window, hidden in audio mode)
+            // 2. Center Overlay: Active Media Title (Clean sanitized title, hover shows full raw filename)
             if !player.mediaTitle.isEmpty && !player.isAudioOnly {
-                Text(player.mediaTitle)
+                let sanitized = MediaFilenameSanitizer.sanitize(player.mediaTitle)
+                Text(sanitized.displayTitle.isEmpty ? sanitized.cleanTitle : sanitized.displayTitle)
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundColor(.white.opacity(0.90))
                     .lineLimit(1)
@@ -194,7 +184,8 @@ public struct PlayerHUDView: View {
                         Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
                     )
                     .shadow(color: Color.black.opacity(0.30), radius: 6, x: 0, y: 2)
-                    .frame(maxWidth: max(160, tier == .expanded ? 460 : 280))
+                    .frame(maxWidth: max(160, tier == .expanded ? 400 : 260))
+                    .help(player.mediaTitle)
             }
         }
     }
@@ -823,6 +814,9 @@ public struct PlayerHUDView: View {
                 isControlsVisible = true
             }
         }
+        if !player.isHUDVisible {
+            player.isHUDVisible = true
+        }
         idleTask?.cancel()
         guard !player.isScrubbing else { return } // Never auto-hide while scrubbing
         if player.isAudioOnly {
@@ -843,6 +837,7 @@ public struct PlayerHUDView: View {
                 withAnimation(.easeInOut(duration: 0.25)) {
                     isControlsVisible = false
                 }
+                player.isHUDVisible = false
                 player.setTrafficLightsHidden(true)
                 hideCursor()
             }

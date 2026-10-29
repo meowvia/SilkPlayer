@@ -69,6 +69,11 @@ public struct PlayerContainerView: View {
                         .allowsHitTesting(false)
                 }
 
+                // Subtitle Display Layer (Adaptive text & PGS bitmap rendering)
+                SubtitleOverlayView(player: player)
+                    .edgesIgnoringSafeArea(.all)
+                    .zIndex(15)
+
                 // Immersive Playback HUD (Embedded Scrubber + Controls + Autohide)
                 PlayerHUDView(
                     player: player,
@@ -79,11 +84,6 @@ public struct PlayerContainerView: View {
                 )
                 .environment(\.colorScheme, .dark)
                 .zIndex(20)
-
-                // Subtitle Display Layer (Adaptive text & PGS bitmap rendering)
-                // Positioned above HUD layer to guarantee 100% zero occlusion
-                SubtitleOverlayView(player: player)
-                    .edgesIgnoringSafeArea(.all)
 
                 // Transient On-Screen Display (OSD) HUD (Seek, Play/Pause, Track, Adjustments, Screenshot)
                 // Centered at Top with uniform margin across windowed & fullscreen modes (macOS standard)
