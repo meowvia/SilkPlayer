@@ -705,8 +705,11 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         let maxSize = screenFrame.size
 
-        // In fullscreen mode, during maximize/restore animation, or during zoom to screen size, allow unconstrained filling
-        if window.styleMask.contains(.fullScreen) || isMaximizingOrRestoring || frameSize == screenFrame.size {
+        // In fullscreen mode, during fullscreen transitions, during maximize/restore animation, or during zoom to screen size:
+        if window.styleMask.contains(.fullScreen) ||
+           isMaximizingOrRestoring ||
+           player?.isFullscreenTransitioning == true ||
+           frameSize == screenFrame.size {
             return frameSize
         }
 
@@ -900,7 +903,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowDidResize(_ notification: Notification) {
-        guard !isMaximizingOrRestoring && !isAdjustingWindowFrame else { return }
+        guard !isMaximizingOrRestoring && !isAdjustingWindowFrame && player?.isFullscreenTransitioning != true else { return }
         guard let window = notification.object as? NSWindow,
               !window.styleMask.contains(.fullScreen) else { return }
 
@@ -1058,13 +1061,29 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
     public func windowWillExitFullScreen(_ notification: Notification) {
         player?.isFullscreenTransitioning = true
+        if let window = notification.object as? NSWindow {
+            window.contentAspectRatio = .zero
+            window.aspectRatio = .zero
+        }
     }
 
     public func windowDidExitFullScreen(_ notification: Notification) {
         player?.setFullscreenState(false)
         player?.applyContentAspectRatioLock()
         player?.isFullscreenTransitioning = false
-        player?.renderCurrentFrameImmediately()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            if let player = self?.player, !player.isPlaying {
+                player.renderCurrentFrameImmediately()
+            }
+        }
+    }
+
+    public func windowDidFailToEnterFullScreen(_ window: NSWindow) {
+        player?.isFullscreenTransitioning = false
+    }
+
+    public func windowDidFailToExitFullScreen(_ window: NSWindow) {
+        player?.isFullscreenTransitioning = false
     }
 
     public func windowWillClose(_ notification: Notification) {
