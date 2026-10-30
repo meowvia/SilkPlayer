@@ -886,6 +886,9 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         if player.videoWidth > 0 || player.videoHeight > 0 {
             player.updateRememberedWindowSize(contentSize)
         }
+        if !player.isPlaying {
+            player.renderCurrentFrameImmediately()
+        }
     }
 
     public func windowDidResize(_ notification: Notification) {
@@ -946,6 +949,10 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
                 }
             }
         }
+
+        if let player = self.player, !player.isPlaying {
+            player.renderCurrentFrameImmediately()
+        }
     }
 
     public func windowWillUseStandardFrame(_ window: NSWindow, defaultFrame: NSRect) -> NSRect {
@@ -979,12 +986,24 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             )
             window.setFrame(restoreFrame, display: true, animate: true)
             savedPreZoomFrame = nil
+            if let player = self.player, !player.isPlaying {
+                player.renderCurrentFrameImmediately()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) { [weak player] in
+                    player?.renderCurrentFrameImmediately()
+                }
+            }
             return
         }
 
         // Save current frame for restore
         savedPreZoomFrame = window.frame
         window.setFrame(screenFrame, display: true, animate: true)
+        if let player = self.player, !player.isPlaying {
+            player.renderCurrentFrameImmediately()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) { [weak player] in
+                player?.renderCurrentFrameImmediately()
+            }
+        }
     }
 
     public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {

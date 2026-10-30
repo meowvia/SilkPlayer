@@ -25,7 +25,7 @@ public struct SanitizedMediaTitle: Equatable, Sendable {
 public enum MediaFilenameSanitizer: Sendable {
 
     private static let adBracketsRegex: NSRegularExpression = {
-        let pattern = #"[\[\(\{][^\]\)\} promos]*(?:www\.|(?:\.com|\.net|\.cn|\.org|\.xyz|\.me|\.cc|\.tv|\.top)|电影|影视|字幕|发布|BT|dyg|人人|淘片|首发)[^\]\)\} promos]*[\]\)\}]"#
+        let pattern = #"[\[【\(\{][^\]】\)\}]{0,100}?(?:www|\b(?:com|net|cn|org|xyz|me|cc|tv|top)\b|电影|影视|字幕|发布|BT|dyg|人人|淘片|首发|阳光|电影港|高清|无水印|中字|双字|国语|粤语|dygangs?|5266ys)[^\]】\)\}]{0,100}?[\]】\)\}]"#
         return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
     }()
 
@@ -35,7 +35,7 @@ public enum MediaFilenameSanitizer: Sendable {
     }()
 
     private static let mediaTokensRegex: NSRegularExpression = {
-        let pattern = #"(?i)\b(2160p|1080p|1080i|720p|480p|4k|8k|uhd|fhd|hd|remux|bluray|blu-ray|web-dl|webrip|hdtv|bdrip|dvdrip|x265|x264|h265|h264|hevc|avc|10bit|8bit|hdr10\+?|hdr|dovi|dv|dolby\s*vision|aac(?:\s*5\.1)?|ac3|dts(?:-hd)?|truehd|atmos|mp3|flac|flv|mp4|mkv|avi|wmv|chs|cht|eng|aac5\.1|hd中英双字|中英双字|双语字幕|中文字幕|国粤双语|国语|粤语|简繁中字|超清|高清|无水印)\b"#
+        let pattern = #"(?i)(?:\b(2160p|1080p|1080i|720p|480p|4k|8k|uhd|fhd|hd|remux|bluray|blu-ray|web-dl|webrip|hdtv|bdrip|dvdrip|x265|x264|h265|h264|hevc|avc|10bit|8bit|hdr10\+?|hdr|dovi|dv|dolby\s*vision|aac(?:\s*5\.1)?|ac3|dts(?:-hd)?|truehd|atmos|mp3|flac|flv|mp4|mkv|avi|wmv|chs|cht|eng|aac5\.1|hybrid|dsnp|ddp?5[\s.-]?1|7[\s.-]?1|framestor)\b|(?:hd)?(?:国粤双语|国语|粤语)?(?:中英双字|双语字幕|中文字幕|简繁中字|国语中字|中字)?(?:超清|高清)?(?:无水印))"#
         return try! NSRegularExpression(pattern: pattern)
     }()
 
@@ -156,6 +156,20 @@ public enum MediaFilenameSanitizer: Sendable {
         cleanPre = cleanPre.replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: "_", with: " ")
         let preWords = cleanPre.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
         let preTitle = preWords.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: " -_:;,./|"))
+
+        // Language-adaptive title extraction
+        let langCode = UserDefaults.standard.string(forKey: "appLanguage") ?? Locale.current.language.languageCode?.identifier
+        let isEnglishPreferred = (langCode == "en")
+
+        if isEnglishPreferred {
+            let enTokens = preWords.filter { word in
+                !word.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }
+            }
+            let enTitle = enTokens.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: " -_:;,./|"))
+            if !enTitle.isEmpty {
+                return "\(enTitle) · \(epSubtitle)"
+            }
+        }
 
         // Check if preTitle has Chinese characters: if so, extract Chinese portion to keep it concise alongside the episode subtitle
         let hasChinese = preTitle.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }

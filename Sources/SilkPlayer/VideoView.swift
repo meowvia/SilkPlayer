@@ -65,6 +65,9 @@ public final class MetalPlayerContainerView: NSView {
         guard b.width > 0, b.height > 0 else { return }
 
         view.wantsLayer = true
+        view.autoresizingMask = [.width, .height]
+        view.layer?.setAffineTransform(.identity)
+        view.frame = b
 
         if let metalView = view as? SilkMetalRenderView, let p = playerCore {
             metalView.transformUniforms = MetalTransformUniforms(
@@ -78,13 +81,9 @@ public final class MetalPlayerContainerView: NSView {
                 ratioSetting: p.videoAspectRatio
             )
             if !p.isPlaying {
-                metalView.renderCurrentFrameImmediately()
+                metalView.updateMetalGeometryAndRedraw()
             }
         }
-
-        view.autoresizingMask = [.width, .height]
-        view.layer?.setAffineTransform(.identity)
-        view.frame = b
     }
 
     // MARK: - Drag and Drop Destination

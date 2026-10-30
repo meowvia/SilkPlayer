@@ -1209,8 +1209,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func renderCurrentFrameImmediately() {
+        renderContainer?.applyRenderViewLayout()
         if let renderView = (renderContainer?.metalRenderView ?? (playerLayer?.player.view as? SilkMetalRenderView)) {
-            renderView.renderCurrentFrameImmediately()
+            renderView.updateMetalGeometryAndRedraw()
         }
     }
 
