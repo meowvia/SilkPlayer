@@ -123,6 +123,7 @@ extension Notification.Name {
                 guard let self = self, let notifWindow = notifWindow else { return }
                 for s in self.sessions where s.window === notifWindow {
                     s.onFullScreenChangedHandler?(true)
+                    s.player?.isFullscreenTransitioning = false
                 }
                 if let settings = self.settingsWindow {
                     settings.level = .floating
@@ -139,6 +140,8 @@ extension Notification.Name {
                 guard let self = self, let notifWindow = notifWindow else { return }
                 for s in self.sessions where s.window === notifWindow {
                     s.onFullScreenChangedHandler?(false)
+                    s.player?.isFullscreenTransitioning = false
+                    s.player?.renderCurrentFrameImmediately()
                 }
                 if let settings = self.settingsWindow {
                     settings.level = .floating
@@ -371,7 +374,11 @@ extension Notification.Name {
         } else {
             let screen = targetWin.screen ?? NSScreen.main
             if let screenFrame = screen?.visibleFrame {
-                targetWin.setFrame(screenFrame, display: true, animate: true)
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.22
+                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    targetWin.animator().setFrame(screenFrame, display: true)
+                }
             }
         }
     }
@@ -662,6 +669,7 @@ private final class WindowObserverView: NSView {
 public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public weak var session: PlayerWindowSession?
     public weak var player: (any PlayerControllable)?
+    public private(set) var isMaximizingOrRestoring: Bool = false
     private var isAdjustingWindowFrame: Bool = false
     private var savedPreZoomFrame: NSRect? = nil
 
@@ -697,8 +705,8 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         let maxSize = screenFrame.size
 
-        // In fullscreen mode or during zoom to screen size, allow unconstrained filling
-        if window.styleMask.contains(.fullScreen) || frameSize == screenFrame.size {
+        // In fullscreen mode, during maximize/restore animation, or during zoom to screen size, allow unconstrained filling
+        if window.styleMask.contains(.fullScreen) || isMaximizingOrRestoring || frameSize == screenFrame.size {
             return frameSize
         }
 
@@ -892,7 +900,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowDidResize(_ notification: Notification) {
-        guard !isAdjustingWindowFrame else { return }
+        guard !isMaximizingOrRestoring && !isAdjustingWindowFrame else { return }
         guard let window = notification.object as? NSWindow,
               !window.styleMask.contains(.fullScreen) else { return }
 
@@ -969,41 +977,63 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func toggleMaximize(window: NSWindow) {
+        guard !isMaximizingOrRestoring else { return }
         let screen = window.screen ?? NSScreen.main
         guard let screenFrame = screen?.visibleFrame else { return }
 
-        isAdjustingWindowFrame = true
-        defer { isAdjustingWindowFrame = false }
+        // Determine if window currently fills the visibleFrame (with tolerance for subpixel/dock offsets)
+        let isWidthMaximized = abs(window.frame.width - screenFrame.width) <= 8.0
+        let isHeightMaximized = abs(window.frame.height - screenFrame.height) <= 8.0
+        let isAlreadyMaximized = (isWidthMaximized && isHeightMaximized) ||
+                                 (savedPreZoomFrame != nil && isWidthMaximized)
 
-        // If window already fills visibleFrame, restore previous frame
-        if abs(window.frame.width - screenFrame.width) <= 4.0 &&
-           abs(window.frame.height - screenFrame.height) <= 4.0 {
-            let restoreFrame = savedPreZoomFrame ?? NSRect(
-                x: screenFrame.midX - 480,
-                y: screenFrame.midY - 270,
-                width: 960,
-                height: 540
-            )
-            window.setFrame(restoreFrame, display: true, animate: true)
+        let targetFrame: NSRect
+        if isAlreadyMaximized {
+            if let saved = savedPreZoomFrame {
+                targetFrame = saved
+            } else if let player = self.player, player.videoWidth > 0, player.videoHeight > 0 {
+                let aspect = player.effectiveAspectRatio
+                let idealH = min(540.0, round(screenFrame.height * 0.60))
+                let idealW = round(idealH * aspect)
+                let cx = round(screenFrame.midX - idealW / 2)
+                let cy = round(screenFrame.midY - idealH / 2)
+                targetFrame = NSRect(x: cx, y: cy, width: idealW, height: idealH)
+            } else {
+                targetFrame = NSRect(
+                    x: round(screenFrame.midX - 480),
+                    y: round(screenFrame.midY - 270),
+                    width: 960,
+                    height: 540
+                )
+            }
             savedPreZoomFrame = nil
-            if let player = self.player, !player.isPlaying {
-                player.renderCurrentFrameImmediately()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) { [weak player] in
-                    player?.renderCurrentFrameImmediately()
+        } else {
+            // Save current frame for restore
+            savedPreZoomFrame = window.frame
+            targetFrame = screenFrame
+        }
+
+        isMaximizingOrRestoring = true
+        isAdjustingWindowFrame = true
+
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.22
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.allowsImplicitAnimation = true
+            window.animator().setFrame(targetFrame, display: true)
+        }, completionHandler: { [weak self, weak window] in
+            MainActor.assumeIsolated {
+                guard let self = self else { return }
+                self.isMaximizingOrRestoring = false
+                self.isAdjustingWindowFrame = false
+                if let window = window {
+                    window.setFrame(targetFrame, display: true, animate: false)
+                }
+                if let player = self.player, !player.isPlaying {
+                    player.renderCurrentFrameImmediately()
                 }
             }
-            return
-        }
-
-        // Save current frame for restore
-        savedPreZoomFrame = window.frame
-        window.setFrame(screenFrame, display: true, animate: true)
-        if let player = self.player, !player.isPlaying {
-            player.renderCurrentFrameImmediately()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) { [weak player] in
-                player?.renderCurrentFrameImmediately()
-            }
-        }
+        })
     }
 
     public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {

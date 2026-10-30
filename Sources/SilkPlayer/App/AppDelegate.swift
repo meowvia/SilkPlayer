@@ -45,6 +45,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             PlayerWindowManager.shared.openNewWindow()
             return true
         }
+        sender.activate(ignoringOtherApps: true)
+        if let targetWindow = PlayerWindowManager.shared.activeSession(preferKey: true)?.window ?? sender.windows.first {
+            if targetWindow.isMiniaturized {
+                targetWindow.deminiaturize(nil)
+            }
+            targetWindow.makeKeyAndOrderFront(nil)
+        }
         return true
     }
 

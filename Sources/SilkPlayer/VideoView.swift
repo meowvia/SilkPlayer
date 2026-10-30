@@ -306,20 +306,28 @@ public final class MetalPlayerContainerView: NSView {
             // Top information bar interactive buttons:
             // Trailing quick action buttons (Close, Pin, Inspector) occupy trailing ~160pt.
             // Leading traffic lights occupy leading 70pt in windowed mode.
-            if player.isHUDVisible && loc.y >= b.height - 44.0 {
+            let isTopBarArea = (loc.y >= b.height - 44.0)
+            if isTopBarArea {
                 let isTrailingActionArea = loc.x >= b.width - 160.0
                 let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
-                if isTrailingActionArea || isLeadingTrafficArea {
+                if player.isHUDVisible && (isTrailingActionArea || isLeadingTrafficArea) {
                     super.mouseDown(with: event)
                     return
                 }
-                // Double-click strictly on the top bar in windowed mode: toggle maximize to visibleFrame
-                if !isFullscreen && event.clickCount == 2 {
+
+                // Double-click strictly on the top bar:
+                // - In windowed mode: toggle maximize to visibleFrame / restore
+                // - In fullscreen mode: exit fullscreen back to maximized/windowed state
+                if event.clickCount == 2 {
                     pendingSingleClickWorkItem?.cancel()
                     pendingSingleClickWorkItem = nil
-                    PlayerWindowManager.shared.toggleMaximize(window: window)
+                    if isFullscreen {
+                        player.toggleFullscreen()
+                    } else {
+                        PlayerWindowManager.shared.toggleMaximize(window: window)
+                    }
                     return
-                } else if !isFullscreen && event.clickCount > 2 {
+                } else if event.clickCount > 2 {
                     pendingSingleClickWorkItem?.cancel()
                     pendingSingleClickWorkItem = nil
                     return
@@ -352,7 +360,15 @@ public final class MetalPlayerContainerView: NSView {
             if let player = playerCore, player.isHUDVisible {
                 let isBottomControlArea = (loc.y <= 112.0)
                 let isTopControlArea = (loc.y >= b.height - 44.0)
-                if isBottomControlArea || isTopControlArea {
+                if isBottomControlArea {
+                    return
+                }
+                if isTopControlArea {
+                    if isFullscreen {
+                        player.toggleFullscreen()
+                    } else {
+                        PlayerWindowManager.shared.toggleMaximize(window: window)
+                    }
                     return
                 }
             }

@@ -1197,7 +1197,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     public func toggleFullscreen() {
         guard let window = hostWindow ?? NSApp.keyWindow else { return }
         let now = CACurrentMediaTime()
-        guard !isFullscreenTransitioning, (now - lastFullscreenToggleTime) > 0.6 else {
+        // Fail-safe watchdog: if transitioning flag remained stuck for > 1.2s, clear to prevent lockup
+        if isFullscreenTransitioning && (now - lastFullscreenToggleTime) > 1.2 {
+            isFullscreenTransitioning = false
+        }
+        guard !isFullscreenTransitioning, (now - lastFullscreenToggleTime) > 0.35 else {
             return
         }
         lastFullscreenToggleTime = now
@@ -1217,6 +1221,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     public func setFullscreenState(_ fullscreen: Bool) {
         isFullscreen = fullscreen
+        isFullscreenTransitioning = false
         if fullscreen {
             isPlaylistDrawerVisible = false
         }
