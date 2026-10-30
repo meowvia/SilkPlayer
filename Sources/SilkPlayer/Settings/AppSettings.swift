@@ -139,6 +139,11 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             UserDefaults.standard.set(autoResizeWindow, forKey: "autoResizeWindow")
         }
     }
+    public var showLocalTimeInFullscreen: Bool {
+        didSet {
+            UserDefaults.standard.set(showLocalTimeInFullscreen, forKey: "showLocalTimeInFullscreen")
+        }
+    }
     public var doubleClickAction: DoubleClickAction {
         didSet {
             UserDefaults.standard.set(doubleClickAction.rawValue, forKey: "doubleClickAction")
@@ -190,6 +195,12 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
     public var autoPlayNextItem: Bool {
         didSet {
             UserDefaults.standard.set(autoPlayNextItem, forKey: "autoPlayNextItem")
+        }
+    }
+    public var dualPlaylistMode: Bool {
+        didSet {
+            UserDefaults.standard.set(dualPlaylistMode, forKey: "dualPlaylistMode")
+            PlaylistManager.shared.applyDualPlaylistMode(dualPlaylistMode)
         }
     }
     public var shortSeekStep: Double {
@@ -299,6 +310,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         }
         self.keepWindowOnTop = UserDefaults.standard.bool(forKey: "keepWindowOnTop")
         self.autoResizeWindow = UserDefaults.standard.object(forKey: "autoResizeWindow") as? Bool ?? true
+        self.showLocalTimeInFullscreen = UserDefaults.standard.object(forKey: "showLocalTimeInFullscreen") as? Bool ?? true
         let rawDoubleClick = UserDefaults.standard.string(forKey: "doubleClickAction") ?? DoubleClickAction.toggleFullscreen.rawValue
         self.doubleClickAction = DoubleClickAction(rawValue: rawDoubleClick) ?? .toggleFullscreen
 
@@ -313,6 +325,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         self.resumePlayback = UserDefaults.standard.object(forKey: "resumePlayback") as? Bool ?? true
         self.autoResumeOnLaunch = UserDefaults.standard.object(forKey: "autoResumeOnLaunch") as? Bool ?? false
         self.autoPlayNextItem = UserDefaults.standard.object(forKey: "autoPlayNextItem") as? Bool ?? true
+        self.dualPlaylistMode = UserDefaults.standard.object(forKey: "dualPlaylistMode") as? Bool ?? true
         self.shortSeekStep = UserDefaults.standard.object(forKey: "shortSeekStep") as? Double ?? 5.0
         self.longSeekStep = UserDefaults.standard.object(forKey: "longSeekStep") as? Double ?? 30.0
         self.autoEnhanceQuality = UserDefaults.standard.object(forKey: "autoEnhanceQuality") as? Bool ?? false

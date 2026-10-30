@@ -30,6 +30,7 @@ public struct PlaybackModeButton: View {
         .scaleEffect(isHovered ? 1.08 : 1.0)
         .animation(.spring(response: 0.20, dampingFraction: 0.75), value: isHovered)
         .onHover { isHovered = $0 }
+        .hudTooltip(L10n.tr("Playback Mode: \(playlist.playbackMode.title) (Click to switch)", "播放模式: \(playlist.playbackMode.title) (点击切换)"), edge: .top)
         .help(playlist.playbackMode.title)
     }
 }

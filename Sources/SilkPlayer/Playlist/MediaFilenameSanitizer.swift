@@ -5,6 +5,8 @@ import Foundation
 public struct SanitizedMediaTitle: Equatable, Sendable {
     /// Extracted episode badge, e.g. "E01", "S02E05", "第01集", or nil if none found.
     public let episodeBadge: String?
+    /// Complete season and episode badge, prioritizing full "S01E03" format for top bar display.
+    public let fullSeasonEpisodeBadge: String?
     /// Cleaned title without advertising noise or redundant encoding parameters.
     public let cleanTitle: String
     /// Compact display title intelligently optimized for drawer rows and sidebar lists.
@@ -12,11 +14,37 @@ public struct SanitizedMediaTitle: Equatable, Sendable {
     /// Original raw title or filename.
     public let rawTitle: String
 
-    public init(episodeBadge: String?, cleanTitle: String, displayTitle: String? = nil, rawTitle: String) {
+    public init(
+        episodeBadge: String?,
+        fullSeasonEpisodeBadge: String? = nil,
+        cleanTitle: String,
+        displayTitle: String? = nil,
+        rawTitle: String
+    ) {
         self.episodeBadge = episodeBadge
+        self.fullSeasonEpisodeBadge = fullSeasonEpisodeBadge ?? episodeBadge
         self.cleanTitle = cleanTitle
         self.displayTitle = displayTitle ?? cleanTitle
         self.rawTitle = rawTitle
+    }
+
+    /// Complete header title including season/episode indicator and episode subtitle for prominent top bar display.
+    public var headerTitle: String {
+        let badge = fullSeasonEpisodeBadge ?? episodeBadge
+        guard let b = badge, !b.isEmpty else {
+            return displayTitle.isEmpty ? cleanTitle : displayTitle
+        }
+        let base = displayTitle.isEmpty ? cleanTitle : displayTitle
+        if base.localizedCaseInsensitiveContains(b) {
+            return base
+        }
+        if let dotRange = base.range(of: " · ") {
+            let showPart = base[..<dotRange.lowerBound]
+            let epPart = base[dotRange.upperBound...]
+            return "\(showPart) · \(b) · \(epPart)"
+        } else {
+            return "\(base) · \(b)"
+        }
     }
 }
 
@@ -35,7 +63,7 @@ public enum MediaFilenameSanitizer: Sendable {
     }()
 
     private static let mediaTokensRegex: NSRegularExpression = {
-        let pattern = #"(?i)(?:\b(2160p|1080p|1080i|720p|480p|4k|8k|uhd|fhd|hd|remux|bluray|blu-ray|web-dl|webrip|hdtv|bdrip|dvdrip|x265|x264|h265|h264|hevc|avc|10bit|8bit|hdr10\+?|hdr|dovi|dv|dolby\s*vision|aac(?:\s*5\.1)?|ac3|dts(?:-hd)?|truehd|atmos|mp3|flac|flv|mp4|mkv|avi|wmv|chs|cht|eng|aac5\.1|hybrid|dsnp|ddp?5[\s.-]?1|7[\s.-]?1|framestor)\b|(?:hd)?(?:国粤双语|国语|粤语)?(?:中英双字|双语字幕|中文字幕|简繁中字|国语中字|中字)?(?:超清|高清)?(?:无水印))"#
+        let pattern = #"(?i)(?:\b(2160p|1080p|1080i|720p|480p|4k|8k|uhd|fhd|hd|remux|bluray|blu-ray|web-dl|webrip|hdtv|bdrip|dvdrip|x265|x264|h265|h264|hevc|avc|10bit|8bit|hdr10\+?|hdr|dovi|dv|dolby\s*vision|aac(?:\s*5\.1)?|ac3|dts(?:-hd)?|truehd|atmos|mp3|flac|flv|mp4|mkv|avi|wmv|chs|cht|eng|aac5\.1|hybrid|dsnp|ddp?5[\s.-]?1|7[\s.-]?1|framestor)\b|(?:hd)?(?:国粤双语|国粤语|国语|粤语|中英双字|双语字幕|中文字幕|简繁中字|国语中字|中字|双字|超清|高清|无水印)+)"#
         return try! NSRegularExpression(pattern: pattern)
     }()
 
@@ -87,7 +115,9 @@ public enum MediaFilenameSanitizer: Sendable {
         }
 
         // L1: Extract episode badge
-        let episodeBadge = extractEpisodeBadge(from: baseName)
+        let badges = extractEpisodeBadges(from: baseName)
+        let episodeBadge = badges.badge
+        let fullBadge = badges.fullBadge
 
         // L2: Clean noise (ads, websites, codec/resolution tokens)
         var cleaned = stripNoise(from: baseName)
@@ -119,6 +149,7 @@ public enum MediaFilenameSanitizer: Sendable {
 
         return SanitizedMediaTitle(
             episodeBadge: episodeBadge,
+            fullSeasonEpisodeBadge: fullBadge,
             cleanTitle: finalTitle,
             displayTitle: displayTitle,
             rawTitle: rawTitle
@@ -194,7 +225,7 @@ public enum MediaFilenameSanitizer: Sendable {
     }
 
     // MARK: - Level 1: Episode Badge Extraction
-    private static func extractEpisodeBadge(from text: String) -> String? {
+    private static func extractEpisodeBadges(from text: String) -> (badge: String?, fullBadge: String?) {
         let nsRange = NSRange(location: 0, length: (text as NSString).length)
 
         // SxxExx pattern
@@ -202,11 +233,9 @@ public enum MediaFilenameSanitizer: Sendable {
             let seasonStr = (text as NSString).substring(with: match.range(at: 1))
             let epStr = (text as NSString).substring(with: match.range(at: 2))
             if let season = Int(seasonStr), let ep = Int(epStr) {
-                if season == 1 {
-                    return String(format: "E%02d", ep)
-                } else {
-                    return String(format: "S%02dE%02d", season, ep)
-                }
+                let full = String(format: "S%02dE%02d", season, ep)
+                let compact = season == 1 ? String(format: "E%02d", ep) : full
+                return (compact, full)
             }
         }
 
@@ -214,7 +243,8 @@ public enum MediaFilenameSanitizer: Sendable {
         if let match = chineseEpisodeRegex.firstMatch(in: text, range: nsRange) {
             let epStr = (text as NSString).substring(with: match.range(at: 1))
             if let ep = Int(epStr) {
-                return String(format: "第%02d集", ep)
+                let b = String(format: "第%02d集", ep)
+                return (b, b)
             }
         }
 
@@ -222,7 +252,8 @@ public enum MediaFilenameSanitizer: Sendable {
         if let match = episodeOnlyRegex.firstMatch(in: text, range: nsRange) {
             let epStr = (text as NSString).substring(with: match.range(at: 1))
             if let ep = Int(epStr) {
-                return String(format: "E%02d", ep)
+                let b = String(format: "E%02d", ep)
+                return (b, b)
             }
         }
 
@@ -230,7 +261,8 @@ public enum MediaFilenameSanitizer: Sendable {
         if let match = bracketEpisodeRegex.firstMatch(in: text, range: nsRange) {
             let epStr = (text as NSString).substring(with: match.range(at: 1))
             if let ep = Int(epStr) {
-                return String(format: "E%02d", ep)
+                let b = String(format: "E%02d", ep)
+                return (b, b)
             }
         }
 
@@ -238,11 +270,16 @@ public enum MediaFilenameSanitizer: Sendable {
         if let match = hyphenEpisodeRegex.firstMatch(in: text, range: nsRange) {
             let epStr = (text as NSString).substring(with: match.range(at: 1))
             if let ep = Int(epStr) {
-                return String(format: "E%02d", ep)
+                let b = String(format: "E%02d", ep)
+                return (b, b)
             }
         }
 
-        return nil
+        return (nil, nil)
+    }
+
+    private static func extractEpisodeBadge(from text: String) -> String? {
+        extractEpisodeBadges(from: text).badge
     }
 
     // MARK: - Level 2: Noise Stripping

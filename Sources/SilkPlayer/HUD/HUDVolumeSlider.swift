@@ -21,6 +21,7 @@ struct HUDVolumeSlider: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(player.isMuted ? L10n.unmuteAudio : L10n.muteAudio)
+            .hudTooltip("\(player.isMuted ? L10n.unmuteAudio : L10n.muteAudio) (M)", edge: .top)
             .help("\(player.isMuted ? L10n.unmuteAudio : L10n.muteAudio) (M)")
 
             GeometryReader { geo in

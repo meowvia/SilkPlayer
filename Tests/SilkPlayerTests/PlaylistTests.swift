@@ -1601,8 +1601,17 @@ final class PlaylistRegressionTests: XCTestCase {
 
     let rawEp1 = "Friends.S01E05.The.One.with.the.East.German.Laundry.Detergent.1080p.BluRay.x264.mkv"
     let sanitizedEp1 = MediaFilenameSanitizer.sanitize(rawEp1)
-    XCTAssertEqual(sanitizedEp1.episodeBadge, "E05", "S01E05 formatted cleanly as E05")
+    XCTAssertEqual(sanitizedEp1.episodeBadge, "E05", "S01E05 formatted cleanly as E05 for compact drawer")
+    XCTAssertEqual(sanitizedEp1.fullSeasonEpisodeBadge, "S01E05", "Full S01E05 preserved for prominent top bar header")
+    XCTAssertTrue(sanitizedEp1.headerTitle.contains("S01E05"), "Header title contains complete season/episode identifier")
     XCTAssertEqual(sanitizedEp1.cleanTitle, "Friends The One with the East German Laundry Detergent")
+
+    // Test noise stripping of trailing Chinese media tags like "HD 中英双字"
+    let rawDualAudio = "终极名单.The.Terminal.List.S01E03.Fathers.and.Sons.1080p.HD.中英双字.mkv"
+    let sanitizedDualAudio = MediaFilenameSanitizer.sanitize(rawDualAudio)
+    XCTAssertFalse(sanitizedDualAudio.headerTitle.contains("中英双字"), "Trailing subtitle tags are cleanly stripped")
+    XCTAssertFalse(sanitizedDualAudio.headerTitle.contains("HD"), "Trailing resolution tags are cleanly stripped")
+    XCTAssertTrue(sanitizedDualAudio.headerTitle.contains("S01E03"), "Header title correctly displays S01E03")
 
     let rawAudio = "Taylor Swift - Cruel Summer.flac"
     let sanitizedAudio = MediaFilenameSanitizer.sanitize(rawAudio)
@@ -1635,6 +1644,45 @@ final class PlaylistRegressionTests: XCTestCase {
 
     dualManager.switchCategory(.video)
     XCTAssertEqual(dualManager.items.count, 2, "Video track items intact upon switching back")
+
+    // 57. Dual Playlist Mode vs Single Playlist Mode Adaptive Invariants
+    print("\n--- Test 57: Dual Playlist Mode vs Single Playlist Mode Adaptive Invariants ---")
+    let modeManager = PlaylistManager(
+        isPersistenceEnabled: false,
+        itemsStorageKey: "test.mode.items",
+        indexStorageKey: "test.mode.index",
+        modeStorageKey: "test.mode.mode"
+    )
+    XCTAssertTrue(modeManager.isDualPlaylistMode, "Defaults to dual playlist mode")
+    let v1 = PlaylistItem(path: "/media/v1.mp4", title: "Video 1", duration: 100.0)
+    let a1 = PlaylistItem(path: "/media/a1.mp3", title: "Audio 1", duration: 200.0)
+    modeManager.appendItems([v1, a1])
+
+    XCTAssertEqual(modeManager.videoCount, 1)
+    XCTAssertEqual(modeManager.audioCount, 1)
+    XCTAssertEqual(modeManager.items.count, 1, "In dual mode, items reflect active category (video)")
+
+    // Switch to single playlist mode
+    modeManager.applyDualPlaylistMode(false)
+    XCTAssertFalse(modeManager.isDualPlaylistMode)
+    XCTAssertEqual(modeManager.items.count, 2, "In single playlist mode, items reflect all unified items")
+    XCTAssertEqual(modeManager.items[0].title, "Video 1")
+    XCTAssertEqual(modeManager.items[1].title, "Audio 1")
+
+    // Switch back to dual playlist mode
+    modeManager.applyDualPlaylistMode(true)
+    XCTAssertTrue(modeManager.isDualPlaylistMode)
+    XCTAssertEqual(modeManager.videoCount, 1)
+    XCTAssertEqual(modeManager.audioCount, 1)
+
+    // 58. Fullscreen Clock & Immersive HUD Invariants
+    print("\n--- Test 58: Fullscreen Clock & Immersive HUD Invariants ---")
+    let originalShowTime = AppSettings.shared.showLocalTimeInFullscreen
+    AppSettings.shared.showLocalTimeInFullscreen = true
+    XCTAssertTrue(AppSettings.shared.showLocalTimeInFullscreen, "Default showLocalTimeInFullscreen is true")
+    AppSettings.shared.showLocalTimeInFullscreen = false
+    XCTAssertFalse(AppSettings.shared.showLocalTimeInFullscreen, "Preference successfully toggled to false")
+    AppSettings.shared.showLocalTimeInFullscreen = originalShowTime
 
     testPlayer.isAudioOnly = false
     }

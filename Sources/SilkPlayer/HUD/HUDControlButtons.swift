@@ -1,6 +1,79 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Instant Responsive Micro-Tooltip Modifier
+@MainActor
+public struct HUDMicroTooltipModifier: ViewModifier {
+    let text: String
+    var edge: VerticalEdge = .top
+
+    @State private var isHovered: Bool = false
+    @State private var isVisible: Bool = false
+    @State private var timerTask: Task<Void, Never>? = nil
+
+    public func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                isHovered = hovering
+                timerTask?.cancel()
+                if hovering && !text.isEmpty {
+                    timerTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 200_000_000) // 0.20s natural debounce
+                        guard !Task.isCancelled, isHovered else { return }
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            isVisible = true
+                        }
+                    }
+                } else {
+                    timerTask?.cancel()
+                    if isVisible {
+                        withAnimation(.easeIn(duration: 0.10)) {
+                            isVisible = false
+                        }
+                    }
+                }
+            }
+            .overlay(alignment: edge == .top ? .top : .bottom) {
+                if isVisible && !text.isEmpty {
+                    Text(text)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(.white.opacity(0.95))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 7.5)
+                        .padding(.vertical, 4)
+                        .background(
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(.ultraThinMaterial)
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(Color.black.opacity(0.72))
+                            }
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.6)
+                        )
+                        .shadow(color: Color.black.opacity(0.35), radius: 6, x: 0, y: 2)
+                        .offset(y: edge == .top ? -32 : 34)
+                        .allowsHitTesting(false)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.95)),
+                            removal: .opacity
+                        ))
+                        .zIndex(9999)
+                }
+            }
+    }
+}
+
+extension View {
+    @MainActor
+    public func hudTooltip(_ text: String, edge: VerticalEdge = .top) -> some View {
+        self.modifier(HUDMicroTooltipModifier(text: text, edge: edge))
+    }
+}
+
 @MainActor
 struct HUDTransportButton: View {
     let icon: String
@@ -33,6 +106,7 @@ struct HUDTransportButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .hudTooltip(helpText, edge: .top)
         .help(helpText)
     }
 }
@@ -73,6 +147,7 @@ struct HUDMenuButton<Content: View>: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .hudTooltip(helpText, edge: .top)
         .help(helpText)
     }
 }
@@ -106,6 +181,7 @@ struct HUDMoreMenuButton<Content: View>: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .hudTooltip(L10n.tr("More Controls", "更多控制"), edge: .top)
         .help("更多控制")
     }
 }
@@ -147,6 +223,7 @@ struct HUDSpeedMenuButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .hudTooltip(L10n.tr("Playback Speed (Click to choose)", "倍速播放 (点击选择常规倍速)"), edge: .top)
         .help(L10n.tr("Playback Speed: \(String(format: "%.2fx", player.speed)) (Click to choose)", "倍速播放: \(String(format: "%.2fx", player.speed)) (点击选择常规倍速)"))
     }
 
@@ -206,6 +283,7 @@ struct HUDCircleButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .hudTooltip(helpText, edge: .bottom)
         .help(helpText)
     }
 }

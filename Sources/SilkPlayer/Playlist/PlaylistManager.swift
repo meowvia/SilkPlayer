@@ -35,33 +35,125 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     public static let shared = PlaylistManager(isPersistenceEnabled: true, autoRestore: true)
 
     // MARK: - Dual-Track Category State
+    public var isDualPlaylistMode: Bool = true {
+        didSet {
+            handleDualPlaylistModeChange()
+        }
+    }
     public private(set) var activeCategory: MediaCategory = .video
     public private(set) var videoItems: [PlaylistItem] = []
     public private(set) var audioItems: [PlaylistItem] = []
+    public private(set) var unifiedItems: [PlaylistItem] = []
     public private(set) var videoCurrentIndex: Int = -1
     public private(set) var audioCurrentIndex: Int = -1
+    public private(set) var unifiedCurrentIndex: Int = -1
 
     public var videoCount: Int { videoItems.count }
     public var audioCount: Int { audioItems.count }
 
     public private(set) var items: [PlaylistItem] {
-        get { activeCategory == .video ? videoItems : audioItems }
+        get {
+            if !isDualPlaylistMode {
+                return unifiedItems
+            }
+            return activeCategory == .video ? videoItems : audioItems
+        }
         set {
-            if activeCategory == .video {
-                videoItems = newValue
+            if !isDualPlaylistMode {
+                unifiedItems = newValue
+                videoItems = newValue.filter { Self.category(for: $0.url) == .video }
+                audioItems = newValue.filter { Self.category(for: $0.url) == .audio }
             } else {
-                audioItems = newValue
+                if activeCategory == .video {
+                    videoItems = newValue
+                } else {
+                    audioItems = newValue
+                }
+                syncUnifiedItems()
             }
         }
     }
 
     public private(set) var currentIndex: Int {
-        get { activeCategory == .video ? videoCurrentIndex : audioCurrentIndex }
+        get {
+            if !isDualPlaylistMode {
+                return unifiedCurrentIndex
+            }
+            return activeCategory == .video ? videoCurrentIndex : audioCurrentIndex
+        }
         set {
-            if activeCategory == .video {
-                videoCurrentIndex = newValue
+            if !isDualPlaylistMode {
+                unifiedCurrentIndex = newValue
+                if newValue >= 0 && newValue < unifiedItems.count {
+                    let cur = unifiedItems[newValue]
+                    if Self.category(for: cur.url) == .audio {
+                        activeCategory = .audio
+                        audioCurrentIndex = audioItems.firstIndex(where: { $0.id == cur.id || $0.path == cur.path }) ?? -1
+                    } else {
+                        activeCategory = .video
+                        videoCurrentIndex = videoItems.firstIndex(where: { $0.id == cur.id || $0.path == cur.path }) ?? -1
+                    }
+                } else {
+                    videoCurrentIndex = -1
+                    audioCurrentIndex = -1
+                }
             } else {
-                audioCurrentIndex = newValue
+                if activeCategory == .video {
+                    videoCurrentIndex = newValue
+                } else {
+                    audioCurrentIndex = newValue
+                }
+                syncUnifiedCurrentIndex()
+            }
+        }
+    }
+
+    public func applyDualPlaylistMode(_ enabled: Bool) {
+        guard isDualPlaylistMode != enabled else { return }
+        isDualPlaylistMode = enabled
+        saveToStorage()
+    }
+
+    private func handleDualPlaylistModeChange() {
+        if !isDualPlaylistMode {
+            syncUnifiedItems()
+            syncUnifiedCurrentIndex()
+            if playbackMode == .shuffle {
+                unifiedShuffleQueue.removeAll()
+                ensureShuffleCandidate()
+            }
+        } else {
+            if unifiedCurrentIndex >= 0 && unifiedCurrentIndex < unifiedItems.count {
+                let cur = unifiedItems[unifiedCurrentIndex]
+                activeCategory = Self.category(for: cur.url)
+                if activeCategory == .video {
+                    videoCurrentIndex = videoItems.firstIndex(where: { $0.id == cur.id || $0.path == cur.path }) ?? -1
+                } else {
+                    audioCurrentIndex = audioItems.firstIndex(where: { $0.id == cur.id || $0.path == cur.path }) ?? -1
+                }
+            }
+            if playbackMode == .shuffle {
+                ensureShuffleCandidate()
+            }
+        }
+    }
+
+    private func syncUnifiedItems() {
+        unifiedItems = videoItems + audioItems
+    }
+
+    private func syncUnifiedCurrentIndex() {
+        if activeCategory == .video {
+            if videoCurrentIndex >= 0 && videoCurrentIndex < videoItems.count {
+                unifiedCurrentIndex = videoCurrentIndex
+            } else {
+                unifiedCurrentIndex = -1
+            }
+        } else {
+            if audioCurrentIndex >= 0 && audioCurrentIndex < audioItems.count {
+                unifiedCurrentIndex = videoItems.count + audioCurrentIndex
+            } else {
+                unifiedCurrentIndex = -1
             }
         }
     }
@@ -153,13 +245,20 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
 
     private var videoShuffleQueue: [Int] = []
     private var audioShuffleQueue: [Int] = []
+    private var unifiedShuffleQueue: [Int] = []
     private var videoPlayHistory: [Int] = []
     private var audioPlayHistory: [Int] = []
+    private var unifiedPlayHistory: [Int] = []
 
     private var currentShuffleQueue: [Int] {
-        get { activeCategory == .video ? videoShuffleQueue : audioShuffleQueue }
+        get {
+            if !isDualPlaylistMode { return unifiedShuffleQueue }
+            return activeCategory == .video ? videoShuffleQueue : audioShuffleQueue
+        }
         set {
-            if activeCategory == .video {
+            if !isDualPlaylistMode {
+                unifiedShuffleQueue = newValue
+            } else if activeCategory == .video {
                 videoShuffleQueue = newValue
             } else {
                 audioShuffleQueue = newValue
@@ -168,9 +267,14 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     }
 
     private var currentPlayHistory: [Int] {
-        get { activeCategory == .video ? videoPlayHistory : audioPlayHistory }
+        get {
+            if !isDualPlaylistMode { return unifiedPlayHistory }
+            return activeCategory == .video ? videoPlayHistory : audioPlayHistory
+        }
         set {
-            if activeCategory == .video {
+            if !isDualPlaylistMode {
+                unifiedPlayHistory = newValue
+            } else if activeCategory == .video {
                 videoPlayHistory = newValue
             } else {
                 audioPlayHistory = newValue
@@ -305,6 +409,8 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         if playbackMode == .shuffle {
             ensureShuffleCandidate()
         }
+        syncUnifiedItems()
+        syncUnifiedCurrentIndex()
         saveToStorage()
     }
 
@@ -359,6 +465,8 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         if playbackMode == .shuffle {
             ensureShuffleCandidate()
         }
+        syncUnifiedItems()
+        syncUnifiedCurrentIndex()
         saveToStorage()
     }
 
@@ -402,6 +510,8 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
                 ensureShuffleCandidate()
             }
         }
+        syncUnifiedItems()
+        syncUnifiedCurrentIndex()
         saveToStorage()
     }
 
@@ -466,6 +576,8 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             }
         }
 
+        syncUnifiedItems()
+        syncUnifiedCurrentIndex()
         saveToStorage()
         return currentItem
     }
@@ -685,6 +797,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         do {
             userDefaults.set(playbackMode.rawValue, forKey: modeStorageKey)
             userDefaults.set(activeCategory.rawValue, forKey: Self.defaultCategoryStorageKey)
+            userDefaults.set(isDualPlaylistMode, forKey: "dualPlaylistMode")
 
             let videoData = try JSONEncoder().encode(videoItems)
             userDefaults.set(videoData, forKey: Self.defaultVideoItemsStorageKey)
@@ -709,6 +822,9 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         if let modeRaw = userDefaults.string(forKey: modeStorageKey),
            let mode = PlaybackMode(rawValue: modeRaw) {
             self.playbackMode = mode
+        }
+        if let dualPref = userDefaults.object(forKey: "dualPlaylistMode") as? Bool {
+            self.isDualPlaylistMode = dualPref
         }
 
         // Custom test keys handling: if non-default storage keys were provided
@@ -788,6 +904,8 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         if playbackMode == .shuffle {
             ensureShuffleCandidate()
         }
+        syncUnifiedItems()
+        syncUnifiedCurrentIndex()
         return restoredAny
     }
 

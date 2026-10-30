@@ -247,6 +247,13 @@ public struct SilkSettingsView: View {
                     Text(L10n.tr("Advances to the next item in the folder or playlist when playback completes.", "当前媒体播放完毕后，自动衔接同目录或播放列表中的下一个项目。"))
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    Divider().opacity(0.2)
+
+                    Toggle(L10n.tr("Dual Playlist Mode", "双列表模式"), isOn: $settings.dualPlaylistMode)
+                    Text(L10n.tr("Separates video and music into independent queues in the drawer; disables to use a unified playlist.", "在侧边抽屉中将视频与音乐分列独立管理；关闭则呈现统一极简播放列表。"))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
 
@@ -255,6 +262,13 @@ public struct SilkSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle(L10n.tr("Auto-match video aspect ratio", "自动匹配视频原始比例"), isOn: $settings.autoResizeWindow)
                     Text(L10n.tr("Automatically resizes window to fit native video dimensions without black bars.", "打开媒体时自动调整窗口大小以贴合视频原生宽高比，消除黑边。"))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Divider().opacity(0.2)
+
+                    Toggle(L10n.tr("Show Local Time in Fullscreen", "全屏显示本地时间"), isOn: $settings.showLocalTimeInFullscreen)
+                    Text(L10n.tr("Displays current system clock in top-right HUD during fullscreen playback.", "在全屏沉浸播放时，于顶部控制栏常驻显示系统实时时钟。"))
                         .font(.caption)
                         .foregroundColor(.secondary)
 
@@ -565,7 +579,7 @@ public struct SilkSettingsView: View {
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(.primary)
 
-                    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.3.0"
+                    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
                     Text(L10n.tr("Version \(appVersion) (SilkCoreKit · Apple Silicon)", "版本 \(appVersion) (SilkCoreKit · Apple Silicon)"))
                         .font(.system(size: 11.5, design: .monospaced))
                         .foregroundColor(.secondary)

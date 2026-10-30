@@ -31,6 +31,34 @@ public enum HUDLayoutTier: Equatable {
 }
 
 @MainActor
+struct FullscreenClockView: View {
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0)) { context in
+            Text(Self.timeFormatter.string(from: context.date))
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundColor(.white.opacity(0.92))
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .background(
+                    ZStack {
+                        Capsule().fill(.ultraThinMaterial)
+                        Capsule().fill(Color.black.opacity(0.20))
+                    }
+                )
+                .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 2)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+@MainActor
 public struct PlayerHUDView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var settings = AppSettings.shared
@@ -63,18 +91,19 @@ public struct PlayerHUDView: View {
         GeometryReader { geometry in
             let availableWidth = geometry.size.width
             let tier = layoutTier(for: availableWidth)
+            let isHUDActive = isControlsVisible && player.isHUDVisible
 
             ZStack {
                 VStack(spacing: 0) {
-                    topBar(tier: tier)
+                    topBar(tier: tier, isHUDActive: isHUDActive)
                         .padding(.horizontal, 16)
                         .padding(.top, player.isFullscreen ? 16 : 30)
                     Spacer()
                     bottomControls(tier: tier, width: availableWidth)
+                        .opacity(isHUDActive ? 1.0 : 0.0)
+                        .allowsHitTesting(isHUDActive)
                 }
-                .opacity(isControlsVisible && player.isHUDVisible ? 1.0 : 0.0)
-                .allowsHitTesting(isControlsVisible && player.isHUDVisible)
-                .animation(.easeInOut(duration: 0.22), value: isControlsVisible && player.isHUDVisible)
+                .animation(.easeInOut(duration: 0.22), value: isHUDActive)
                 .animation(.spring(response: 0.25, dampingFraction: 0.8), value: tier)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -95,8 +124,27 @@ public struct PlayerHUDView: View {
                         isControlsVisible = true
                     }
                 }
+                player.isHUDVisible = true
+                if !isPlaying && player.isFullscreen && !player.isAudioOnly {
+                    registerUserActivity()
+                }
             } else {
                 registerUserActivity()
+            }
+        }
+        .onChange(of: player.isFullscreen) { _, isFullscreen in
+            if isFullscreen {
+                registerUserActivity()
+            } else {
+                showCursor()
+                player.setTrafficLightsHidden(false)
+                if !player.isPlaying {
+                    idleTask?.cancel()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isControlsVisible = true
+                    }
+                    player.isHUDVisible = true
+                }
             }
         }
         .onChange(of: player.isAudioOnly) { _, isAudio in
@@ -118,56 +166,68 @@ public struct PlayerHUDView: View {
     }
 
     // MARK: - Top Information Bar
-    private func topBar(tier: HUDLayoutTier) -> some View {
+    private func topBar(tier: HUDLayoutTier, isHUDActive: Bool) -> some View {
         ZStack(alignment: .center) {
             // 1. Base Layer: Leading Spec Badges + Trailing Quick Actions
             HStack(alignment: .center, spacing: 10) {
                 specBadgesRow(tier: tier)
                     .padding(.leading, player.isFullscreen ? 0 : (tier == .minimal ? 54 : 70)) // Avoid traffic lights in windowed mode
+                    .opacity(isHUDActive ? 1.0 : 0.0)
+                    .allowsHitTesting(isHUDActive)
 
                 Spacer()
 
-                // Trailing Quick Action Buttons: Pin, Inspector, Close
+                // Trailing: Optional Fullscreen Clock + Quick Action Buttons
                 HStack(spacing: 8) {
-                    // Window Pin / Always on Top Button
-                    HUDCircleButton(
-                        icon: settings.keepWindowOnTop ? "pin.fill" : "pin",
-                        isActive: settings.keepWindowOnTop,
-                        helpText: settings.keepWindowOnTop ? L10n.tr("Unpin Window", "取消窗口置顶") : L10n.tr("Keep Window on Top", "保持窗口置顶")
-                    ) {
-                        let next = !settings.keepWindowOnTop
-                        settings.keepWindowOnTop = next
-                        player.showOSD(.pictureAdjustment(name: L10n.tr("Always on Top", "窗口置顶"), value: next ? L10n.tr("On", "开启") : L10n.tr("Off", "关闭")))
+                    if player.isFullscreen && settings.showLocalTimeInFullscreen {
+                        FullscreenClockView()
+                            .opacity(isHUDActive ? 1.0 : 0.60)
                     }
 
-                    // Media Inspector Button
-                    if tier != .minimal {
+                    // Trailing Quick Action Buttons: Pin, Inspector, Close
+                    HStack(spacing: 8) {
+                        // Window Pin / Always on Top Button
                         HUDCircleButton(
-                            icon: player.isInspectorVisible ? "info.circle.fill" : "info.circle",
-                            isActive: player.isInspectorVisible,
-                            helpText: L10n.tr("Media Properties (I)", "媒体属性 (I)")
+                            icon: settings.keepWindowOnTop ? "pin.fill" : "pin",
+                            isActive: settings.keepWindowOnTop,
+                            helpText: settings.keepWindowOnTop ? L10n.tr("Unpin Window", "取消窗口置顶") : L10n.tr("Keep Window on Top", "保持窗口置顶")
                         ) {
-                            player.toggleInspector()
+                            let next = !settings.keepWindowOnTop
+                            settings.keepWindowOnTop = next
+                            player.showOSD(.pictureAdjustment(name: L10n.tr("Always on Top", "窗口置顶"), value: next ? L10n.tr("On", "开启") : L10n.tr("Off", "关闭")))
+                        }
+
+                        // Media Inspector Button
+                        if tier != .minimal {
+                            HUDCircleButton(
+                                icon: player.isInspectorVisible ? "info.circle.fill" : "info.circle",
+                                isActive: player.isInspectorVisible,
+                                helpText: L10n.tr("Media Properties (I)", "媒体属性 (I)")
+                            ) {
+                                player.toggleInspector()
+                            }
+                        }
+
+                        // Close Current Media / Return to Empty Canvas
+                        HUDCircleButton(
+                            icon: "xmark",
+                            isActive: false,
+                            helpText: L10n.tr("Close Playback / Return Home (Esc / Cmd+W)", "退出播放 / 返回主页 (Esc / Cmd+W)")
+                        ) {
+                            player.isPlaylistDrawerVisible = false
+                            player.isInspectorVisible = false
+                            onClosePlayback?()
                         }
                     }
-
-                    // Close Current Media / Return to Empty Canvas
-                    HUDCircleButton(
-                        icon: "xmark",
-                        isActive: false,
-                        helpText: L10n.tr("Close Playback / Return Home (Esc / Cmd+W)", "退出播放 / 返回主页 (Esc / Cmd+W)")
-                    ) {
-                        player.isPlaylistDrawerVisible = false
-                        player.isInspectorVisible = false
-                        onClosePlayback?()
-                    }
+                    .opacity(isHUDActive ? 1.0 : 0.0)
+                    .allowsHitTesting(isHUDActive)
                 }
             }
 
             // 2. Center Overlay: Active Media Title (Clean sanitized title, hover shows full raw filename)
             if !player.mediaTitle.isEmpty && !player.isAudioOnly {
                 let sanitized = MediaFilenameSanitizer.sanitize(player.mediaTitle)
-                Text(sanitized.displayTitle.isEmpty ? sanitized.cleanTitle : sanitized.displayTitle)
+                Text(sanitized.headerTitle)
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundColor(.white.opacity(0.90))
                     .lineLimit(1)
@@ -184,8 +244,10 @@ public struct PlayerHUDView: View {
                         Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
                     )
                     .shadow(color: Color.black.opacity(0.30), radius: 6, x: 0, y: 2)
-                    .frame(maxWidth: max(160, tier == .expanded ? 400 : 260))
+                    .frame(maxWidth: max(160, tier == .expanded ? 460 : 280))
                     .help(player.mediaTitle)
+                    .opacity(isHUDActive ? 1.0 : 0.0)
+                    .allowsHitTesting(isHUDActive)
             }
         }
     }
@@ -365,7 +427,7 @@ public struct PlayerHUDView: View {
                     icon: backIcon,
                     size: 13.5,
                     weight: .medium,
-                    helpText: L10n.tr("Step backward \(backStep)s (Left)", "快退 \(backStep) 秒 (Left)")
+                    helpText: L10n.tr("Step backward \(backStep)s (←)", "快退 \(backStep) 秒 (←)")
                 ) {
                     player.step(seconds: -Double(backStep))
                 }
@@ -378,7 +440,7 @@ public struct PlayerHUDView: View {
                     icon: "backward.frame",
                     size: 13.5,
                     weight: .medium,
-                    helpText: L10n.tr("Previous Frame ( [ )", "上一帧 / 逐帧微调取帧 ( [ )")
+                    helpText: L10n.tr("Previous Frame ( [ )", "上一帧 / 逐帧微调 ( [ )")
                 ) {
                     player.stepFrame(forward: false)
                 }
@@ -415,6 +477,7 @@ public struct PlayerHUDView: View {
             }
             .buttonStyle(HUDInteractiveButtonStyle(hoverScale: 1.08))
             .accessibilityLabel(player.isPlaying ? L10n.pause : L10n.play)
+            .hudTooltip("\(player.isPlaying ? L10n.pause : L10n.play) (Space)", edge: .top)
             .help("\(player.isPlaying ? L10n.pause : L10n.play) (Space)")
 
             // 5. 下一帧 (仅 expanded 模式直显，音频模式下隐藏)
@@ -423,7 +486,7 @@ public struct PlayerHUDView: View {
                     icon: "forward.frame",
                     size: 13.5,
                     weight: .medium,
-                    helpText: L10n.tr("Next Frame ( ] )", "下一帧 / 逐帧微调取帧 ( ] )")
+                    helpText: L10n.tr("Next Frame ( ] )", "下一帧 / 逐帧微调 ( ] )")
                 ) {
                     player.stepFrame(forward: true)
                 }
@@ -438,7 +501,7 @@ public struct PlayerHUDView: View {
                     icon: forwardIcon,
                     size: 13.5,
                     weight: .medium,
-                    helpText: L10n.tr("Step forward \(forwardStep)s (Right)", "快进 \(forwardStep) 秒 (Right)")
+                    helpText: L10n.tr("Step forward \(forwardStep)s (→)", "快进 \(forwardStep) 秒 (→)")
                 ) {
                     player.step(seconds: Double(forwardStep))
                 }
@@ -492,11 +555,11 @@ public struct PlayerHUDView: View {
                     size: 14,
                     weight: .medium,
                     color: player.isHDREnabled ? .cyan : .white.opacity(0.90),
-                    helpText: L10n.tr("HDR Remastering (H)", "画质增强 (H)")
+                    helpText: L10n.tr("Quality Enhancement (H)", "画质增强 (H)")
                 ) {
                     player.toggleHDR()
                 }
-                .accessibilityLabel(L10n.tr("HDR Remastering", "画质增强"))
+                .accessibilityLabel(L10n.tr("Quality Enhancement", "画质增强"))
             }
         }
     }
@@ -511,7 +574,7 @@ public struct PlayerHUDView: View {
                     icon: "waveform",
                     size: 14,
                     weight: .medium,
-                    helpText: L10n.audioTrackSelection
+                    helpText: L10n.tr("Audio Track Selection (A)", "音轨选择 (A)")
                 ) {
                     audioTracksMenuContent
                 }
@@ -524,7 +587,7 @@ public struct PlayerHUDView: View {
                     size: 14,
                     weight: .medium,
                     isActive: player.selectedSubtitleTrackId > 0,
-                    helpText: L10n.subtitleTrackSelection
+                    helpText: L10n.tr("Subtitle Track Selection (S)", "字幕选择 (S)")
                 ) {
                     subtitleTracksMenuContent
                 }
@@ -557,7 +620,7 @@ public struct PlayerHUDView: View {
                 size: 13.5,
                 weight: .medium,
                 color: .white.opacity(0.90),
-                helpText: L10n.toggleFullscreenHelp
+                helpText: L10n.tr("Toggle Fullscreen (F / Return)", "切换全屏 (F / 回车)")
             ) {
                 player.toggleFullscreen()
             }
@@ -823,6 +886,10 @@ public struct PlayerHUDView: View {
             // Audio mode: progress bar and bottom controls stay permanently visible for quick track switching
             return
         }
+        // In windowed mode, do not auto-hide when paused
+        if !player.isPlaying && !player.isFullscreen {
+            return
+        }
         idleTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_800_000_000) // 1.8 seconds idle timeout
             guard !Task.isCancelled else { return }
@@ -833,7 +900,7 @@ public struct PlayerHUDView: View {
             if PlayerWindowManager.shared.settingsWindow != nil {
                 return
             }
-            if player.isPlaying {
+            if player.isPlaying || player.isFullscreen {
                 withAnimation(.easeInOut(duration: 0.25)) {
                     isControlsVisible = false
                 }

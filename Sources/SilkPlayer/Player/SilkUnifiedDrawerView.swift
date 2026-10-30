@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 @MainActor
 public struct SilkPlaylistDrawerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var settings = AppSettings.shared
     @ObservedObject var player: PlayerCore
     var playlist: PlaylistManager
     public var drawerWidth: CGFloat
@@ -85,9 +86,32 @@ public struct SilkPlaylistDrawerView: View {
 
     // MARK: - Header Bar
     private var headerBar: some View {
-        HStack(alignment: .center, spacing: 4) {
-            categoryTab(for: .video, count: playlist.videoCount)
-            categoryTab(for: .audio, count: playlist.audioCount)
+        Group {
+            if settings.dualPlaylistMode {
+                HStack(alignment: .center, spacing: 4) {
+                    categoryTab(for: .video, count: playlist.videoCount)
+                    categoryTab(for: .audio, count: playlist.audioCount)
+                }
+            } else {
+                HStack(alignment: .center, spacing: 6) {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.70))
+                    Text(L10n.tr("Playlist", "播放列表"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.90))
+                    if playlist.count > 0 {
+                        Text("\(playlist.count)")
+                            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundColor(.cyan)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1.5)
+                            .background(Capsule().fill(Color.cyan.opacity(0.18)))
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 28)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.top, 10)
@@ -137,14 +161,14 @@ public struct SilkPlaylistDrawerView: View {
                 Circle()
                     .fill(Color.white.opacity(0.05))
                     .frame(width: 52, height: 52)
-                Image(systemName: playlist.activeCategory == .video ? "film.stack" : "music.note.list")
+                Image(systemName: settings.dualPlaylistMode ? (playlist.activeCategory == .video ? "film.stack" : "music.note.list") : "list.bullet.rectangle")
                     .font(.system(size: 22))
                     .foregroundColor(.white.opacity(0.35))
             }
-            Text(playlist.activeCategory == .video ? L10n.tr("Video Playlist Empty", "视频列表为空") : L10n.tr("Music Playlist Empty", "音乐列表为空"))
+            Text(settings.dualPlaylistMode ? (playlist.activeCategory == .video ? L10n.tr("Video Playlist Empty", "视频列表为空") : L10n.tr("Music Playlist Empty", "音乐列表为空")) : L10n.tr("Playlist is Empty", "播放列表为空"))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white.opacity(0.75))
-            Text(playlist.activeCategory == .video ? L10n.tr("Drop video files or folders here to add", "拖拽视频文件或文件夹至此处即可添加") : L10n.tr("Drop audio files or folders here to add", "拖拽音频文件或文件夹至此处即可添加"))
+            Text(settings.dualPlaylistMode ? (playlist.activeCategory == .video ? L10n.tr("Drop video files or folders here to add", "拖拽视频文件或文件夹至此处即可添加") : L10n.tr("Drop audio files or folders here to add", "拖拽音频文件或文件夹至此处即可添加")) : L10n.tr("Drop media files or folders here to add", "拖拽媒体文件或文件夹至此处即可添加"))
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.40))
                 .multilineTextAlignment(.center)
