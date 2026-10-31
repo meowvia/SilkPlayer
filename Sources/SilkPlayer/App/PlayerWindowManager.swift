@@ -877,17 +877,26 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             targetW = targetH * baseAspect
         }
 
-        if targetW > maxSize.width {
-            targetW = maxSize.width
-            targetH = round(targetW / max(0.001, baseAspect))
-        }
+        // 窗口尺寸上限与超宽屏幕自适应放行：
+        // 当窗口高度达到屏幕可用工作区极限时，若用户继续向两侧拉伸宽度，允许窗口放行扩展至屏幕最大宽度（内部黑色底座等比居中渲染）；
+        // 同样，当宽度达到屏幕极限时，允许高度向下扩展至屏幕最大高度。
         if targetH > maxSize.height {
             targetH = maxSize.height
-            targetW = round(targetH * baseAspect)
+            let maxAspectW = round(targetH * baseAspect)
+            if frameSize.width > maxAspectW {
+                targetW = min(maxSize.width, frameSize.width)
+            } else {
+                targetW = maxAspectW
+            }
         }
         if targetW > maxSize.width {
             targetW = maxSize.width
-            targetH = round(targetW / max(0.001, baseAspect))
+            let maxAspectH = round(targetW / max(0.001, baseAspect))
+            if frameSize.height > maxAspectH {
+                targetH = min(maxSize.height, frameSize.height)
+            } else {
+                targetH = maxAspectH
+            }
         }
         targetW = min(targetW, maxSize.width)
         targetH = min(targetH, maxSize.height)
@@ -1058,41 +1067,18 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return
         }
 
-        // B. 闲置窗口（未加载视频）：在 screenFrame 与 960x540 之间双向切换
-        guard let player = self.player, player.videoWidth > 0, player.videoHeight > 0 else {
-            let isCurrentlyMax = abs(window.frame.width - screenFrame.width) <= 16.0 &&
-                                 abs(window.frame.height - screenFrame.height) <= 16.0
-            if isCurrentlyMax {
-                let restore = savedPreZoomFrame ?? NSRect(
-                    x: round(screenFrame.midX - 480),
-                    y: round(screenFrame.midY - 270),
-                    width: 960,
-                    height: 540
-                )
-                savedPreZoomFrame = nil
-                window.setFrame(restore, display: true, animate: true)
-            } else {
-                savedPreZoomFrame = window.frame
-                window.setFrame(screenFrame, display: true, animate: true)
-            }
-            return
-        }
+        // B & C. 闲置窗口 或 视频播放态：铺满屏幕除状态栏及 Dock 外可用工作区（screenFrame），或还原
+        // 窗口铺满可用屏幕，视频内部保持原生纵横比等比居中渲染并由播放器黑色底座提供自然衬底
+        let isCurrentlyMax = abs(window.frame.width - screenFrame.width) <= 16.0 &&
+                             abs(window.frame.height - screenFrame.height) <= 16.0
 
-        // C. 视频播放态：计算当前屏幕可用区内的最大等比尺寸（100% 占满工作区长边，严格保持视频比例）
-        let aspect = player.effectiveAspectRatio
-        let maxContent = PlayerGeometry.maximizedContentSize(for: aspect, screenVisibleSize: screenFrame.size)
-        let maxW = round(maxContent.width)
-        let maxH = round(maxContent.height)
-
-        let isCurrentlyAtMax = abs(window.frame.width - maxW) <= 16.0 &&
-                               abs(window.frame.height - maxH) <= 16.0
-
-        if isCurrentlyAtMax {
+        if isCurrentlyMax {
             let restoreFrame: NSRect
             if let saved = savedPreZoomFrame,
-               (abs(saved.width - maxW) > 16.0 || abs(saved.height - maxH) > 16.0) {
+               (abs(saved.width - screenFrame.width) > 16.0 || abs(saved.height - screenFrame.height) > 16.0) {
                 restoreFrame = saved
-            } else {
+            } else if let player = self.player, player.videoWidth > 0, player.videoHeight > 0 {
+                let aspect = player.effectiveAspectRatio
                 let stdW: CGFloat
                 let stdH: CGFloat
                 if player.isEffectiveVertical {
@@ -1105,17 +1091,21 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
                 let cx = round(screenFrame.midX - stdW / 2)
                 let cy = round(screenFrame.midY - stdH / 2)
                 restoreFrame = NSRect(x: cx, y: cy, width: stdW, height: stdH)
+            } else {
+                restoreFrame = NSRect(
+                    x: round(screenFrame.midX - 480),
+                    y: round(screenFrame.midY - 270),
+                    width: 960,
+                    height: 540
+                )
             }
             savedPreZoomFrame = nil
             savedPreFullScreenFrame = restoreFrame
             window.setFrame(restoreFrame, display: true, animate: true)
         } else {
             savedPreZoomFrame = window.frame
-            let targetX = round(screenFrame.midX - maxW / 2)
-            let targetY = round(screenFrame.midY - maxH / 2)
-            let targetFrame = NSRect(x: targetX, y: targetY, width: maxW, height: maxH)
-            savedPreFullScreenFrame = targetFrame
-            window.setFrame(targetFrame, display: true, animate: true)
+            savedPreFullScreenFrame = screenFrame
+            window.setFrame(screenFrame, display: true, animate: true)
         }
     }
 

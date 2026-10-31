@@ -293,8 +293,8 @@ public final class MetalPlayerContainerView: NSView {
         }
         let loc = self.convert(point, from: superview)
         let b = bounds
-        let margin: CGFloat = 6.0
-        // 窗口四周边框 6pt 留给 AppKit 原生调整大小手柄（显示双向缩放箭头并响应边框拖拽伸缩）
+        let margin: CGFloat = 8.0
+        // 窗口四周边框 8pt 留给 AppKit 原生调整大小手柄（显示双向缩放箭头并响应边框拖拽伸缩）
         if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
             return nil
         }

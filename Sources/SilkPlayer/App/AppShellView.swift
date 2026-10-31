@@ -63,6 +63,7 @@ public struct AppShellView: View {
                     if !player.isAudioOnly {
                         Color.black
                             .edgesIgnoringSafeArea(.all)
+                            .allowsHitTesting(false)
                     }
 
                     PlayerContainerView(
@@ -468,7 +469,7 @@ public struct AppShellView: View {
         window.tabbingMode = .disallowed
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.styleMask.insert(.fullSizeContentView)
+        window.styleMask.insert([.resizable, .fullSizeContentView])
         window.isMovableByWindowBackground = !isPlaying
         window.isOpaque = false
         window.backgroundColor = .clear

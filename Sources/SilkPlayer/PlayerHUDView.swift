@@ -109,7 +109,10 @@ public struct PlayerHUDView: View {
                 .animation(.spring(response: 0.25, dampingFraction: 0.8), value: tier)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(player.isFullscreen ? 0 : 8)
+            .allowsHitTesting(isHUDActive)
         }
+        .allowsHitTesting(isControlsVisible && player.isHUDVisible)
         .onAppear {
             setupMouseMonitor()
             registerUserActivity()

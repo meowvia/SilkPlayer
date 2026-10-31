@@ -1685,5 +1685,45 @@ final class PlaylistRegressionTests: XCTestCase {
     AppSettings.shared.showLocalTimeInFullscreen = originalShowTime
 
     testPlayer.isAudioOnly = false
+
+    // 59. Ultrawide Workspace Maximize & Manual Drag Resize Invariants
+    print("\n--- Test 59: Ultrawide Workspace Maximize & Manual Drag Resize Invariants ---")
+    let maxTestPlayer = MockPlayerController()
+    maxTestPlayer.isPlaying = true
+    maxTestPlayer.videoWidth = 1920
+    maxTestPlayer.videoHeight = 1080
+    let maxSession = PlayerWindowSession(id: UUID(), player: maxTestPlayer)
+    let maxDelegate = PlayerWindowDelegate(session: maxSession, player: maxTestPlayer)
+
+    let maxInitFrame = NSRect(x: 200, y: 200, width: 1280, height: 720)
+    let maxWindow = NSWindow(
+        contentRect: maxInitFrame,
+        styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+        backing: .buffered,
+        defer: false
+    )
+    maxWindow.setFrame(maxInitFrame, display: false)
+    let maxScreenFrame = maxWindow.screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+
+    // A. Double-click title bar / Zoom maximizes window to screenFrame
+    maxDelegate.toggleMaximize(window: maxWindow)
+    XCTAssertEqual(maxWindow.frame.width, maxScreenFrame.width, accuracy: 2.0, "Window width fills visible screen frame")
+    XCTAssertEqual(maxWindow.frame.height, maxScreenFrame.height, accuracy: 2.0, "Window height fills visible screen frame")
+
+    // B. Rapid double-clicks (<0.35s) are debounced to eliminate flicker
+    maxDelegate.toggleMaximize(window: maxWindow)
+    XCTAssertEqual(maxWindow.frame.width, maxScreenFrame.width, accuracy: 2.0, "Rapid second click is debounced")
+
+    // C. Manual inward drag shrinks proportionally
+    let shrinkProposal = NSSize(width: 960, height: 540)
+    let shrinkResult = maxDelegate.windowWillResize(maxWindow, to: shrinkProposal)
+    XCTAssertEqual(shrinkResult.width, 960, accuracy: 2.0, "Inward resize accepts width 960")
+    XCTAssertEqual(shrinkResult.height, 540, accuracy: 2.0, "Inward resize preserves 16:9 height 540")
+
+    // D. Over-aspect outward drag expands width without getting locked
+    let overExpandProposal = NSSize(width: maxScreenFrame.width, height: maxScreenFrame.height)
+    let overExpandResult = maxDelegate.windowWillResize(maxWindow, to: overExpandProposal)
+    XCTAssertEqual(overExpandResult.width, maxScreenFrame.width, accuracy: 2.0, "Outward drag expands up to max width")
+    XCTAssertEqual(overExpandResult.height, maxScreenFrame.height, accuracy: 2.0, "Outward drag caps at screen height")
     }
 }
