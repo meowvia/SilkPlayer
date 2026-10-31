@@ -174,7 +174,7 @@ public struct AppShellView: View {
                     player.applyContentAspectRatioLock()
                 }
             } else {
-                player.hostWindow?.isMovableByWindowBackground = false
+                player.hostWindow?.isMovableByWindowBackground = true
                 player.hostWindow?.isOpaque = false
                 player.hostWindow?.backgroundColor = .clear
                 player.hostWindow?.contentAspectRatio = .zero
@@ -469,7 +469,7 @@ public struct AppShellView: View {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
-        window.isMovableByWindowBackground = false
+        window.isMovableByWindowBackground = !isPlaying
         window.isOpaque = false
         window.backgroundColor = .clear
         window.level = AppSettings.shared.keepWindowOnTop ? .floating : .normal

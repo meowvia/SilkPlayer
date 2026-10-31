@@ -65,6 +65,7 @@ public struct EmptyPlaybackView: View {
 
             // 3.5 Native Window Background Drag Canvas (padded by 8pt to preserve edge resize handles)
             WindowDragGestureView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(8)
                 .edgesIgnoringSafeArea(.all)
 
@@ -206,9 +207,10 @@ public struct WindowDragGestureView: NSViewRepresentable {
 }
 
 public final class WindowDragCanvasView: NSView {
+    override public var mouseDownCanMoveWindow: Bool { true }
     private var initialMouseLocation: NSPoint = .zero
-    private var downEvent: NSEvent? = nil
-    private var canDrag: Bool = false
+    private var initialWindowOrigin: NSPoint = .zero
+    private var isDragging: Bool = false
 
     override public func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -217,39 +219,33 @@ public final class WindowDragCanvasView: NSView {
         let loc = self.convert(event.locationInWindow, from: nil)
         let b = bounds
 
-        if event.clickCount >= 2 {
-            canDrag = false
-            downEvent = nil
-            if event.clickCount == 2 {
-                if loc.y >= b.height - 52.0 {
-                    PlayerWindowManager.shared.toggleMaximize(window: window)
-                } else if AppSettings.shared.doubleClickAction == .openFile {
-                    PlayerWindowManager.shared.openFilePicker()
-                }
+        if event.clickCount == 2 {
+            isDragging = false
+            if loc.y >= b.height - 52.0 {
+                PlayerWindowManager.shared.toggleMaximize(window: window)
+            } else if AppSettings.shared.doubleClickAction == .openFile {
+                PlayerWindowManager.shared.openFilePicker()
             }
             return
         }
 
         initialMouseLocation = NSEvent.mouseLocation
-        downEvent = event
-        canDrag = !window.styleMask.contains(.fullScreen)
+        initialWindowOrigin = window.frame.origin
+        isDragging = false
     }
 
     override public func mouseDragged(with event: NSEvent) {
-        guard canDrag, let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
+        guard let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
         let current = NSEvent.mouseLocation
         let dx = current.x - initialMouseLocation.x
         let dy = current.y - initialMouseLocation.y
-        if hypot(dx, dy) > 3.0 {
-            guard let down = downEvent else { return }
-            canDrag = false
-            downEvent = nil
-            window.performDrag(with: down)
+        if isDragging || hypot(dx, dy) > 3.0 {
+            isDragging = true
+            window.setFrameOrigin(NSPoint(x: round(initialWindowOrigin.x + dx), y: round(initialWindowOrigin.y + dy)))
         }
     }
 
     override public func mouseUp(with event: NSEvent) {
-        canDrag = false
-        downEvent = nil
+        isDragging = false
     }
 }

@@ -7,8 +7,9 @@ import SilkCoreKit
 public final class MetalPlayerContainerView: NSView {
     public weak var playerCore: PlayerCore?
     private var trackingArea: NSTrackingArea?
-    private var currentMouseDownEvent: NSEvent? = nil
     private var dragInitialMouseScreenLocation: NSPoint = .zero
+    private var dragInitialWindowOrigin: NSPoint = .zero
+    private var isDraggingWindow: Bool = false
     private var canDragWindowFromCurrentMouseDown: Bool = false
     private var pendingSingleClickWorkItem: DispatchWorkItem?
     private var lastMouseActivityTime: TimeInterval = 0
@@ -256,6 +257,20 @@ public final class MetalPlayerContainerView: NSView {
         super.mouseExited(with: event)
     }
 
+    override public func hitTest(_ point: NSPoint) -> NSView? {
+        guard let window = self.window, !window.styleMask.contains(.fullScreen) else {
+            return super.hitTest(point)
+        }
+        let loc = self.convert(point, from: superview)
+        let b = bounds
+        let margin: CGFloat = 6.0
+        // 窗口四周边框 6pt 留给 AppKit 原生调整大小手柄（显示双向缩放箭头并响应边框拖拽伸缩）
+        if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
+            return nil
+        }
+        return super.hitTest(point)
+    }
+
     override public func mouseDown(with event: NSEvent) {
         let loc = self.convert(event.locationInWindow, from: nil)
         let b = bounds
@@ -265,15 +280,6 @@ public final class MetalPlayerContainerView: NSView {
         }
         let isFullscreen = window.styleMask.contains(.fullScreen)
         canDragWindowFromCurrentMouseDown = false
-
-        // 1. 窗口边缘 8pt 原生调整大小保护
-        if !isFullscreen {
-            let margin: CGFloat = 8.0
-            if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
-                super.mouseDown(with: event)
-                return
-            }
-        }
 
         // 抽屉与音量滑块判定
         let activeDrawerWidth: CGFloat = (playerCore?.isInspectorVisible == true) ? 348.0 :
@@ -335,7 +341,8 @@ public final class MetalPlayerContainerView: NSView {
                 // 顶栏单击：允许拖拽窗口
                 canDragWindowFromCurrentMouseDown = !isFullscreen
                 dragInitialMouseScreenLocation = NSEvent.mouseLocation
-                currentMouseDownEvent = event
+                dragInitialWindowOrigin = window.frame.origin
+                isDraggingWindow = false
                 return
             }
         }
@@ -362,7 +369,8 @@ public final class MetalPlayerContainerView: NSView {
         // 单击准备与画布拖拽授权
         canDragWindowFromCurrentMouseDown = !isFullscreen
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
-        currentMouseDownEvent = event
+        dragInitialWindowOrigin = window.frame.origin
+        isDraggingWindow = false
     }
 
     override public func mouseDragged(with event: NSEvent) {
@@ -377,19 +385,23 @@ public final class MetalPlayerContainerView: NSView {
         let dx = current.x - dragInitialMouseScreenLocation.x
         let dy = current.y - dragInitialMouseScreenLocation.y
         let distance = hypot(dx, dy)
-        if distance > 3.0 {
-            guard let down = currentMouseDownEvent else { return }
+        if isDraggingWindow || distance > 3.0 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-            canDragWindowFromCurrentMouseDown = false
-            currentMouseDownEvent = nil
-            window.performDrag(with: down)
+            isDraggingWindow = true
+            window.setFrameOrigin(NSPoint(x: round(dragInitialWindowOrigin.x + dx), y: round(dragInitialWindowOrigin.y + dy)))
         }
     }
 
     override public func mouseUp(with event: NSEvent) {
+        if isDraggingWindow {
+            isDraggingWindow = false
+            canDragWindowFromCurrentMouseDown = false
+            pendingSingleClickWorkItem?.cancel()
+            pendingSingleClickWorkItem = nil
+            return
+        }
         canDragWindowFromCurrentMouseDown = false
-        currentMouseDownEvent = nil
 
         guard event.clickCount == 1 else { return }
 

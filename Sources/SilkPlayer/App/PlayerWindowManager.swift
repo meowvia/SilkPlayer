@@ -1141,6 +1141,41 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         if let window = notification.object as? NSWindow {
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
+            let screen = window.screen ?? NSScreen.main
+            let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+
+            var targetFrame: NSRect
+            if let saved = savedPreFullScreenFrame {
+                let clampedW = min(saved.width, screenFrame.width)
+                let clampedH = min(saved.height, screenFrame.height)
+                let clampedX = max(screenFrame.minX, min(screenFrame.maxX - clampedW, saved.origin.x))
+                let clampedY = max(screenFrame.minY, min(screenFrame.maxY - clampedH, saved.origin.y))
+                targetFrame = NSRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
+            } else {
+                let aspect = player?.effectiveAspectRatio ?? (16.0 / 9.0)
+                let stdW = round(screenFrame.width * 0.55)
+                let stdH = round(stdW / max(0.001, aspect))
+                let clampedW = min(stdW, screenFrame.width)
+                let clampedH = min(stdH, screenFrame.height)
+                let cx = round(screenFrame.midX - clampedW / 2)
+                let cy = round(screenFrame.midY - clampedH / 2)
+                targetFrame = NSRect(x: cx, y: cy, width: clampedW, height: clampedH)
+            }
+
+            if targetFrame.height > screenFrame.height {
+                targetFrame.size.height = screenFrame.height
+            }
+            if targetFrame.origin.y < screenFrame.minY {
+                targetFrame.origin.y = screenFrame.minY
+            }
+            if targetFrame.maxY > screenFrame.maxY {
+                targetFrame.origin.y = max(screenFrame.minY, screenFrame.maxY - targetFrame.height)
+            }
+
+            // 预设桌面空间窗口恢复帧，使 AppKit 全屏退出转场动画直接平滑缩回该目标帧，避免从 (0,0) 左下角缩放跳跃
+            isAdjustingWindowFrame = true
+            window.setFrame(targetFrame, display: false, animate: false)
+            isAdjustingWindowFrame = false
         }
     }
 
