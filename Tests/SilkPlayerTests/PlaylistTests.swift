@@ -1722,7 +1722,9 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssertEqual(maxWindow.frame.width, maxScreenFrame.width, accuracy: 2.0, "Rapid second click is debounced")
 
     // C. Maximized state strictly locks window size (no drag resize in maximized)
-    let shrinkProposal = NSSize(width: min(960, round(maxScreenFrame.width * 0.5)), height: min(540, round(maxScreenFrame.height * 0.5)))
+    let dragTestW = max(640.0, min(960.0, round(maxScreenFrame.width * 0.75)))
+    let dragTestH = round(dragTestW / (16.0 / 9.0))
+    let shrinkProposal = NSSize(width: dragTestW, height: dragTestH)
     let shrinkLockedResult = maxDelegate.windowWillResize(maxWindow, to: shrinkProposal)
     XCTAssertEqual(shrinkLockedResult.width, maxScreenFrame.width, accuracy: 2.0, "Maximized window width is locked")
     XCTAssertEqual(shrinkLockedResult.height, maxScreenFrame.height, accuracy: 2.0, "Maximized window height is locked")
@@ -1735,11 +1737,9 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssertEqual(maxDelegate.currentInteractiveMode, .normal, "Mode returned to normal")
 
     // E. In normal mode: manual 8-way drag adjusts window size
-    let expectedNormalW = shrinkProposal.width
-    let expectedNormalH = round(expectedNormalW / (16.0 / 9.0))
-    let normalResizeResult = maxDelegate.windowWillResize(maxWindow, to: NSSize(width: expectedNormalW, height: expectedNormalH))
-    XCTAssertEqual(normalResizeResult.width, expectedNormalW, accuracy: 2.0, "Normal resize accepts width \(expectedNormalW)")
-    XCTAssertEqual(normalResizeResult.height, expectedNormalH, accuracy: 2.0, "Normal resize preserves 16:9 height \(expectedNormalH)")
+    let normalResizeResult = maxDelegate.windowWillResize(maxWindow, to: shrinkProposal)
+    XCTAssertEqual(normalResizeResult.width, dragTestW, accuracy: 2.0, "Normal resize accepts width \(dragTestW)")
+    XCTAssertEqual(normalResizeResult.height, dragTestH, accuracy: 2.0, "Normal resize preserves 16:9 height \(dragTestH)")
 
     // F. Over-aspect outward drag caps at visible screen height
     let overExpandProposal = NSSize(width: maxScreenFrame.width, height: maxScreenFrame.height)
