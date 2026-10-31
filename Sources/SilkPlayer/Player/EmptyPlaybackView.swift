@@ -207,10 +207,9 @@ public struct WindowDragGestureView: NSViewRepresentable {
 }
 
 public final class WindowDragCanvasView: NSView {
-    override public var mouseDownCanMoveWindow: Bool { true }
+    override public var mouseDownCanMoveWindow: Bool { false }
     private var initialMouseLocation: NSPoint = .zero
     private var initialWindowOrigin: NSPoint = .zero
-    private var isDragging: Bool = false
 
     override public func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -220,8 +219,8 @@ public final class WindowDragCanvasView: NSView {
         }
         let loc = (superview != nil) ? self.convert(point, from: superview) : self.convert(point, from: nil)
         let b = bounds
-        let margin: CGFloat = 6.0
-        // 四周边框与四角（6pt）绝对放行：返回 nil，直通 AppKit 系统 NSThemeFrame，激活原生八向缩放手柄与原生拖拽循环
+        let margin: CGFloat = 8.0
+        // 四周边框与四角（8pt）绝对放行：返回 nil，直通 AppKit 系统 NSThemeFrame，激活原生八向缩放手柄与原生拖拽循环
         if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
             return nil
         }
@@ -234,14 +233,13 @@ public final class WindowDragCanvasView: NSView {
         let b = bounds
 
         if !window.styleMask.contains(.fullScreen) {
-            let margin: CGFloat = 6.0
+            let margin: CGFloat = 8.0
             if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
                 return
             }
         }
 
         if event.clickCount == 2 {
-            isDragging = false
             if loc.y >= b.height - 64.0 {
                 PlayerWindowManager.shared.toggleMaximize(window: window)
             } else if AppSettings.shared.doubleClickAction == .openFile {
@@ -252,21 +250,20 @@ public final class WindowDragCanvasView: NSView {
 
         initialMouseLocation = NSEvent.mouseLocation
         initialWindowOrigin = window.frame.origin
-        isDragging = false
     }
 
     override public func mouseDragged(with event: NSEvent) {
         guard let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
+        if let del = window.delegate as? PlayerWindowDelegate, del.currentInteractiveMode == .maximized {
+            return
+        }
         let current = NSEvent.mouseLocation
         let dx = current.x - initialMouseLocation.x
         let dy = current.y - initialMouseLocation.y
-        if isDragging || hypot(dx, dy) > 3.0 {
-            isDragging = true
-            window.setFrameOrigin(NSPoint(x: round(initialWindowOrigin.x + dx), y: round(initialWindowOrigin.y + dy)))
+        if hypot(dx, dy) > 3.0 {
+            window.performDrag(with: event)
         }
     }
 
-    override public func mouseUp(with event: NSEvent) {
-        isDragging = false
-    }
+    override public func mouseUp(with event: NSEvent) {}
 }

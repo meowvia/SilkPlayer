@@ -316,8 +316,8 @@ public final class MetalPlayerContainerView: NSView {
         }
         let loc = (superview != nil) ? self.convert(point, from: superview) : self.convert(point, from: nil)
         let b = bounds
-        let margin: CGFloat = 6.0
-        // 四周边框与四角（6pt）绝对放行：返回 nil，直通 AppKit 系统 NSThemeFrame，激活原生八向缩放手柄与原生拖拽循环
+        let margin: CGFloat = 8.0
+        // 四周边框与四角（8pt）绝对放行：返回 nil，直通 AppKit 系统 NSThemeFrame，激活原生八向缩放手柄与原生拖拽循环
         if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
             return nil
         }
@@ -334,9 +334,9 @@ public final class MetalPlayerContainerView: NSView {
         let isFullscreen = window.styleMask.contains(.fullScreen)
         canDragWindowFromCurrentMouseDown = false
 
-        // 1. 边缘 6pt 预留给 AppKit 原生 NSThemeFrame 八向拉伸，绝不在此拦截
+        // 1. 边缘 8pt 预留给 AppKit 原生 NSThemeFrame 八向拉伸，绝不在此拦截
         if !isFullscreen {
-            let margin: CGFloat = 6.0
+            let margin: CGFloat = 8.0
             if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
                 return
             }
@@ -423,22 +423,17 @@ public final class MetalPlayerContainerView: NSView {
             window.makeFirstResponder(self)
         }
 
+        // 双击播放区：全屏（严格契合状态机）
         if event.clickCount >= 2 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-            if isFullscreen {
-                player.toggleFullscreen()
-            } else {
-                self.handleDoubleClickAction()
-            }
+            player.toggleFullscreen()
             return
         }
 
-        // 画面区域单击：准备拖拽窗口或延时触发播放/暂停
-        canDragWindowFromCurrentMouseDown = !isFullscreen && !isMaximized
+        // 画面区域单击：防抖触发播放/暂停，绝不在此启动窗口移动
+        canDragWindowFromCurrentMouseDown = false
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
-        dragInitialWindowOrigin = window.frame.origin
-        isDraggingWindow = false
     }
 
     override public func mouseDragged(with event: NSEvent) {
@@ -453,22 +448,15 @@ public final class MetalPlayerContainerView: NSView {
         let dx = current.x - dragInitialMouseScreenLocation.x
         let dy = current.y - dragInitialMouseScreenLocation.y
         let distance = hypot(dx, dy)
-        if isDraggingWindow || distance > 3.0 {
+        if distance > 3.0 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-            isDraggingWindow = true
-            window.setFrameOrigin(NSPoint(x: round(dragInitialWindowOrigin.x + dx), y: round(dragInitialWindowOrigin.y + dy)))
+            canDragWindowFromCurrentMouseDown = false
+            window.performDrag(with: event)
         }
     }
 
     override public func mouseUp(with event: NSEvent) {
-        if isDraggingWindow {
-            isDraggingWindow = false
-            canDragWindowFromCurrentMouseDown = false
-            pendingSingleClickWorkItem?.cancel()
-            pendingSingleClickWorkItem = nil
-            return
-        }
         canDragWindowFromCurrentMouseDown = false
 
         guard event.clickCount == 1 else { return }

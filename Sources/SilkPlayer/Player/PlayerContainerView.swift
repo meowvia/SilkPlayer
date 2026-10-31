@@ -38,6 +38,7 @@ public struct PlayerContainerView: View {
                 // Video Canvas Surface
                 VideoView(playerCore: player)
                     .edgesIgnoringSafeArea(.all)
+                    .padding(player.isFullscreen ? 0 : 8)
                     .contextMenu {
                         if !player.isAudioOnly {
                             let flipH = player.transform.flipH

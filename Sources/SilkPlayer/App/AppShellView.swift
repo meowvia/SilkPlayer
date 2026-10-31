@@ -87,6 +87,7 @@ public struct AppShellView: View {
                 } else {
                     VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
                         .edgesIgnoringSafeArea(.all)
+                        .allowsHitTesting(false)
 
                     EmptyPlaybackView(
                         onOpenFile: {
@@ -175,7 +176,7 @@ public struct AppShellView: View {
                     player.applyContentAspectRatioLock()
                 }
             } else {
-                player.hostWindow?.isMovableByWindowBackground = true
+                player.hostWindow?.isMovableByWindowBackground = false
                 player.hostWindow?.isOpaque = false
                 player.hostWindow?.backgroundColor = .clear
                 player.hostWindow?.contentAspectRatio = .zero
@@ -475,7 +476,7 @@ public struct AppShellView: View {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert([.resizable, .fullSizeContentView])
-        window.isMovableByWindowBackground = !isPlaying
+        window.isMovableByWindowBackground = false
         window.isOpaque = false
         window.backgroundColor = .clear
         window.level = AppSettings.shared.keepWindowOnTop ? .floating : .normal

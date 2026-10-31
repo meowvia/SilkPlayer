@@ -947,9 +947,6 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             targetW = targetH * baseAspect
         }
 
-        // 窗口尺寸上限与超宽屏幕自适应放行：
-        // 当窗口高度达到屏幕可用工作区极限时，若用户继续向两侧拉伸宽度，允许窗口放行扩展至屏幕最大宽度（内部黑色底座等比居中渲染）；
-        // 同样，当宽度达到屏幕极限时，允许高度向下扩展至屏幕最大高度。
         if targetH > maxSize.height {
             targetH = maxSize.height
             let maxAspectW = round(targetH * baseAspect)
