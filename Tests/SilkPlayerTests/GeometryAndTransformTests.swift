@@ -163,7 +163,7 @@ final class GeometryAndTransformTests: XCTestCase {
         }
     }
 
-    // MARK: - 4. Window Resize NaN Defense Invariants
+    // MARK: - 4. Window Resize & Fullscreen Destination Invariants
     @MainActor
     func testWindowResizeNaNDefense() {
         let delegate = PlayerWindowDelegate()
@@ -174,7 +174,17 @@ final class GeometryAndTransformTests: XCTestCase {
             defer: false
         )
 
-        // 1. windowWillResize with NaN or non-positive sizes must gracefully return current frame size without crashing
+        // 1. Verify delegate responds to destinationFrameToExitFullScreenForWindow: selector
+        let sel = NSSelectorFromString("destinationFrameToExitFullScreenForWindow:")
+        XCTAssertTrue(delegate.responds(to: sel), "Delegate must respond to destinationFrameToExitFullScreenForWindow:")
+
+        // 2. Pre-saved window frame must be restored accurately, never maximized to full screen
+        delegate.savePreFullScreenFrame(window: window)
+        let dest = delegate.destinationFrameToExitFullScreen(for: window)
+        XCTAssertEqual(dest.size.width, window.frame.width, accuracy: 1.0, "Exit destination width must match saved normal window")
+        XCTAssertEqual(dest.size.height, window.frame.height, accuracy: 1.0, "Exit destination height must match saved normal window")
+
+        // 3. windowWillResize with NaN or non-positive sizes must gracefully return current frame size without crashing
         let nanSize = NSSize(width: 1280, height: CGFloat.nan)
         let safeResized = delegate.windowWillResize(window, to: nanSize)
         XCTAssertFalse(safeResized.width.isNaN, "Resized width must not be NaN")

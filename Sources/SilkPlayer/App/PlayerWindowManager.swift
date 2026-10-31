@@ -665,6 +665,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public weak var player: (any PlayerControllable)?
     public private(set) var isMaximizingOrRestoring: Bool = false
     private var isAdjustingWindowFrame: Bool = false
+    public private(set) var preFullScreenFrame: NSRect? = nil
 
     public init(session: PlayerWindowSession? = nil, player: (any PlayerControllable)? = nil) {
         self.session = session
@@ -986,11 +987,64 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         return true
     }
 
+    public func savePreFullScreenFrame(window: NSWindow) {
+        let f = window.frame
+        guard !f.origin.x.isNaN && !f.origin.y.isNaN &&
+              !f.size.width.isNaN && !f.size.height.isNaN &&
+              f.size.width >= 320 && f.size.height >= 240 else {
+            return
+        }
+        if let screen = window.screen ?? NSScreen.main {
+            // Guard: If window is already taking the full physical screen, do not overwrite with fullscreen frame
+            if abs(f.width - screen.frame.width) < 2.0 && abs(f.height - screen.frame.height) < 2.0 {
+                return
+            }
+        }
+        self.preFullScreenFrame = f
+    }
+
     public func windowWillEnterFullScreen(_ notification: Notification) {
         if let window = notification.object as? NSWindow {
+            savePreFullScreenFrame(window: window)
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
         }
+    }
+
+    @objc(destinationFrameToExitFullScreenForWindow:)
+    public func destinationFrameToExitFullScreen(for window: NSWindow) -> NSRect {
+        let screen = window.screen ?? NSScreen.main
+        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+
+        // 1. If valid pre-fullscreen frame is remembered, clamp and restore back to normal window
+        if let saved = preFullScreenFrame,
+           !saved.origin.x.isNaN && !saved.origin.y.isNaN &&
+           !saved.size.width.isNaN && !saved.size.height.isNaN &&
+           saved.size.width >= 320 && saved.size.height >= 240 {
+            let clampedW = min(saved.size.width, screenFrame.width)
+            let clampedH = min(saved.size.height, screenFrame.height)
+            let clampedX = max(screenFrame.minX, min(screenFrame.maxX - clampedW, saved.origin.x))
+            let clampedY = max(screenFrame.minY, min(screenFrame.maxY - clampedH, saved.origin.y))
+            return NSRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
+        }
+
+        // 2. Fallback: return balanced centered normal window, strictly never maximize
+        if let player = self.player, player.videoWidth > 0, player.videoHeight > 0 {
+            let aspect = player.effectiveAspectRatio
+            let safeAspect = max(0.001, aspect.isNaN ? (16.0 / 9.0) : aspect)
+            let idealH = min(540.0, round(screenFrame.height * 0.60))
+            let idealW = round(idealH * safeAspect)
+            let cx = round(screenFrame.midX - idealW / 2)
+            let cy = round(screenFrame.midY - idealH / 2)
+            return NSRect(x: cx, y: cy, width: idealW, height: idealH)
+        }
+
+        return NSRect(
+            x: round(screenFrame.midX - 480),
+            y: round(screenFrame.midY - 270),
+            width: 960,
+            height: 540
+        )
     }
 
     public func windowDidEnterFullScreen(_ notification: Notification) {
@@ -1008,6 +1062,12 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public func windowDidExitFullScreen(_ notification: Notification) {
         player?.setFullscreenState(false)
         player?.applyContentAspectRatioLock()
+        if let window = notification.object as? NSWindow, let saved = preFullScreenFrame {
+            if abs(window.frame.width - saved.width) > 10 || abs(window.frame.height - saved.height) > 10 {
+                window.setFrame(saved, display: true, animate: false)
+            }
+        }
+        preFullScreenFrame = nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             if let player = self?.player, !player.isPlaying {
                 player.renderCurrentFrameImmediately()
