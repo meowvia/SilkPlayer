@@ -54,14 +54,18 @@ let package = Package(
             ),
         .executableTarget(
             name: "SilkPlayer",
-            dependencies: [
-                "Libavcodec",
-                "Libavformat",
-                "Libavutil",
-                "Libswresample",
-                "Libswscale",
-                "SilkCoreKit"
-            ],
+            dependencies: (ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true")
+                ? [
+                    "SilkCoreKit"
+                ]
+                : [
+                    "Libavcodec",
+                    "Libavformat",
+                    "Libavutil",
+                    "Libswresample",
+                    "Libswscale",
+                    "SilkCoreKit"
+                ],
             path: "Sources/SilkPlayer",
             swiftSettings: [
                 .swiftLanguageMode(.v6)
