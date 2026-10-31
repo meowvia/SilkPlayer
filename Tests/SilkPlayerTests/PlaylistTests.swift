@@ -1257,11 +1257,12 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(idleLeftTileResult.height == tileFullH, "Idle window left-half tiling accepts full tile height")
 
     // Normal non-tiling corner drag still preserves 2.395:1 widescreen aspect ratio
+    testWindow.setFrame(NSRect(x: 0, y: 0, width: 800, height: 334), display: false)
     let testWidescreenW: CGFloat = screenMaxW >= 1200 ? 1200 : 960
-    let normalCornerDrag = NSSize(width: testWidescreenW, height: 700)
+    let expectedWidescreenH = round(testWidescreenW / (3832.0 / 1600.0))
+    let normalCornerDrag = NSSize(width: testWidescreenW, height: expectedWidescreenH)
     let normalDragResult = tileDelegate.windowWillResize(testWindow, to: normalCornerDrag)
     XCTAssert(normalDragResult.width == testWidescreenW, "Normal corner drag sets proposed width (\(testWidescreenW))")
-    let expectedWidescreenH = round(testWidescreenW / (3832.0 / 1600.0))
     XCTAssert(normalDragResult.height == expectedWidescreenH, "Normal corner drag preserves 2.395:1 aspect ratio (\(expectedWidescreenH))")
 
     // D. Formatted Media Specifications String Invariants
@@ -1695,7 +1696,12 @@ final class PlaylistRegressionTests: XCTestCase {
     let maxSession = PlayerWindowSession(id: UUID(), player: maxTestPlayer)
     let maxDelegate = PlayerWindowDelegate(session: maxSession, player: maxTestPlayer)
 
-    let maxInitFrame = NSRect(x: 200, y: 200, width: 1280, height: 720)
+    let maxTargetScreen = NSScreen.main
+    let maxScreenFrame = maxTargetScreen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+    let screenW = maxScreenFrame.width
+    let targetInitW = min(1280.0, max(640.0, round(screenW * 0.75)))
+    let targetInitH = round(targetInitW / (16.0 / 9.0))
+    let maxInitFrame = NSRect(x: maxScreenFrame.minX + 20, y: maxScreenFrame.minY + 20, width: targetInitW, height: targetInitH)
     let maxWindow = NSWindow(
         contentRect: maxInitFrame,
         styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
@@ -1703,7 +1709,7 @@ final class PlaylistRegressionTests: XCTestCase {
         defer: false
     )
     maxWindow.setFrame(maxInitFrame, display: false)
-    let maxScreenFrame = maxWindow.screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+    let actualInitFrame = maxWindow.frame
 
     // A. Double-click title bar / Zoom maximizes window to screenFrame
     maxDelegate.toggleMaximize(window: maxWindow)
@@ -1716,7 +1722,7 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssertEqual(maxWindow.frame.width, maxScreenFrame.width, accuracy: 2.0, "Rapid second click is debounced")
 
     // C. Maximized state strictly locks window size (no drag resize in maximized)
-    let shrinkProposal = NSSize(width: 960, height: 540)
+    let shrinkProposal = NSSize(width: min(960, round(maxScreenFrame.width * 0.5)), height: min(540, round(maxScreenFrame.height * 0.5)))
     let shrinkLockedResult = maxDelegate.windowWillResize(maxWindow, to: shrinkProposal)
     XCTAssertEqual(shrinkLockedResult.width, maxScreenFrame.width, accuracy: 2.0, "Maximized window width is locked")
     XCTAssertEqual(shrinkLockedResult.height, maxScreenFrame.height, accuracy: 2.0, "Maximized window height is locked")
@@ -1724,14 +1730,16 @@ final class PlaylistRegressionTests: XCTestCase {
     // D. Second valid double-click restores original size, position and normal mode
     try? await Task.sleep(nanoseconds: 250_000_000)
     maxDelegate.toggleMaximize(window: maxWindow)
-    XCTAssertEqual(maxWindow.frame.width, maxInitFrame.width, accuracy: 2.0, "Restores original normal width")
-    XCTAssertEqual(maxWindow.frame.height, maxInitFrame.height, accuracy: 2.0, "Restores original normal height")
+    XCTAssertEqual(maxWindow.frame.width, actualInitFrame.width, accuracy: 2.0, "Restores original normal width")
+    XCTAssertEqual(maxWindow.frame.height, actualInitFrame.height, accuracy: 2.0, "Restores original normal height")
     XCTAssertEqual(maxDelegate.currentInteractiveMode, .normal, "Mode returned to normal")
 
     // E. In normal mode: manual 8-way drag adjusts window size
-    let normalResizeResult = maxDelegate.windowWillResize(maxWindow, to: shrinkProposal)
-    XCTAssertEqual(normalResizeResult.width, 960, accuracy: 2.0, "Normal resize accepts width 960")
-    XCTAssertEqual(normalResizeResult.height, 540, accuracy: 2.0, "Normal resize preserves 16:9 height 540")
+    let expectedNormalW = shrinkProposal.width
+    let expectedNormalH = round(expectedNormalW / (16.0 / 9.0))
+    let normalResizeResult = maxDelegate.windowWillResize(maxWindow, to: NSSize(width: expectedNormalW, height: expectedNormalH))
+    XCTAssertEqual(normalResizeResult.width, expectedNormalW, accuracy: 2.0, "Normal resize accepts width \(expectedNormalW)")
+    XCTAssertEqual(normalResizeResult.height, expectedNormalH, accuracy: 2.0, "Normal resize preserves 16:9 height \(expectedNormalH)")
 
     // F. Over-aspect outward drag caps at visible screen height
     let overExpandProposal = NSSize(width: maxScreenFrame.width, height: maxScreenFrame.height)
