@@ -870,8 +870,12 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         // 彻底杜绝强行改写单向尺寸导致的 AppKit / WindowServer 几何脱节死锁（避免边框锁死拉不动）！
         // 内部 MetalPlayerContainerView 已具有精准等比居中渲染与黑色底座，画面绝不拉伸变形。
         if window.inLiveResize {
-            let minWidth: CGFloat = max(320.0, minW)
-            let minHeight: CGFloat = max(240.0, minH)
+            let minWidth: CGFloat = 320.0
+            let minHeight: CGFloat = 240.0
+            if window.minSize.width > minWidth || window.minSize.height > minHeight {
+                window.minSize = NSSize(width: minWidth, height: minHeight)
+                window.contentMinSize = NSSize(width: minWidth, height: minHeight)
+            }
             let clampedW = max(minWidth, min(maxSize.width, frameSize.width))
             let clampedH = max(minHeight, min(maxSize.height, frameSize.height))
             return NSSize(width: round(clampedW), height: round(clampedH))
@@ -1233,6 +1237,8 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
+            window.resizeIncrements = NSSize(width: 1, height: 1)
+            window.contentResizeIncrements = NSSize(width: 1, height: 1)
         }
         isFullscreenTransitioning = true
         player?.isFullscreenTransitioning = true
@@ -1250,6 +1256,8 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         if let window = notification.object as? NSWindow {
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
+            window.resizeIncrements = NSSize(width: 1, height: 1)
+            window.contentResizeIncrements = NSSize(width: 1, height: 1)
             let screen = window.screen ?? NSScreen.main
             let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
 

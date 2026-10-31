@@ -182,6 +182,7 @@ public struct AppShellView: View {
                 player.hostWindow?.contentAspectRatio = .zero
                 player.hostWindow?.aspectRatio = .zero
                 player.hostWindow?.resizeIncrements = NSSize(width: 1, height: 1)
+                player.hostWindow?.contentResizeIncrements = NSSize(width: 1, height: 1)
                 let emptyMin = NSSize(width: 640, height: 360)
                 if let w = player.hostWindow, !w.styleMask.contains(.fullScreen), !player.isFullscreen {
                     w.minSize = emptyMin
@@ -499,6 +500,7 @@ public struct AppShellView: View {
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
             window.resizeIncrements = NSSize(width: 1, height: 1)
+            window.contentResizeIncrements = NSSize(width: 1, height: 1)
 
             if !Self.didCenterInitialColdLaunchWindow {
                 Self.didCenterInitialColdLaunchWindow = true

@@ -310,6 +310,77 @@ public final class MetalPlayerContainerView: NSView {
         super.mouseExited(with: event)
     }
 
+    override public func menu(for event: NSEvent) -> NSMenu? {
+        guard let player = playerCore, !player.isAudioOnly else { return nil }
+        let menu = NSMenu()
+
+        let rotateCW = NSMenuItem(
+            title: L10n.tr("Rotate 90° Clockwise", "顺时针旋转 90°"),
+            action: #selector(handleRotateCW(_:)),
+            keyEquivalent: ""
+        )
+        rotateCW.target = self
+        menu.addItem(rotateCW)
+
+        let rotateCCW = NSMenuItem(
+            title: L10n.tr("Rotate 90° Counterclockwise", "逆时针旋转 90°"),
+            action: #selector(handleRotateCCW(_:)),
+            keyEquivalent: ""
+        )
+        rotateCCW.target = self
+        menu.addItem(rotateCCW)
+
+        let resetRot = NSMenuItem(
+            title: L10n.tr("Reset Orientation", "复位"),
+            action: #selector(handleResetRotation(_:)),
+            keyEquivalent: ""
+        )
+        resetRot.target = self
+        menu.addItem(resetRot)
+
+        menu.addItem(.separator())
+
+        let flipH = NSMenuItem(
+            title: L10n.tr("Flip Horizontal", "水平翻转"),
+            action: #selector(handleFlipH(_:)),
+            keyEquivalent: ""
+        )
+        flipH.target = self
+        flipH.state = player.transform.flipH ? .on : .off
+        menu.addItem(flipH)
+
+        let flipV = NSMenuItem(
+            title: L10n.tr("Flip Vertical", "垂直翻转"),
+            action: #selector(handleFlipV(_:)),
+            keyEquivalent: ""
+        )
+        flipV.target = self
+        flipV.state = player.transform.flipV ? .on : .off
+        menu.addItem(flipV)
+
+        return menu
+    }
+
+    @objc private func handleRotateCW(_ sender: Any?) {
+        playerCore?.rotateVideo(clockwise: true)
+    }
+
+    @objc private func handleRotateCCW(_ sender: Any?) {
+        playerCore?.rotateVideo(clockwise: false)
+    }
+
+    @objc private func handleResetRotation(_ sender: Any?) {
+        playerCore?.resetVideoRotation()
+    }
+
+    @objc private func handleFlipH(_ sender: Any?) {
+        playerCore?.toggleFlipHorizontal()
+    }
+
+    @objc private func handleFlipV(_ sender: Any?) {
+        playerCore?.toggleFlipVertical()
+    }
+
     override public func hitTest(_ point: NSPoint) -> NSView? {
         guard let window = self.window, !window.styleMask.contains(.fullScreen) else {
             return super.hitTest(point)
@@ -423,17 +494,22 @@ public final class MetalPlayerContainerView: NSView {
             window.makeFirstResponder(self)
         }
 
-        // 双击播放区：全屏（严格契合状态机）
         if event.clickCount >= 2 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-            player.toggleFullscreen()
+            if isFullscreen {
+                player.toggleFullscreen()
+            } else {
+                self.handleDoubleClickAction()
+            }
             return
         }
 
-        // 画面区域单击：防抖触发播放/暂停，绝不在此启动窗口移动
-        canDragWindowFromCurrentMouseDown = false
+        // 画面区域（已排除四周 8pt 边框）单击：允许拖拽移动窗口（超过 3pt 调用 window.performDrag）或松开触发播放/暂停
+        canDragWindowFromCurrentMouseDown = !isFullscreen && !isMaximized
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
+        dragInitialWindowOrigin = window.frame.origin
+        isDraggingWindow = false
     }
 
     override public func mouseDragged(with event: NSEvent) {

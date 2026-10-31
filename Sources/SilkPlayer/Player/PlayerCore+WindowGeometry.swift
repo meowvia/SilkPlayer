@@ -77,8 +77,10 @@ extension PlayerCore {
 
     public func applyContentAspectRatioLock() {
         guard let window = hostWindow ?? NSApp.keyWindow else { return }
-        window.contentAspectRatio = NSSize(width: 0, height: 0)
-        window.aspectRatio = NSSize(width: 0, height: 0)
+        window.contentAspectRatio = .zero
+        window.aspectRatio = .zero
+        window.resizeIncrements = NSSize(width: 1, height: 1)
+        window.contentResizeIncrements = NSSize(width: 1, height: 1)
     }
 
     public func applyAudioWindowGeometry(animated: Bool = false) {

@@ -528,6 +528,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
             window.resizeIncrements = NSSize(width: 1, height: 1)
+            window.contentResizeIncrements = NSSize(width: 1, height: 1)
             let emptyMin = NSSize(width: 640, height: 360)
             window.minSize = emptyMin
             window.contentMinSize = emptyMin
