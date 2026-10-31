@@ -66,6 +66,7 @@ public final class MetalPlayerContainerView: NSView {
         guard b.width > 0, b.height > 0 else { return }
 
         view.wantsLayer = true
+        view.layer?.contentsGravity = .resizeAspect
 
         if let metalView = view as? SilkMetalRenderView, let p = playerCore {
             metalView.transformUniforms = MetalTransformUniforms(
@@ -83,9 +84,38 @@ public final class MetalPlayerContainerView: NSView {
             }
         }
 
-        view.autoresizingMask = [.width, .height]
+        // 精准计算保持视频原始比例的画面视口帧，居中悬浮于黑色底座之上：
+        // 确保全屏/窗口转场动画期间，Metal 纹理宽高比始终与视频完全一致，绝不发生画面拉伸或人物变形
+        var videoFrame = b
+        if let p = playerCore, p.videoWidth > 0, p.videoHeight > 0 {
+            let aspect = p.transform.displayAspectRatio(
+                rawWidth: p.displayVideoWidth > 0 ? p.displayVideoWidth : p.videoWidth,
+                rawHeight: p.displayVideoHeight > 0 ? p.displayVideoHeight : p.videoHeight,
+                ratioSetting: p.videoAspectRatio
+            )
+            let safeAspect = max(0.001, aspect)
+            let containerAspect = b.width / max(1.0, b.height)
+
+            if abs(containerAspect - safeAspect) > 0.002 {
+                if containerAspect > safeAspect {
+                    // 容器更宽（如 21:9 全屏播放 16:9 视频）：高度撑满，宽度等比居中
+                    let vH = b.height
+                    let vW = round(vH * safeAspect)
+                    let vX = round((b.width - vW) / 2.0)
+                    videoFrame = NSRect(x: vX, y: 0, width: vW, height: vH)
+                } else {
+                    // 容器更高（如宽屏播放竖屏视频）：宽度撑满，高度等比居中
+                    let vW = b.width
+                    let vH = round(vW / safeAspect)
+                    let vY = round((b.height - vH) / 2.0)
+                    videoFrame = NSRect(x: 0, y: vY, width: vW, height: vH)
+                }
+            }
+        }
+
+        view.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
         view.layer?.setAffineTransform(.identity)
-        view.frame = b
+        view.frame = videoFrame
     }
 
     // MARK: - Drag and Drop Destination
@@ -319,14 +349,7 @@ public final class MetalPlayerContainerView: NSView {
 
             // B. 顶栏区域
             if isTopBarArea {
-                let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
-                let isTrailingActionArea = loc.x >= b.width - 160.0
-                if isLeadingTrafficArea || isTrailingActionArea {
-                    super.mouseDown(with: event)
-                    return
-                }
-
-                // 顶栏中间区域双击：最大化/还原或退出全屏
+                // 顶栏双击：最大化/还原或退出全屏（涵盖红绿灯区域、标题胶囊及顶栏空白处）
                 if event.clickCount >= 2 {
                     pendingSingleClickWorkItem?.cancel()
                     pendingSingleClickWorkItem = nil
@@ -335,6 +358,13 @@ public final class MetalPlayerContainerView: NSView {
                     } else {
                         PlayerWindowManager.shared.toggleMaximize(window: window)
                     }
+                    return
+                }
+
+                let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
+                let isTrailingActionArea = loc.x >= b.width - 160.0
+                if isLeadingTrafficArea || isTrailingActionArea {
+                    super.mouseDown(with: event)
                     return
                 }
 
@@ -356,8 +386,8 @@ public final class MetalPlayerContainerView: NSView {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
 
-            // 沉浸态下顶部 28pt 仍允许窗口最大化
-            if !isFullscreen && !player.isHUDVisible && loc.y >= b.height - 28.0 {
+            // 沉浸态下顶部 52pt 顶栏区域双击仍触发窗口等比最大化/还原
+            if !isFullscreen && !player.isHUDVisible && loc.y >= b.height - 52.0 {
                 PlayerWindowManager.shared.toggleMaximize(window: window)
                 return
             }

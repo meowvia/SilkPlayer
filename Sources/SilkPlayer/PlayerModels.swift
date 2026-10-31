@@ -367,6 +367,23 @@ public enum PlayerGeometry: Sendable {
         }
     }
 
+    /// Maximum safe content size for window maximization:
+    /// Fills 100% of the visible desktop working bounds along the limiting dimension while strictly preserving video aspect ratio.
+    public static func maximizedContentSize(for aspect: CGFloat, screenVisibleSize: NSSize) -> NSSize {
+        let safeAspect = max(0.001, aspect)
+        let screenAspect = screenVisibleSize.width / max(1.0, screenVisibleSize.height)
+
+        if safeAspect >= screenAspect {
+            let targetW = screenVisibleSize.width
+            let targetH = min(screenVisibleSize.height, round(targetW / safeAspect))
+            return NSSize(width: round(targetW), height: round(targetH))
+        } else {
+            let targetH = screenVisibleSize.height
+            let targetW = min(screenVisibleSize.width, round(targetH * safeAspect))
+            return NSSize(width: round(targetW), height: round(targetH))
+        }
+    }
+
     /// Objective physical maximum safe content size preserving target aspect ratio and natural desktop breathing margins:
     /// - Vertical (aspect < 1.0): strictly capped at 85% of visible screen height to prevent jamming against menu bar and Dock
     /// - Horizontal (aspect >= 1.0): capped at 88% of visible screen bounds

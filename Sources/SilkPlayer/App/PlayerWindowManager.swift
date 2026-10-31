@@ -668,6 +668,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     private var isFullscreenTransitioning: Bool = false
     private var savedPreZoomFrame: NSRect? = nil
     private var savedPreFullScreenFrame: NSRect? = nil
+    private var lastToggleMaximizeTime: TimeInterval = 0
 
     public init(session: PlayerWindowSession? = nil, player: (any PlayerControllable)? = nil) {
         self.session = session
@@ -1033,14 +1034,18 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
     public func toggleMaximize(window: NSWindow) {
         guard !window.styleMask.contains(.fullScreen), !isFullscreenTransitioning else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastToggleMaximizeTime > 0.35 else { return }
+        lastToggleMaximizeTime = now
+
         let screen = window.screen ?? NSScreen.main
         guard let screenFrame = screen?.visibleFrame else { return }
 
         isMaximizingOrRestoring = true
         isAdjustingWindowFrame = true
-        defer {
-            isAdjustingWindowFrame = false
-            isMaximizingOrRestoring = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.isAdjustingWindowFrame = false
+            self?.isMaximizingOrRestoring = false
         }
 
         // A. 纯音频模式：固定 520x520 居中
@@ -1055,8 +1060,8 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
         // B. 闲置窗口（未加载视频）：在 screenFrame 与 960x540 之间双向切换
         guard let player = self.player, player.videoWidth > 0, player.videoHeight > 0 else {
-            let isCurrentlyMax = abs(window.frame.width - screenFrame.width) <= 24.0 &&
-                                 abs(window.frame.height - screenFrame.height) <= 24.0
+            let isCurrentlyMax = abs(window.frame.width - screenFrame.width) <= 16.0 &&
+                                 abs(window.frame.height - screenFrame.height) <= 16.0
             if isCurrentlyMax {
                 let restore = savedPreZoomFrame ?? NSRect(
                     x: round(screenFrame.midX - 480),
@@ -1073,19 +1078,19 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return
         }
 
-        // C. 视频播放态：计算当前屏幕可用区内的最大等比安全尺寸
+        // C. 视频播放态：计算当前屏幕可用区内的最大等比尺寸（100% 占满工作区长边，严格保持视频比例）
         let aspect = player.effectiveAspectRatio
-        let maxContent = PlayerGeometry.maximumSafeContentSize(for: aspect, screenVisibleSize: screenFrame.size)
+        let maxContent = PlayerGeometry.maximizedContentSize(for: aspect, screenVisibleSize: screenFrame.size)
         let maxW = round(maxContent.width)
         let maxH = round(maxContent.height)
 
-        let isCurrentlyAtMax = abs(window.frame.width - maxW) <= 24.0 &&
-                               abs(window.frame.height - maxH) <= 24.0
+        let isCurrentlyAtMax = abs(window.frame.width - maxW) <= 16.0 &&
+                               abs(window.frame.height - maxH) <= 16.0
 
         if isCurrentlyAtMax {
             let restoreFrame: NSRect
             if let saved = savedPreZoomFrame,
-               (abs(saved.width - maxW) > 24.0 || abs(saved.height - maxH) > 24.0) {
+               (abs(saved.width - maxW) > 16.0 || abs(saved.height - maxH) > 16.0) {
                 restoreFrame = saved
             } else {
                 let stdW: CGFloat

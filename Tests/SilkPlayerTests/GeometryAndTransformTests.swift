@@ -214,5 +214,19 @@ final class GeometryAndTransformTests: XCTestCase {
         XCTAssertEqual(ratioVertical, 9.0 / 16.0, accuracy: 0.02, "9:16 maximum safe size must preserve aspect ratio")
         XCTAssertLessThanOrEqual(maxVertical.width, screenSize.width * 0.88 + 1.0)
         XCTAssertLessThanOrEqual(maxVertical.height, screenSize.height * 0.85 + 1.0)
+
+        // 4. Aspect-preserved 100% maximized window content size calculations
+        let full169 = PlayerGeometry.maximizedContentSize(for: 16.0 / 9.0, screenVisibleSize: screenSize)
+        XCTAssertEqual(full169.width, 1920, "16:9 maximized size on 16:9 screen must fill full width")
+        XCTAssertEqual(full169.height, 1080, "16:9 maximized size on 16:9 screen must fill full height")
+
+        let ultrawideScreen = NSSize(width: 2752, height: 1027)
+        let ultrawide169 = PlayerGeometry.maximizedContentSize(for: 16.0 / 9.0, screenVisibleSize: ultrawideScreen)
+        XCTAssertEqual(ultrawide169.height, 1027, "16:9 on 21:9 screen must fill 100% visible height")
+        XCTAssertEqual(ultrawide169.width, 1826, "16:9 on 21:9 screen must be 1826 width")
+
+        let fullCinemascope = PlayerGeometry.maximizedContentSize(for: 2.39, screenVisibleSize: screenSize)
+        XCTAssertEqual(fullCinemascope.width, 1920, "2.39:1 on 16:9 screen must fill 100% width")
+        XCTAssertEqual(fullCinemascope.height, 803, "2.39:1 on 16:9 screen must be 803 height")
     }
 }

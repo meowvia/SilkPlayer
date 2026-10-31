@@ -221,7 +221,7 @@ public final class WindowDragCanvasView: NSView {
 
         if event.clickCount == 2 {
             isDragging = false
-            if loc.y >= b.height - 52.0 {
+            if loc.y >= b.height - 64.0 {
                 PlayerWindowManager.shared.toggleMaximize(window: window)
             } else if AppSettings.shared.doubleClickAction == .openFile {
                 PlayerWindowManager.shared.openFilePicker()
