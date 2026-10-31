@@ -337,52 +337,18 @@ public final class MetalPlayerContainerView: NSView {
                         return
                     }
 
-                    // Double-click strictly on the top bar:
-                    // - In windowed mode: toggle maximize to visibleFrame / restore
-                    // - In fullscreen mode: exit fullscreen back to maximized/windowed state
-                    if event.clickCount == 2 {
+                    // Top bar double-click: uniform double click action (toggle fullscreen)
+                    if event.clickCount >= 2 {
                         pendingSingleClickWorkItem?.cancel()
                         pendingSingleClickWorkItem = nil
-                        DispatchQueue.main.async { [weak self, weak window] in
-                            guard let self = self, let window = window else { return }
-                            if isFullscreen {
-                                self.playerCore?.toggleFullscreen()
-                            } else {
-                                PlayerWindowManager.shared.toggleMaximize(window: window)
-                            }
+                        DispatchQueue.main.async { [weak self] in
+                            self?.handleDoubleClickAction()
                         }
-                        return
-                    } else if event.clickCount > 2 {
-                        pendingSingleClickWorkItem?.cancel()
-                        pendingSingleClickWorkItem = nil
                         return
                     }
 
                     // Single click on top bar area: record anchor for dragging, never pass through to canvas
                     canDragWindowFromCurrentMouseDown = !isFullscreen
-                    dragInitialMouseScreenLocation = NSEvent.mouseLocation
-                    dragInitialWindowOrigin = window.frame.origin
-                    isDraggingWindow = false
-                    return
-                }
-            } else {
-                // 3. Immersive viewing state (HUD is hidden):
-                // Only top 28pt in windowed mode serves as native titlebar double-click maximize area
-                if !isFullscreen && loc.y >= b.height - 28.0 {
-                    if event.clickCount == 2 {
-                        pendingSingleClickWorkItem?.cancel()
-                        pendingSingleClickWorkItem = nil
-                        DispatchQueue.main.async { [weak window] in
-                            guard let window = window else { return }
-                            PlayerWindowManager.shared.toggleMaximize(window: window)
-                        }
-                        return
-                    } else if event.clickCount > 2 {
-                        pendingSingleClickWorkItem?.cancel()
-                        pendingSingleClickWorkItem = nil
-                        return
-                    }
-                    canDragWindowFromCurrentMouseDown = true
                     dragInitialMouseScreenLocation = NSEvent.mouseLocation
                     dragInitialWindowOrigin = window.frame.origin
                     isDraggingWindow = false

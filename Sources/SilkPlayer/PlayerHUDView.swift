@@ -133,18 +133,10 @@ public struct PlayerHUDView: View {
             }
         }
         .onChange(of: player.isFullscreen) { _, isFullscreen in
-            if isFullscreen {
-                registerUserActivity()
-            } else {
+            registerUserActivity()
+            if !isFullscreen {
                 showCursor()
                 player.setTrafficLightsHidden(false)
-                if !player.isPlaying {
-                    idleTask?.cancel()
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isControlsVisible = true
-                    }
-                    player.isHUDVisible = true
-                }
             }
         }
         .onChange(of: player.isAudioOnly) { _, isAudio in
