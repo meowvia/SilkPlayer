@@ -46,12 +46,15 @@ rm -rf "${HOME}/Applications/${APP_NAME}.app"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "/Applications/${APP_NAME}.app" 2>/dev/null || true
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "${HOME}/Applications/${APP_NAME}.app" 2>/dev/null || true
 
-# 5. Clean transient runtime caches
-echo "-> Cleaning application support and runtime caches..."
+# 5. Clean transient runtime caches & preferences
+echo "-> Cleaning application support, preferences and runtime caches..."
+defaults delete "${BUNDLE_ID}" 2>/dev/null || true
+rm -f "${HOME}/Library/Preferences/${BUNDLE_ID}.plist"
 rm -rf "${HOME}/Library/Application Support/${APP_NAME}"
 rm -rf "${HOME}/Library/Caches/${APP_NAME}"
 rm -rf "${HOME}/Library/Saved Application State/${BUNDLE_ID}.savedState"
 rm -rf "${HOME}/Library/Saved Application State/${APP_NAME}.savedState"
+killall Dock 2>/dev/null || true
 
 echo "=================================================="
 echo " SilkPlayer installation bundle removed cleanly!"

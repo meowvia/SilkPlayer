@@ -114,6 +114,9 @@ find "${PROJECT_DIR}/.build" -path "*/Release/*.bundle" -type d | while read -r 
     cp -R "${b}" "${APP_BUNDLE}/Contents/Resources/"
 done
 
+# Strip all extended attributes before codesigning to ensure clean LaunchServices & Gatekeeper indexing
+xattr -cr "${APP_BUNDLE}"
+
 # 4. Ad-hoc inside-out code signing
 echo "[4/6] Applying ad-hoc inside-out codesign with entitlements..."
 for fw in "${APP_BUNDLE}/Contents/Frameworks"/*.framework; do

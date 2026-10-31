@@ -7,6 +7,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp?.setActivationPolicy(.regular)
+        if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let iconImg = NSImage(contentsOf: iconURL) {
+            NSApp?.applicationIconImage = iconImg
+        }
         NSApp?.activate(ignoringOtherApps: true)
         let args = CommandLine.arguments.dropFirst()
         var validFiles: [String] = []
