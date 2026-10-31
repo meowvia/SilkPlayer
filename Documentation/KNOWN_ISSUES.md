@@ -16,7 +16,7 @@
 | ISSUE-006 | 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步 | 引擎解复用与同步 / SilkCoreKit (SilkPlayerEngine) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
 | ISSUE-007 | 暂停态音频拖拽 Seek 时钟偏移与硬件采样单调累加缺陷 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | High | 已修复 (v1.3.0) | v1.2.0 |
 | ISSUE-008 | macOS Dock 栏图标边缘暗部与 Dock 底色融合导致视觉偏小 | 视觉设计与图标 / SilkPlayer (Resources) | Medium | 已修复 (v1.3.0) | v1.2.0 |
-| ISSUE-009 | 外置存储 (ORICO/USB/SMB/NAS) 播放 4K 10-bit HEVC 拖拽后音画不同步与饥饿重锚失效缺陷 | 解复用与主时钟同步 / SilkCoreKit (SilkAudioEngine & SilkPlayerEngine) | High | 方案已设计待落地 | v1.3.0 |
+| ISSUE-009 | 外置存储 (ORICO/USB/SMB/NAS) 播放 4K 10-bit HEVC 拖拽后音画不同步与饥饿重锚失效缺陷 | 解复用与主时钟同步 / SilkCoreKit (SilkAudioEngine & SilkPlayerEngine) | High | 已修复 (v1.4.0) | v1.3.0 |
 
 ---
 
@@ -511,3 +511,12 @@ public enum WindowPresentationState: Equatable {
    - 验证切换后播放器时间轴无不可逆漂移；
 3. **全量自动化测试基线**：
    - 运行 `./scripts/run_tests.sh` 确保现存 54 项全量测试 100% 保持全绿通过。
+
+---
+
+### 6. 实施与闭环验证 (v1.4.0)
+- **SilkAudioEngine**: `isStarved` 饥饿状态机自愈重锚逻辑已实装并合并；
+- **PlayerCore**: `ProcessInfo.processInfo.beginActivity([.idleDisplaySleepDisabled, .userInitiated])` 播放防休眠断言已接入；
+- **SilkPlayerEngine**: 音轨切换强制微距 Seek 重定位已合入；
+- **测试结果**: 自动化回归套件全量通过，外置存储播放 4K HEVC 拖拽音画失步与断流饥饿重锚问题已彻底闭环解决。
+
