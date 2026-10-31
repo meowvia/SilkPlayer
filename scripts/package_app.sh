@@ -12,6 +12,11 @@ cd "${PROJECT_DIR}"
 APP_NAME="SilkPlayer"
 VERSION="${1:-1.0.0}"
 ARCH="${2:-arm64}"
+BUILD_APP_ONLY=false
+
+if [[ "${3:-}" == "--app-only" || "${3:-}" == "--no-dmg" ]]; then
+    BUILD_APP_ONLY=true
+fi
 
 if [[ "${ARCH}" != "arm64" && "${ARCH}" != "x86_64" ]]; then
     echo "Error: Unsupported architecture '${ARCH}'. Supported: arm64, x86_64." >&2
@@ -24,14 +29,20 @@ DMG_NAME="${APP_NAME}-${VERSION}-${ARCH}.dmg"
 DMG_PATH="${BUILD_DIR}/${DMG_NAME}"
 STAGING_DIR="${BUILD_DIR}/dmg_staging"
 
-echo "=================================================="
-echo " Packaging ${APP_NAME} (${VERSION} - ${ARCH}) -> ${DMG_PATH}"
-echo "=================================================="
+if [[ "${BUILD_APP_ONLY}" == "true" ]]; then
+    echo "=================================================="
+    echo " Assembling ${APP_NAME}.app (${VERSION} - ${ARCH}) [DMG Skipped]"
+    echo "=================================================="
+else
+    echo "=================================================="
+    echo " Packaging ${APP_NAME} (${VERSION} - ${ARCH}) -> ${DMG_PATH}"
+    echo "=================================================="
+fi
 
 # 1. Clean previous build staging and destination DMG
 echo "[1/6] Cleaning previous build artifacts..."
 
-if [[ "${VERSION}" != *"-test"* && -f "${DMG_PATH}" ]]; then
+if [[ "${BUILD_APP_ONLY}" != "true" && "${VERSION}" != *"-test"* && -f "${DMG_PATH}" ]]; then
     echo "Error: Release ${DMG_PATH} already exists! To prevent accidental overwrite of finalized versions, delete it manually or bump version." >&2
     exit 1
 fi
@@ -133,6 +144,14 @@ codesign --force --sign - \
 
 echo "Codesign verification:"
 codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
+
+if [[ "${BUILD_APP_ONLY}" == "true" ]]; then
+    echo "=================================================="
+    echo " App bundle assembled and signed successfully (DMG creation bypassed)!"
+    echo " App: ${APP_BUNDLE}"
+    echo "=================================================="
+    exit 0
+fi
 
 # 5. Build DMG Installer
 echo "[5/6] Constructing DMG installer..."
