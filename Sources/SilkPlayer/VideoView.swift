@@ -291,7 +291,7 @@ public final class MetalPlayerContainerView: NSView {
         guard let window = self.window, !window.styleMask.contains(.fullScreen) else {
             return super.hitTest(point)
         }
-        let loc = self.convert(point, from: superview)
+        let loc = (superview != nil) ? self.convert(point, from: superview) : self.convert(point, from: nil)
         let b = bounds
         let margin: CGFloat = 8.0
         // 窗口四周边框 8pt 留给 AppKit 原生调整大小手柄（显示双向缩放箭头并响应边框拖拽伸缩）
@@ -335,49 +335,47 @@ public final class MetalPlayerContainerView: NSView {
         }
 
         guard let player = playerCore else { return }
-        let topBarHeight: CGFloat = isFullscreen ? 52.0 : 64.0
+        let topBarHeight: CGFloat = isFullscreen ? 56.0 : 78.0
         let isTopBarArea = (loc.y >= b.height - topBarHeight)
         let isBottomControlArea = (loc.y <= 112.0)
 
-        // 2. HUD 激活态路由
-        if player.isHUDVisible {
-            // A. 底部控制栏：禁止任何画布暂停与窗口拖拽
-            if isBottomControlArea {
-                canDragWindowFromCurrentMouseDown = false
+        // 2. 顶栏区域全局判定（无论是 HUD 激活态还是沉浸观影态）
+        if isTopBarArea {
+            // A. 顶栏双击：窗口模式下 100% 触发铺满最大化 / 还原切换，绝不进入全屏；全屏模式下双击顶栏退出全屏
+            if event.clickCount >= 2 {
+                pendingSingleClickWorkItem?.cancel()
+                pendingSingleClickWorkItem = nil
+                if isFullscreen {
+                    player.toggleFullscreen()
+                } else {
+                    PlayerWindowManager.shared.toggleMaximize(window: window)
+                }
                 return
             }
 
-            // B. 顶栏区域
-            if isTopBarArea {
-                // 顶栏双击：最大化/还原或退出全屏（涵盖红绿灯区域、标题胶囊及顶栏空白处）
-                if event.clickCount >= 2 {
-                    pendingSingleClickWorkItem?.cancel()
-                    pendingSingleClickWorkItem = nil
-                    if isFullscreen {
-                        player.toggleFullscreen()
-                    } else {
-                        PlayerWindowManager.shared.toggleMaximize(window: window)
-                    }
-                    return
-                }
-
-                let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
-                let isTrailingActionArea = loc.x >= b.width - 160.0
-                if isLeadingTrafficArea || isTrailingActionArea {
-                    super.mouseDown(with: event)
-                    return
-                }
-
-                // 顶栏单击：允许拖拽窗口
-                canDragWindowFromCurrentMouseDown = !isFullscreen
-                dragInitialMouseScreenLocation = NSEvent.mouseLocation
-                dragInitialWindowOrigin = window.frame.origin
-                isDraggingWindow = false
+            // B. 顶栏红绿灯与右侧操作按钮：HUD 激活时放行给子视图按钮响应
+            let isLeadingTrafficArea = !isFullscreen && loc.x <= 72.0
+            let isTrailingActionArea = loc.x >= b.width - 160.0
+            if (isLeadingTrafficArea || isTrailingActionArea) && player.isHUDVisible {
+                super.mouseDown(with: event)
                 return
             }
+
+            // C. 顶栏空白处/标题胶囊处单击：允许拖拽移动窗口
+            canDragWindowFromCurrentMouseDown = !isFullscreen
+            dragInitialMouseScreenLocation = NSEvent.mouseLocation
+            dragInitialWindowOrigin = window.frame.origin
+            isDraggingWindow = false
+            return
         }
 
-        // 3. 沉浸态（纯画面观影）或中间视频画面区域路由
+        // 3. 底部控制栏区域：禁止任何画布暂停与窗口拖拽
+        if isBottomControlArea && player.isHUDVisible {
+            canDragWindowFromCurrentMouseDown = false
+            return
+        }
+
+        // 4. 中间视频画面核心视口区域
         if window.firstResponder !== self {
             window.makeFirstResponder(self)
         }
@@ -385,18 +383,11 @@ public final class MetalPlayerContainerView: NSView {
         if event.clickCount >= 2 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-
-            // 沉浸态下顶部 52pt 顶栏区域双击仍触发窗口等比最大化/还原
-            if !isFullscreen && !player.isHUDVisible && loc.y >= b.height - 52.0 {
-                PlayerWindowManager.shared.toggleMaximize(window: window)
-                return
-            }
-
             self.handleDoubleClickAction()
             return
         }
 
-        // 单击准备与画布拖拽授权
+        // 画面区域单击：准备拖拽窗口或延时触发播放/暂停
         canDragWindowFromCurrentMouseDown = !isFullscreen
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
         dragInitialWindowOrigin = window.frame.origin

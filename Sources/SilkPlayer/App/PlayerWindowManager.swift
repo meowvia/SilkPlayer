@@ -643,6 +643,11 @@ private final class WindowObserverView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // 纯生命周期感知视图，100% 严禁拦截任何鼠标事件，确保窗口边框原生缩放手柄正常工作
+        return nil
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let window = self.window, window !== lastKnownWindow {
