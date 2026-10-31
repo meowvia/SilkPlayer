@@ -206,7 +206,31 @@ public struct WindowDragGestureView: NSViewRepresentable {
 }
 
 public final class WindowDragCanvasView: NSView {
+    private var initialMouseLocation: NSPoint = .zero
+
+    override public func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        return true
+    }
+
     override public func mouseDown(with event: NSEvent) {
-        window?.performDrag(with: event)
+        guard let window = self.window else { return }
+        if event.clickCount == 2 {
+            let loc = self.convert(event.locationInWindow, from: nil)
+            if loc.y >= bounds.height - 52.0 {
+                PlayerWindowManager.shared.toggleMaximize(window: window)
+            } else if AppSettings.shared.doubleClickAction == .openFile {
+                PlayerWindowManager.shared.openFilePicker()
+            }
+            return
+        }
+        initialMouseLocation = NSEvent.mouseLocation
+    }
+
+    override public func mouseDragged(with event: NSEvent) {
+        guard let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
+        let current = NSEvent.mouseLocation
+        if hypot(current.x - initialMouseLocation.x, current.y - initialMouseLocation.y) > 3.0 {
+            window.performDrag(with: event)
+        }
     }
 }

@@ -10,6 +10,7 @@ public final class MetalPlayerContainerView: NSView {
     private var dragInitialMouseScreenLocation: NSPoint = .zero
     private var dragInitialWindowOrigin: NSPoint = .zero
     private var isDraggingWindow: Bool = false
+    private var canDragWindowFromCurrentMouseDown: Bool = false
     private var pendingSingleClickWorkItem: DispatchWorkItem?
     private var lastMouseActivityTime: TimeInterval = 0
 
@@ -265,6 +266,7 @@ public final class MetalPlayerContainerView: NSView {
         }
 
         let isFullscreen = window.styleMask.contains(.fullScreen)
+        canDragWindowFromCurrentMouseDown = false
 
         // 0. Window Edge Resize Zone Protection:
         // When in windowed mode, clicks within 8pt of the window outer border belong to AppKit
@@ -302,44 +304,6 @@ public final class MetalPlayerContainerView: NSView {
                 }
             }
 
-            // 2. Interactive control areas pass-through:
-            // Top information bar interactive buttons:
-            // Trailing quick action buttons (Close, Pin, Inspector) occupy trailing ~160pt.
-            // Leading traffic lights occupy leading 70pt in windowed mode.
-            let isTopBarArea = (loc.y >= b.height - 44.0)
-            if isTopBarArea {
-                let isTrailingActionArea = loc.x >= b.width - 160.0
-                let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
-                if player.isHUDVisible && (isTrailingActionArea || isLeadingTrafficArea) {
-                    super.mouseDown(with: event)
-                    return
-                }
-
-                // Double-click strictly on the top bar:
-                // - In windowed mode: toggle maximize to visibleFrame / restore
-                // - In fullscreen mode: exit fullscreen back to maximized/windowed state
-                if event.clickCount == 2 {
-                    pendingSingleClickWorkItem?.cancel()
-                    pendingSingleClickWorkItem = nil
-                    if isFullscreen {
-                        player.toggleFullscreen()
-                    } else {
-                        PlayerWindowManager.shared.toggleMaximize(window: window)
-                    }
-                    return
-                } else if event.clickCount > 2 {
-                    pendingSingleClickWorkItem?.cancel()
-                    pendingSingleClickWorkItem = nil
-                    return
-                }
-
-                // Single click on top bar area: record anchor for dragging, never pass through to canvas
-                dragInitialMouseScreenLocation = NSEvent.mouseLocation
-                dragInitialWindowOrigin = window.frame.origin
-                isDraggingWindow = false
-                return
-            }
-
             // Right-side drawers (playlist or inspector)
             if activeDrawerWidth > 0 && loc.x >= b.width - activeDrawerWidth {
                 super.mouseDown(with: event)
@@ -351,22 +315,85 @@ public final class MetalPlayerContainerView: NSView {
                 super.mouseDown(with: event)
                 return
             }
+
+            let topBarHeight: CGFloat = isFullscreen ? 52.0 : 64.0
+            let isTopBarArea = (loc.y >= b.height - topBarHeight)
+            let isBottomControlArea = (loc.y <= 112.0)
+
+            // 2. Control bar regions handling when HUD is visible:
+            if player.isHUDVisible {
+                // A. Bottom control area: never drag window, never toggle canvas play/pause
+                if isBottomControlArea {
+                    canDragWindowFromCurrentMouseDown = false
+                    return
+                }
+
+                // B. Top information bar
+                if isTopBarArea {
+                    let isTrailingActionArea = loc.x >= b.width - 160.0
+                    let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
+                    if isTrailingActionArea || isLeadingTrafficArea {
+                        super.mouseDown(with: event)
+                        return
+                    }
+
+                    // Double-click strictly on the top bar:
+                    // - In windowed mode: toggle maximize to visibleFrame / restore
+                    // - In fullscreen mode: exit fullscreen back to maximized/windowed state
+                    if event.clickCount == 2 {
+                        pendingSingleClickWorkItem?.cancel()
+                        pendingSingleClickWorkItem = nil
+                        if isFullscreen {
+                            player.toggleFullscreen()
+                        } else {
+                            PlayerWindowManager.shared.toggleMaximize(window: window)
+                        }
+                        return
+                    } else if event.clickCount > 2 {
+                        pendingSingleClickWorkItem?.cancel()
+                        pendingSingleClickWorkItem = nil
+                        return
+                    }
+
+                    // Single click on top bar area: record anchor for dragging, never pass through to canvas
+                    canDragWindowFromCurrentMouseDown = !isFullscreen
+                    dragInitialMouseScreenLocation = NSEvent.mouseLocation
+                    dragInitialWindowOrigin = window.frame.origin
+                    isDraggingWindow = false
+                    return
+                }
+            } else {
+                // 3. Immersive viewing state (HUD is hidden):
+                // Only top 28pt in windowed mode serves as native titlebar double-click maximize area
+                if !isFullscreen && loc.y >= b.height - 28.0 {
+                    if event.clickCount == 2 {
+                        pendingSingleClickWorkItem?.cancel()
+                        pendingSingleClickWorkItem = nil
+                        PlayerWindowManager.shared.toggleMaximize(window: window)
+                        return
+                    } else if event.clickCount > 2 {
+                        pendingSingleClickWorkItem?.cancel()
+                        pendingSingleClickWorkItem = nil
+                        return
+                    }
+                    canDragWindowFromCurrentMouseDown = true
+                    dragInitialMouseScreenLocation = NSEvent.mouseLocation
+                    dragInitialWindowOrigin = window.frame.origin
+                    isDraggingWindow = false
+                    return
+                }
+            }
         }
 
         if window.firstResponder !== self {
             window.makeFirstResponder(self)
         }
 
-        // 3. Double-Click Handling (strictly on playback canvas):
-        let isBottomControlArea = (loc.y <= 112.0)
+        // 4. Double-Click Handling (strictly on playback canvas):
         if event.clickCount == 2 {
             // Cancel pending single click task immediately - 100% zero playback glitch or stutter!
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-
-            if isBottomControlArea {
-                return
-            }
             self.handleDoubleClickAction()
             return
         } else if event.clickCount > 2 {
@@ -376,14 +403,15 @@ public final class MetalPlayerContainerView: NSView {
             return
         }
 
-        // 4. Record mouse-down anchor for potential canvas window dragging
+        // 5. Record mouse-down anchor for potential canvas window dragging
+        canDragWindowFromCurrentMouseDown = !isFullscreen
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
         dragInitialWindowOrigin = window.frame.origin
         isDraggingWindow = false
     }
 
     override public func mouseDragged(with event: NSEvent) {
-        guard let window = self.window, !window.styleMask.contains(.fullScreen) else {
+        guard canDragWindowFromCurrentMouseDown, let window = self.window, !window.styleMask.contains(.fullScreen) else {
             super.mouseDragged(with: event)
             return
         }
@@ -423,12 +451,14 @@ public final class MetalPlayerContainerView: NSView {
             return
         }
 
-        // 2. Control bar regions protection: clicks in top bar or bottom controls never toggle canvas play/pause
+        // 2. Control bar regions protection: clicks in top bar or bottom controls never toggle canvas play/pause when HUD is visible
         let loc = self.convert(event.locationInWindow, from: nil)
         let b = bounds
+        let isFullscreen = window?.styleMask.contains(.fullScreen) ?? false
+        let topBarHeight: CGFloat = isFullscreen ? 52.0 : 64.0
         let isBottomControlArea = (loc.y <= 112.0)
-        let isTopControlArea = (loc.y >= b.height - 44.0)
-        if isBottomControlArea || isTopControlArea {
+        let isTopControlArea = (loc.y >= b.height - topBarHeight)
+        if playerCore?.isHUDVisible == true && (isBottomControlArea || isTopControlArea) {
             return
         }
 

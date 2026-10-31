@@ -1300,12 +1300,33 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         resetHUDAutoHideTimer()
     }
 
+    public func isMouseInProtectedHUDZone() -> Bool {
+        if isPlaylistDrawerVisible || isInspectorVisible || isVolumeHUDVisible {
+            return true
+        }
+        guard let window = hostWindow, window.isKeyWindow,
+              let contentView = window.contentView else { return false }
+        let mouseLoc = window.mouseLocationOutsideOfEventStream
+        let loc = contentView.convert(mouseLoc, from: nil)
+        let b = contentView.bounds
+        guard b.contains(loc) else { return false }
+        let topBarH: CGFloat = isFullscreen ? 52.0 : 64.0
+        if loc.y <= 112.0 || loc.y >= b.height - topBarH {
+            return true
+        }
+        return false
+    }
+
     private func resetHUDAutoHideTimer() {
         hudAutoHideTimer?.invalidate()
         guard isPlaying, !isAudioOnly else { return }
         hudAutoHideTimer = Timer.scheduledTimer(withTimeInterval: 1.8, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self, self.isPlaying, !self.isScrubbing, !self.isAudioOnly else { return }
+                if self.isMouseInProtectedHUDZone() {
+                    self.resetHUDAutoHideTimer()
+                    return
+                }
                 self.isHUDVisible = false
             }
         }

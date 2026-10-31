@@ -54,12 +54,16 @@ extension Notification.Name {
 
     public var isAlwaysOnTop: Bool {
         get { (window?.level == .floating) }
-        set { window?.level = newValue ? .floating : .normal }
+        set {
+            window?.level = newValue ? .floating : .normal
+            AppSettings.shared.keepWindowOnTop = newValue
+        }
     }
 
     public func toggleAlwaysOnTop() {
-        guard let window = window else { return }
-        window.level = (window.level == .floating) ? .normal : .floating
+        let next = !AppSettings.shared.keepWindowOnTop
+        AppSettings.shared.keepWindowOnTop = next
+        PlayerWindowManager.shared.applyAlwaysOnTop(next)
     }
 
     public func closePlaybackOrReturnToEmpty() {
@@ -355,11 +359,13 @@ extension Notification.Name {
     }
 
     public var isAlwaysOnTop: Bool {
-        activeSession(preferKey: true)?.isAlwaysOnTop ?? false
+        AppSettings.shared.keepWindowOnTop
     }
 
     public func toggleAlwaysOnTop() {
-        activeSession(preferKey: true)?.toggleAlwaysOnTop()
+        let next = !AppSettings.shared.keepWindowOnTop
+        AppSettings.shared.keepWindowOnTop = next
+        applyAlwaysOnTop(next)
     }
 
     public func fitActiveWindow(scale: Double) {

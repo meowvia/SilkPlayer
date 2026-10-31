@@ -92,8 +92,10 @@ public class SilkMetalRenderView: NSView {
     public var videoRotation: Int = 0
     public var currentPixelBuffer: CVPixelBuffer? = nil
     public var isWindowOccluded: Bool = false
+    public var isQualityEnhancementEnabled: Bool = false
 
     public func renderCurrentFrameImmediately() {}
+    public func updateMetalGeometryAndRedraw() {}
     public func updateColorPipeline() {}
     public func clear() {}
 }
@@ -301,6 +303,7 @@ public final class SilkPlayerLayer: NSObject, SilkEngineDelegate {
     public var isAudioOnly: Bool { player.isAudioOnly }
     public var attachedPictureData: Data? { player.attachedPictureData }
     public var audioRhythmBands: [Float] { player.audioRhythmBands }
+    public var isQualityEnhancementEnabled: Bool = false
 
     public init(options: SilkPlayerOptions = SilkPlayerOptions(), delegate: (any SilkPlayerLayerDelegate)? = nil) {
         self.options = options

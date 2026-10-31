@@ -207,23 +207,6 @@ public struct PlayerCommands: Commands {
                     }
                 }
             }
-
-            Divider()
-
-            // Audio Delay Adjustments
-            Menu(L10n.audioDelay) {
-                Button(L10n.increaseAudioDelay) {
-                    activePlayer?.adjustAudioDelay(by: 0.1)
-                }
-                Button(L10n.decreaseAudioDelay) {
-                    activePlayer?.adjustAudioDelay(by: -0.1)
-                }
-                Divider()
-                Button(L10n.resetAudioDelay) {
-                    activePlayer?.resetAudioDelay()
-                }
-            }
-            .disabled(!isLoaded)
         }
 
         // MARK: - Subtitle Menu
@@ -366,43 +349,6 @@ public struct PlayerCommands: Commands {
                 }
                 Button("270°" + (rot == 270 ? " ✓" : "")) {
                     activePlayer?.setExactRotation(270)
-                }
-            }
-            .disabled(!isLoaded || activePlayer?.isAudioOnly == true)
-
-            Divider()
-
-            Button(L10n.toggleDeband + (activePlayer?.isDebandEnabled == true ? " ✓" : "")) {
-                activePlayer?.toggleDeband()
-            }
-            .keyboardShortcut("d", modifiers: [])
-            .disabled(!isLoaded || activePlayer?.isAudioOnly == true)
-
-            // Picture Adjustments
-            Menu(L10n.pictureAdjustments) {
-                Button(L10n.increaseSharpen) {
-                    activePlayer?.adjustSharpen(by: 0.1)
-                }
-                Button(L10n.decreaseSharpen) {
-                    activePlayer?.adjustSharpen(by: -0.1)
-                }
-                Divider()
-                Button(L10n.increaseContrast) {
-                    activePlayer?.adjustContrast(by: 5.0)
-                }
-                Button(L10n.decreaseContrast) {
-                    activePlayer?.adjustContrast(by: -5.0)
-                }
-                Divider()
-                Button(L10n.increaseBrightness) {
-                    activePlayer?.adjustBrightness(by: 5.0)
-                }
-                Button(L10n.decreaseBrightness) {
-                    activePlayer?.adjustBrightness(by: -5.0)
-                }
-                Divider()
-                Button(L10n.resetPictureAdjustments) {
-                    activePlayer?.resetPictureAdjustments()
                 }
             }
             .disabled(!isLoaded || activePlayer?.isAudioOnly == true)

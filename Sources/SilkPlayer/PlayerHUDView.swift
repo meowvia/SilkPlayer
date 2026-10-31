@@ -780,20 +780,11 @@ public struct PlayerHUDView: View {
                     return event
                 }
 
-                if event.type == .scrollWheel, let hostWin = p.hostWindow {
-                    // Allow playlist and inspector drawers to handle internal scroll
-                    if p.isPlaylistDrawerVisible && event.locationInWindow.x > (hostWin.frame.width - 340) {
-                        return event
-                    }
-                    if p.isInspectorVisible && event.locationInWindow.x > (hostWin.frame.width - 340) {
-                        return event
-                    }
-
-                    MainActor.assumeIsolated {
-                        self.handleScrollWheelEvent(event: event, player: p)
+                if event.type == .scrollWheel {
+                    Task { @MainActor in
                         self.registerUserActivity()
                     }
-                    return nil
+                    return event
                 }
 
                 if event.type == .mouseMoved {
@@ -808,37 +799,6 @@ public struct PlayerHUDView: View {
                     self.registerUserActivity()
                 }
                 return event
-            }
-        }
-    }
-
-    @MainActor
-    private func handleScrollWheelEvent(event: NSEvent, player: PlayerCore) {
-        switch AppSettings.shared.scrollWheelAction {
-        case .volume:
-            if event.hasPreciseScrollingDeltas {
-                let delta = Double(event.scrollingDeltaY)
-                if abs(delta) > 0.08 {
-                    let step = delta * 0.18
-                    player.adjustVolume(by: step)
-                }
-            } else {
-                let stepSign = event.deltaY > 0 ? 1.0 : (event.deltaY < 0 ? -1.0 : 0.0)
-                if stepSign != 0 {
-                    player.handleScrollWheelVolume(deltaY: stepSign)
-                }
-            }
-        case .seek:
-            if event.hasPreciseScrollingDeltas {
-                let delta = Double(event.scrollingDeltaY) * 0.12
-                if abs(delta) > 0.05 {
-                    player.step(seconds: delta)
-                }
-            } else {
-                let stepSign = event.deltaY > 0 ? 1.0 : (event.deltaY < 0 ? -1.0 : 0.0)
-                if stepSign != 0 {
-                    player.step(seconds: stepSign * AppSettings.shared.shortSeekStep)
-                }
             }
         }
     }
@@ -891,22 +851,28 @@ public struct PlayerHUDView: View {
             return
         }
         idleTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_800_000_000) // 1.8 seconds idle timeout
-            guard !Task.isCancelled else { return }
-            guard !player.isScrubbing else { return } // Guard against delayed execution while scrubbing
-            // Do not auto-hide HUD or hide cursor if settings window is open, modal dialog is active, or player window is not key
-            guard let hostWin = player.hostWindow, hostWin.isKeyWindow else { return }
-            guard NSApp.modalWindow == nil else { return }
-            if PlayerWindowManager.shared.settingsWindow != nil {
-                return
-            }
-            if player.isPlaying || player.isFullscreen {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isControlsVisible = false
+            while true {
+                try? await Task.sleep(nanoseconds: 1_800_000_000) // 1.8 seconds idle timeout
+                guard !Task.isCancelled else { return }
+                guard !player.isScrubbing else { return } // Guard against delayed execution while scrubbing
+                // Do not auto-hide HUD or hide cursor if settings window is open, modal dialog is active, or player window is not key
+                guard let hostWin = player.hostWindow, hostWin.isKeyWindow else { return }
+                guard NSApp.modalWindow == nil else { return }
+                if PlayerWindowManager.shared.settingsWindow != nil {
+                    return
                 }
-                player.isHUDVisible = false
-                player.setTrafficLightsHidden(true)
-                hideCursor()
+                if player.isMouseInProtectedHUDZone() {
+                    continue
+                }
+                if player.isPlaying || player.isFullscreen {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isControlsVisible = false
+                    }
+                    player.isHUDVisible = false
+                    player.setTrafficLightsHidden(true)
+                    hideCursor()
+                }
+                break
             }
         }
     }
