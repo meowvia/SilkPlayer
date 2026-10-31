@@ -8,7 +8,7 @@
 Dedicated to lightweight performance, speed, ease of use, and a pure local viewing experience.
 
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-black?style=flat-square&logo=apple)](https://www.apple.com/macos/)
-[![Arch](https://img.shields.io/badge/Arch-Apple%20Silicon-orange?style=flat-square&logo=apple)](https://www.apple.com/mac/)
+[![Arch](https://img.shields.io/badge/Arch-Apple%20Silicon%20%7C%20Intel-orange?style=flat-square&logo=apple)](https://www.apple.com/mac/)
 [![Swift 6](https://img.shields.io/badge/Swift-6.0-F05138?style=flat-square&logo=swift)](https://swift.org)
 [![Tests](https://img.shields.io/badge/Tests-480%20Passed-brightgreen?style=flat-square)](scripts/run_tests.sh)
 [![License](https://img.shields.io/badge/License-LGPL--3.0-blue?style=flat-square)](LICENSE)
@@ -28,7 +28,7 @@ Dedicated to lightweight performance, speed, ease of use, and a pure local viewi
 
 ## Features
 
-- **Hardware-Accelerated Playback (SilkPlayback Engine)**: Optimized for Apple Silicon, delivering smooth playback for common video formats with strict audio-video sync.
+- **Hardware-Accelerated Playback (SilkPlayback Engine)**: Optimized for Apple Silicon (M-series) and Intel Macs, delivering smooth playback for common video formats with strict audio-video sync.
 - **Dolby Vision Color Mapping (SilkRender Pipeline)**: Custom tone-mapping for streaming single-layer Dolby Vision (Profile 5), eliminating the purplish "Thanos tint" seen in some players for clear, natural visuals.
 - **Timeline Hover Preview (SilkThumb Engine)**: Instant thumbnail and chapter previews while scrubbing the progress bar.
 - **Universal Codecs & Subtitles**: Supports HEVC, H.264, AV1, ProRes and more, with audio track switching and automatic subtitle loading.
@@ -89,8 +89,8 @@ SilkCoreKit represents a significant investment of spare time and effort in debu
 
 ## System Requirements
 
-- **Operating System**: macOS 14.0 (Sonoma) or macOS 15.0+ (Sequoia)
-- **Architecture**: Apple Silicon (M-series chips)
+- **Operating System**: macOS 14.0 (Sonoma) or macOS 15.0+ (Sequoia) *(Legacy macOS 12 Monterey compatibility build available in Releases)*
+- **Architecture**: Universal support for Apple Silicon (M-series) & Intel (x86_64) Macs
 
 ---
 
@@ -102,7 +102,9 @@ brew install --cask meowvia/tap/silkplayer
 ```
 
 ### Option 2: Download DMG Installer
-1. Download `SilkPlayer-1.0.0.dmg` from the [Releases](https://github.com/meowvia/SilkPlayer/releases) page;
+1. Download the installer matching your Mac's architecture from the [Releases](https://github.com/meowvia/SilkPlayer/releases) page:
+   - **Apple Silicon (M1/M2/M3/M4)**: `SilkPlayer-1.4.0-arm64.dmg`
+   - **Intel Mac (x86_64)**: `SilkPlayer-1.4.0-x86_64.dmg`
 2. Open the disk image and drag **SilkPlayer.app** to your **Applications** folder;
 3. **If macOS warns "App is damaged" or "Unidentified Developer"** (standard Gatekeeper behavior for non-notarized open-source software), run this single command in Terminal:
    ```bash
@@ -121,8 +123,9 @@ cd SilkPlayer
 # Run automated tests
 ./scripts/run_tests.sh
 
-# Package release DMG
-./scripts/package_app.sh
+# Package release DMG for arm64 or x86_64
+./scripts/package_app.sh 1.4.0 arm64
+./scripts/package_app.sh 1.4.0 x86_64
 ```
 
 > **Build Notes**:

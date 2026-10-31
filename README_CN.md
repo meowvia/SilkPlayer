@@ -8,7 +8,7 @@
 专注轻量、速度、易用性与纯净的本地观影体验
 
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-black?style=flat-square&logo=apple)](https://www.apple.com/macos/)
-[![架构](https://img.shields.io/badge/架构-Apple%20Silicon-orange?style=flat-square&logo=apple)](https://www.apple.com/mac/)
+[![架构](https://img.shields.io/badge/架构-Apple%20Silicon%20%7C%20Intel-orange?style=flat-square&logo=apple)](https://www.apple.com/mac/)
 [![Swift 6](https://img.shields.io/badge/Swift-6.0-F05138?style=flat-square&logo=swift)](https://swift.org)
 [![自动化测试](https://img.shields.io/badge/自动化测试-480%20项全部通过-brightgreen?style=flat-square)](scripts/run_tests.sh)
 [![开源协议](https://img.shields.io/badge/许可证-LGPL--3.0-blue?style=flat-square)](LICENSE)
@@ -28,7 +28,7 @@
 
 ## 功能特性
 
-- **硬件加速回放 (SilkPlayback Engine)**：专为 Apple Silicon 优化，支持市面常见片源流畅播放，音画严格同步。
+- **硬件加速回放 (SilkPlayback Engine)**：深度优化 Apple Silicon（M 系列芯片）与 Intel Mac 双架构，支持市面常见片源流畅播放，音画严格同步。
 - **杜比视界色彩重塑 (SilkRender Pipeline)**：优化流媒体单层杜比视界（Profile 5）色彩映射，告别一些播放器呈现“灭霸”的紫色画面。
 - **时间轴悬停预览 (SilkThumb Engine)**：鼠标滑过进度条即时浮现剧情缩略图与章节，找画面清晰直观。
 - **格式通吃与外挂字幕**：支持 HEVC、H.264、AV1、ProRes 等主流编码，多音轨自由切换，外挂字幕自动加载。
@@ -89,8 +89,8 @@ SilkCoreKit 花了大量业余时间和心血调试、打磨出来的底层积�
 
 ## 系统环境要求
 
-- **操作系统**：macOS 14.0 (Sonoma) 或 macOS 15.0+ (Sequoia)
-- **硬件架构**：Apple Silicon (M 系列芯片)
+- **操作系统**：macOS 14.0 (Sonoma) 或 macOS 15.0+ (Sequoia) *(Releases 页面提供兼容 macOS 12 Monterey 的独立测试包)*
+- **硬件架构**：双架构原生支持（Apple Silicon M 系列芯片 与 Intel x86_64 架构）
 
 ---
 
@@ -101,10 +101,12 @@ SilkCoreKit 花了大量业余时间和心血调试、打磨出来的底层积�
 brew install --cask meowvia/tap/silkplayer
 ```
 
-### 方式二：DMG 手动安装
-1. 从 [Releases](https://github.com/meowvia/SilkPlayer/releases) 页面下载最新的 `SilkPlayer-1.0.0.dmg`；
+### 方式二：下载 DMG 安装包（双架构原生支持）
+1. 从 [Releases](https://github.com/meowvia/SilkPlayer/releases) 页面根据您的 Mac 芯片架构下载对应安装包：
+   - **Apple Silicon (M1/M2/M3/M4)**：`SilkPlayer-1.4.0-arm64.dmg`
+   - **Intel Mac (x86_64)**：`SilkPlayer-1.4.0-x86_64.dmg`
 2. 双击打开并将 **SilkPlayer.app** 拖入「应用程序」文件夹；
-3. **若打开时提示“已损坏”或“无法验证开发者”**（开源应用未向苹果购买高额证书），在终端执行一行命令即可秒开：
+3. **若打开时提示“已损坏”或“无法验证开发者”**（开源应用未向苹果购买商业证书的安全保护提示），在终端执行一行命令即可秒开：
    ```bash
    xattr -cr /Applications/SilkPlayer.app
    ```
@@ -121,8 +123,9 @@ cd SilkPlayer
 # 运行全套自动化测试套件
 ./scripts/run_tests.sh
 
-# 编译打包最终发布版 DMG (产物输出至 build/ 目录)
-./scripts/package_app.sh
+# 编译打包最终发布版 DMG（根据目标架构指定 arm64 或 x86_64）
+./scripts/package_app.sh 1.4.0 arm64
+./scripts/package_app.sh 1.4.0 x86_64
 ```
 
 > **构建说明**：
