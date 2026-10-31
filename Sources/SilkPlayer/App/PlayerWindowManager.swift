@@ -1020,18 +1020,15 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         isAdjustingWindowFrame = true
 
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.22
+            context.duration = 0.18
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             context.allowsImplicitAnimation = true
             window.animator().setFrame(targetFrame, display: true)
-        }, completionHandler: { [weak self, weak window] in
+        }, completionHandler: { [weak self] in
             MainActor.assumeIsolated {
                 guard let self = self else { return }
                 self.isMaximizingOrRestoring = false
                 self.isAdjustingWindowFrame = false
-                if let window = window {
-                    window.setFrame(targetFrame, display: true, animate: false)
-                }
                 if let player = self.player, !player.isPlaying {
                     player.renderCurrentFrameImmediately()
                 }

@@ -178,7 +178,7 @@ public struct AppShellView: View {
                 player.hostWindow?.aspectRatio = .zero
                 player.hostWindow?.resizeIncrements = NSSize(width: 1, height: 1)
                 let emptyMin = NSSize(width: 640, height: 360)
-                if let w = player.hostWindow {
+                if let w = player.hostWindow, !w.styleMask.contains(.fullScreen), !player.isFullscreen {
                     w.minSize = emptyMin
                     w.contentMinSize = emptyMin
                     let screen = w.screen ?? NSScreen.main

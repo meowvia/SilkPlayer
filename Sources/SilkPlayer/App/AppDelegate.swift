@@ -50,7 +50,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             if targetWindow.isMiniaturized {
                 targetWindow.deminiaturize(nil)
             }
-            targetWindow.makeKeyAndOrderFront(nil)
+            if !targetWindow.styleMask.contains(.fullScreen) {
+                targetWindow.makeKeyAndOrderFront(nil)
+            }
         }
         return true
     }

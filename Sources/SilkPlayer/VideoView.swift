@@ -332,6 +332,12 @@ public final class MetalPlayerContainerView: NSView {
                     pendingSingleClickWorkItem = nil
                     return
                 }
+
+                // Single click on top bar area: record anchor for dragging, never pass through to canvas
+                dragInitialMouseScreenLocation = NSEvent.mouseLocation
+                dragInitialWindowOrigin = window.frame.origin
+                isDraggingWindow = false
+                return
             }
 
             // Right-side drawers (playlist or inspector)
@@ -352,25 +358,14 @@ public final class MetalPlayerContainerView: NSView {
         }
 
         // 3. Double-Click Handling (strictly on playback canvas):
+        let isBottomControlArea = (loc.y <= 112.0)
         if event.clickCount == 2 {
             // Cancel pending single click task immediately - 100% zero playback glitch or stutter!
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
 
-            if let player = playerCore, player.isHUDVisible {
-                let isBottomControlArea = (loc.y <= 112.0)
-                let isTopControlArea = (loc.y >= b.height - 44.0)
-                if isBottomControlArea {
-                    return
-                }
-                if isTopControlArea {
-                    if isFullscreen {
-                        player.toggleFullscreen()
-                    } else {
-                        PlayerWindowManager.shared.toggleMaximize(window: window)
-                    }
-                    return
-                }
+            if isBottomControlArea {
+                return
             }
             self.handleDoubleClickAction()
             return
@@ -381,7 +376,7 @@ public final class MetalPlayerContainerView: NSView {
             return
         }
 
-        // 4. Record mouse-down anchor for potential window dragging
+        // 4. Record mouse-down anchor for potential canvas window dragging
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
         dragInitialWindowOrigin = window.frame.origin
         isDraggingWindow = false
@@ -428,15 +423,13 @@ public final class MetalPlayerContainerView: NSView {
             return
         }
 
-        // 2. If click landed in HUD interactive control bars (bottom controls or top bar) while HUD is visible:
-        if let player = playerCore, player.isHUDVisible {
-            let loc = self.convert(event.locationInWindow, from: nil)
-            let b = bounds
-            let isBottomControlArea = (loc.y <= 112.0)
-            let isTopControlArea = (loc.y >= b.height - 44.0)
-            if isBottomControlArea || isTopControlArea {
-                return
-            }
+        // 2. Control bar regions protection: clicks in top bar or bottom controls never toggle canvas play/pause
+        let loc = self.convert(event.locationInWindow, from: nil)
+        let b = bounds
+        let isBottomControlArea = (loc.y <= 112.0)
+        let isTopControlArea = (loc.y >= b.height - 44.0)
+        if isBottomControlArea || isTopControlArea {
+            return
         }
 
         // 3. Stationary in-place click on canvas:
