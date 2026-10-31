@@ -1195,9 +1195,12 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     public func toggleFullscreen() {
         guard let window = hostWindow ?? NSApp.keyWindow else { return }
-        if !isFullscreen {
+        guard !isFullscreenTransitioning else { return }
+        if !isFullscreen && !window.styleMask.contains(.fullScreen) {
             isPlaylistDrawerVisible = false
+            (window.delegate as? PlayerWindowDelegate)?.capturePreFullScreenFrameIfNeeded(window: window)
         }
+        isFullscreenTransitioning = true
         window.toggleFullScreen(nil)
     }
 

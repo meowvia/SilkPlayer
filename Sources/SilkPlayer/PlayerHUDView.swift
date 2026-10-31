@@ -99,10 +99,12 @@ public struct PlayerHUDView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, player.isFullscreen ? 16 : 30)
                     Spacer()
+                        .allowsHitTesting(false)
                     bottomControls(tier: tier, width: availableWidth)
                         .opacity(isHUDActive ? 1.0 : 0.0)
                         .allowsHitTesting(isHUDActive)
                 }
+                .allowsHitTesting(isHUDActive)
                 .animation(.easeInOut(duration: 0.22), value: isHUDActive)
                 .animation(.spring(response: 0.25, dampingFraction: 0.8), value: tier)
             }
@@ -158,15 +160,17 @@ public struct PlayerHUDView: View {
                 specBadgesRow(tier: tier)
                     .padding(.leading, player.isFullscreen ? 0 : (tier == .minimal ? 54 : 70)) // Avoid traffic lights in windowed mode
                     .opacity(isHUDActive ? 1.0 : 0.0)
-                    .allowsHitTesting(isHUDActive)
+                    .allowsHitTesting(false)
 
                 Spacer()
+                    .allowsHitTesting(false)
 
                 // Trailing: Optional Fullscreen Clock + Quick Action Buttons
                 HStack(spacing: 8) {
                     if player.isFullscreen && settings.showLocalTimeInFullscreen {
                         FullscreenClockView()
                             .opacity(isHUDActive ? 1.0 : 0.60)
+                            .allowsHitTesting(false)
                     }
 
                     // Trailing Quick Action Buttons: Pin, Inspector, Close

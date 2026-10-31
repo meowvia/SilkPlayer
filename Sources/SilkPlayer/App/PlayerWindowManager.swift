@@ -665,7 +665,9 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public weak var player: (any PlayerControllable)?
     public private(set) var isMaximizingOrRestoring: Bool = false
     private var isAdjustingWindowFrame: Bool = false
+    private var isFullscreenTransitioning: Bool = false
     private var savedPreZoomFrame: NSRect? = nil
+    private var savedPreFullScreenFrame: NSRect? = nil
 
     public init(session: PlayerWindowSession? = nil, player: (any PlayerControllable)? = nil) {
         self.session = session
@@ -673,19 +675,55 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         super.init()
     }
 
+    public func capturePreFullScreenFrameIfNeeded(window: NSWindow) {
+        guard !window.styleMask.contains(.fullScreen), !isFullscreenTransitioning else { return }
+        let f = window.frame
+        guard !f.origin.x.isNaN, !f.origin.y.isNaN, !f.width.isNaN, !f.height.isNaN,
+              f.width >= 320, f.height >= 240 else { return }
+        if let screen = window.screen ?? NSScreen.main {
+            // 严禁把超出可用工作区尺寸（如物理全屏帧 2752x1152）保存为退出全屏恢复帧
+            if f.height > screen.visibleFrame.height + 2.0 || f.width > screen.frame.width + 2.0 {
+                return
+            }
+            if abs(f.width - screen.frame.width) <= 2.0 && abs(f.height - screen.frame.height) <= 2.0 {
+                return
+            }
+        }
+        savedPreFullScreenFrame = f
+    }
+
     /// Checks whether the target frameSize matches macOS native window tiling / split-screen geometry
     /// (e.g. left/right half screen in macOS 15 Sequoia, quarter screen, top/bottom half)
-    private func isTilingOrSnapSize(_ size: NSSize, screenFrame: NSRect) -> Bool {
+    private func isTilingOrSnapSize(_ size: NSSize, screen: NSScreen?, screenFrame: NSRect) -> Bool {
+        // 1. 严禁将物理全屏尺寸（screen.frame.size）误判为分屏！
+        if let fullScreenSize = screen?.frame.size {
+            if abs(size.width - fullScreenSize.width) <= 8.0 && abs(size.height - fullScreenSize.height) <= 8.0 {
+                return false
+            }
+        }
+        // 2. 严禁将整个可用工作区尺寸（最大化）误判为半屏/四分之一分屏！
         let tolerance: CGFloat = 40.0
-        // 1. Full height vertical split (e.g. Left half, Right half, 1/3, 2/3 column tiles)
-        if abs(size.height - screenFrame.height) <= tolerance {
+        if abs(size.width - screenFrame.width) <= tolerance && abs(size.height - screenFrame.height) <= tolerance {
+            return false
+        }
+        // 3. 任何高度超过可用工作区高度的尺寸（例如全屏过渡帧）绝不是分屏！
+        if size.height > screenFrame.height + 2.0 || size.width > screenFrame.width + 2.0 {
+            return false
+        }
+
+        // A. 左右分屏（高度等于可用区高度，宽度在 30% ~ 70% 之间）
+        if abs(size.height - screenFrame.height) <= tolerance &&
+           size.width >= screenFrame.width * 0.30 &&
+           size.width <= screenFrame.width * 0.70 {
             return true
         }
-        // 2. Full width horizontal split (e.g. Top half, Bottom half)
-        if abs(size.width - screenFrame.width) <= tolerance {
+        // B. 上下分屏（宽度等于可用区宽度，高度在 30% ~ 70% 之间）
+        if abs(size.width - screenFrame.width) <= tolerance &&
+           size.height >= screenFrame.height * 0.30 &&
+           size.height <= screenFrame.height * 0.70 {
             return true
         }
-        // 3. Quarter-screen grid tiling (Half width & Half height)
+        // C. 四分之一分屏（宽高均约为可用区的 50%）
         if abs(size.width - screenFrame.width * 0.5) <= tolerance &&
            abs(size.height - screenFrame.height * 0.5) <= tolerance {
             return true
@@ -704,8 +742,19 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return window.frame.size
         }
 
-        // In fullscreen mode, during maximize/restore animation, or during zoom to screen size:
-        if window.styleMask.contains(.fullScreen) || isMaximizingOrRestoring || frameSize == screenFrame.size {
+        // 在全屏模式、全屏进出过渡期、等比最大化/还原期间、或缩放至屏幕可用工作区尺寸时，100% 原样放行！
+        if window.styleMask.contains(.fullScreen) ||
+           isFullscreenTransitioning ||
+           player?.isFullscreen == true ||
+           player?.isFullscreenTransitioning == true ||
+           isMaximizingOrRestoring ||
+           frameSize == screenFrame.size {
+            return frameSize
+        }
+
+        // 如果非用户手动拖拽且传入的是整个物理屏幕尺寸（AppKit 全屏调用首帧），直接放行
+        if !window.inLiveResize, let fullSz = screen?.frame.size,
+           abs(frameSize.width - fullSz.width) <= 2.0 && abs(frameSize.height - fullSz.height) <= 2.0 {
             return frameSize
         }
 
@@ -730,23 +779,21 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
             var targetSide: CGFloat
             if deltaH > deltaW && deltaH > 1.0 {
-                // Dragging top or bottom edge: scale by vertical delta
                 targetSide = frameSize.height
             } else {
-                // Dragging left or right edge, or corner: scale by horizontal delta
                 targetSide = frameSize.width
             }
 
-            // Clamp to [minAudioSize, maxAudioDimension] preserving strict 1:1 square
             targetSide = max(minAudioSize, min(maxAudioDimension, targetSide))
             return NSSize(width: round(targetSide), height: round(targetSide))
         }
 
         guard let player = self.player, (player.videoWidth > 0 || player.videoHeight > 0) else {
-            // Idle window without loaded video:
-            // Never trigger snap tiling during live manual dragging
-            if !window.inLiveResize && isTilingOrSnapSize(frameSize, screenFrame: screenFrame) {
-                return frameSize
+            if !window.inLiveResize && isTilingOrSnapSize(frameSize, screen: screen, screenFrame: screenFrame) {
+                return NSSize(
+                    width: min(maxSize.width, frameSize.width),
+                    height: min(maxSize.height, frameSize.height)
+                )
             }
             return NSSize(
                 width: max(idleMinW, min(maxSize.width, frameSize.width)),
@@ -761,12 +808,12 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
         // Video-Adaptive Split Screen Tiling ("播放自适应分屏"):
         // Only trigger when NOT in interactive live resize dragging
-        if !window.inLiveResize && isTilingOrSnapSize(frameSize, screenFrame: screenFrame) {
+        if !window.inLiveResize && isTilingOrSnapSize(frameSize, screen: screen, screenFrame: screenFrame) {
             let tolerance: CGFloat = 40.0
 
             // 1. Full-height vertical split (e.g. Left half, Right half, 1/3, 2/3 column tiles)
             if abs(frameSize.height - screenFrame.height) <= tolerance {
-                let targetW = frameSize.width
+                let targetW = min(maxSize.width, frameSize.width)
                 let adaptiveH = round(targetW / max(0.001, baseAspect))
                 if adaptiveH <= screenFrame.height {
                     return NSSize(width: round(targetW), height: round(adaptiveH))
@@ -779,20 +826,20 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
             // 2. Full-width horizontal split (e.g. Top half, Bottom half)
             if abs(frameSize.width - screenFrame.width) <= tolerance {
-                let targetH = frameSize.height
+                let targetH = min(maxSize.height, frameSize.height)
                 let adaptiveW = round(targetH * baseAspect)
                 if adaptiveW <= screenFrame.width {
                     return NSSize(width: round(adaptiveW), height: round(targetH))
                 } else {
                     let targetW = screenFrame.width
-                    let targetH = min(frameSize.height, round(targetW / max(0.001, baseAspect)))
+                    let targetH = min(maxSize.height, round(targetW / max(0.001, baseAspect)))
                     return NSSize(width: round(targetW), height: round(targetH))
                 }
             }
 
             // 3. Quarter-screen grid tiling (Half width & Half height)
-            let boxW = frameSize.width
-            let boxH = frameSize.height
+            let boxW = min(maxSize.width, frameSize.width)
+            let boxH = min(maxSize.height, frameSize.height)
             let boxAspect = boxW / max(1.0, boxH)
             if baseAspect >= boxAspect {
                 let targetW = boxW
@@ -813,16 +860,13 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         var targetH: CGFloat
 
         if deltaH > deltaW && deltaH > 1.0 {
-            // Primarily dragging top or bottom edge
             targetH = frameSize.height
             targetW = targetH * baseAspect
         } else {
-            // Primarily dragging left/right edge or corner
             targetW = frameSize.width
             targetH = targetW / max(0.001, baseAspect)
         }
 
-        // Clamp to minimum size while strictly preserving aspect ratio
         if targetW < minW {
             targetW = minW
             targetH = targetW / max(0.001, baseAspect)
@@ -832,7 +876,6 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             targetW = targetH * baseAspect
         }
 
-        // Clamp to screen maximum visible bounds while strictly preserving aspect ratio
         if targetW > maxSize.width {
             targetW = maxSize.width
             targetH = round(targetW / max(0.001, baseAspect))
@@ -848,37 +891,38 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         targetW = min(targetW, maxSize.width)
         targetH = min(targetH, maxSize.height)
 
+        if targetW.isNaN || targetH.isNaN || targetW <= 0 || targetH <= 0 {
+            return frameSize
+        }
+
         return NSSize(width: round(targetW), height: round(targetH))
     }
 
     public func windowDidEndLiveResize(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
               !window.styleMask.contains(.fullScreen),
-              !window.isZoomed,
+              !isFullscreenTransitioning,
               let player = self.player else { return }
 
-        // User manually finished live resizing: reset pre-zoom frame so future maximize works cleanly
         savedPreZoomFrame = nil
 
-        // Perform boundary safety adjustment once user finishes dragging
         let screen = window.screen ?? NSScreen.main
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         var curFrame = window.frame
         var adjusted = false
 
-        // 1. Strict dock invasion defense: ensure bottom of window never sinks below screenFrame.minY
+        if curFrame.height > screenFrame.height {
+            curFrame.size.height = screenFrame.height
+            adjusted = true
+        }
         if curFrame.minY < screenFrame.minY {
             curFrame.origin.y = screenFrame.minY
             adjusted = true
         }
-
-        // 2. Strict menu bar invasion defense: ensure top of window never exceeds screenFrame.maxY
         if curFrame.maxY > screenFrame.maxY {
             curFrame.origin.y = max(screenFrame.minY, screenFrame.maxY - curFrame.height)
             adjusted = true
         }
-
-        // 3. Screen horizontal boundaries clamp
         if curFrame.minX < screenFrame.minX {
             curFrame.origin.x = screenFrame.minX
             adjusted = true
@@ -889,8 +933,12 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         }
 
         if adjusted {
+            isAdjustingWindowFrame = true
             window.setFrame(curFrame, display: true, animate: false)
+            isAdjustingWindowFrame = false
         }
+
+        capturePreFullScreenFrameIfNeeded(window: window)
 
         let contentSize = window.contentRect(forFrameRect: window.frame).size
         if player.videoWidth > 0 || player.videoHeight > 0 {
@@ -899,19 +947,35 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowDidResize(_ notification: Notification) {
+        guard !isFullscreenTransitioning,
+              !isMaximizingOrRestoring,
+              !isAdjustingWindowFrame,
+              player?.isFullscreen != true,
+              player?.isFullscreenTransitioning != true else { return }
+
         guard let window = notification.object as? NSWindow,
               !window.styleMask.contains(.fullScreen) else { return }
 
-        // If the window is in interactive live resize by user mouse dragging,
-        // do not mutate frame or fight with AppKit's live tracking loop.
         if window.inLiveResize {
             return
         }
+
+        isAdjustingWindowFrame = true
+        defer { isAdjustingWindowFrame = false }
 
         let screen = window.screen ?? NSScreen.main
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         var curFrame = window.frame
         var adjusted = false
+
+        // 0. 高度防溢出保护：窗口高度绝不能超过可用工作区高度（防止侵入 Dock）
+        if curFrame.height > screenFrame.height {
+            curFrame.size.height = screenFrame.height
+            if let player = self.player, !player.isAudioOnly, player.videoWidth > 0, player.videoHeight > 0 {
+                curFrame.size.width = min(screenFrame.width, round(curFrame.size.height * player.effectiveAspectRatio))
+            }
+            adjusted = true
+        }
 
         // 1. Strict dock invasion defense: bottom of window must never sink below screenFrame.minY
         if curFrame.minY < screenFrame.minY {
@@ -968,60 +1032,9 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func toggleMaximize(window: NSWindow) {
-        guard !window.styleMask.contains(.fullScreen) else { return }
+        guard !window.styleMask.contains(.fullScreen), !isFullscreenTransitioning else { return }
         let screen = window.screen ?? NSScreen.main
         guard let screenFrame = screen?.visibleFrame else { return }
-
-        // 1. 若当前已处于等比最大化状态，平滑还原至预存普通尺寸
-        if let saved = savedPreZoomFrame {
-            isMaximizingOrRestoring = true
-            isAdjustingWindowFrame = true
-            defer {
-                isAdjustingWindowFrame = false
-                isMaximizingOrRestoring = false
-            }
-            window.setFrame(saved, display: true, animate: true)
-            savedPreZoomFrame = nil
-            return
-        }
-
-        // 2. 记录当前窗口普通尺寸
-        savedPreZoomFrame = window.frame
-
-        // 3. 闲置窗口（未加载视频）：居中至标准尺寸
-        guard let player = self.player, player.videoWidth > 0, player.videoHeight > 0 else {
-            if player?.isAudioOnly == true {
-                let sz: CGFloat = 520
-                let cx = round(screenFrame.minX + (screenFrame.width - sz) / 2)
-                let cy = round(screenFrame.minY + (screenFrame.height - sz) / 2)
-                let targetFrame = NSRect(x: cx, y: cy, width: sz, height: sz)
-                isMaximizingOrRestoring = true
-                isAdjustingWindowFrame = true
-                defer {
-                    isAdjustingWindowFrame = false
-                    isMaximizingOrRestoring = false
-                }
-                window.setFrame(targetFrame, display: true, animate: true)
-                return
-            }
-            isMaximizingOrRestoring = true
-            isAdjustingWindowFrame = true
-            defer {
-                isAdjustingWindowFrame = false
-                isMaximizingOrRestoring = false
-            }
-            window.setFrame(screenFrame, display: true, animate: true)
-            return
-        }
-
-        // 4. 视频播放态：计算保持长宽比的最大安全尺寸
-        let aspect = player.effectiveAspectRatio
-        let maxContent = PlayerGeometry.maximumSafeContentSize(for: aspect, screenVisibleSize: screenFrame.size)
-        let targetW = round(maxContent.width)
-        let targetH = round(maxContent.height)
-        let targetX = round(screenFrame.midX - targetW / 2)
-        let targetY = round(screenFrame.midY - targetH / 2)
-        let targetFrame = NSRect(x: targetX, y: targetY, width: targetW, height: targetH)
 
         isMaximizingOrRestoring = true
         isAdjustingWindowFrame = true
@@ -1029,7 +1042,76 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             isAdjustingWindowFrame = false
             isMaximizingOrRestoring = false
         }
-        window.setFrame(targetFrame, display: true, animate: true)
+
+        // A. 纯音频模式：固定 520x520 居中
+        if player?.isAudioOnly == true {
+            let sz: CGFloat = 520
+            let cx = round(screenFrame.midX - sz / 2)
+            let cy = round(screenFrame.midY - sz / 2)
+            let targetFrame = NSRect(x: cx, y: cy, width: sz, height: sz)
+            window.setFrame(targetFrame, display: true, animate: true)
+            return
+        }
+
+        // B. 闲置窗口（未加载视频）：在 screenFrame 与 960x540 之间双向切换
+        guard let player = self.player, player.videoWidth > 0, player.videoHeight > 0 else {
+            let isCurrentlyMax = abs(window.frame.width - screenFrame.width) <= 24.0 &&
+                                 abs(window.frame.height - screenFrame.height) <= 24.0
+            if isCurrentlyMax {
+                let restore = savedPreZoomFrame ?? NSRect(
+                    x: round(screenFrame.midX - 480),
+                    y: round(screenFrame.midY - 270),
+                    width: 960,
+                    height: 540
+                )
+                savedPreZoomFrame = nil
+                window.setFrame(restore, display: true, animate: true)
+            } else {
+                savedPreZoomFrame = window.frame
+                window.setFrame(screenFrame, display: true, animate: true)
+            }
+            return
+        }
+
+        // C. 视频播放态：计算当前屏幕可用区内的最大等比安全尺寸
+        let aspect = player.effectiveAspectRatio
+        let maxContent = PlayerGeometry.maximumSafeContentSize(for: aspect, screenVisibleSize: screenFrame.size)
+        let maxW = round(maxContent.width)
+        let maxH = round(maxContent.height)
+
+        let isCurrentlyAtMax = abs(window.frame.width - maxW) <= 24.0 &&
+                               abs(window.frame.height - maxH) <= 24.0
+
+        if isCurrentlyAtMax {
+            let restoreFrame: NSRect
+            if let saved = savedPreZoomFrame,
+               (abs(saved.width - maxW) > 24.0 || abs(saved.height - maxH) > 24.0) {
+                restoreFrame = saved
+            } else {
+                let stdW: CGFloat
+                let stdH: CGFloat
+                if player.isEffectiveVertical {
+                    stdH = round(screenFrame.height * 0.60)
+                    stdW = round(stdH * aspect)
+                } else {
+                    stdW = round(screenFrame.width * 0.55)
+                    stdH = round(stdW / max(0.001, aspect))
+                }
+                let cx = round(screenFrame.midX - stdW / 2)
+                let cy = round(screenFrame.midY - stdH / 2)
+                restoreFrame = NSRect(x: cx, y: cy, width: stdW, height: stdH)
+            }
+            savedPreZoomFrame = nil
+            savedPreFullScreenFrame = restoreFrame
+            window.setFrame(restoreFrame, display: true, animate: true)
+        } else {
+            savedPreZoomFrame = window.frame
+            let targetX = round(screenFrame.midX - maxW / 2)
+            let targetY = round(screenFrame.midY - maxH / 2)
+            let targetFrame = NSRect(x: targetX, y: targetY, width: maxW, height: maxH)
+            savedPreFullScreenFrame = targetFrame
+            window.setFrame(targetFrame, display: true, animate: true)
+        }
     }
 
     public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
@@ -1039,23 +1121,93 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
     public func windowWillEnterFullScreen(_ notification: Notification) {
         if let window = notification.object as? NSWindow {
+            capturePreFullScreenFrameIfNeeded(window: window)
+            window.contentAspectRatio = .zero
+            window.aspectRatio = .zero
+        }
+        isFullscreenTransitioning = true
+        player?.isFullscreenTransitioning = true
+    }
+
+    public func windowDidEnterFullScreen(_ notification: Notification) {
+        isFullscreenTransitioning = false
+        player?.isFullscreenTransitioning = false
+        player?.setFullscreenState(true)
+    }
+
+    public func windowWillExitFullScreen(_ notification: Notification) {
+        isFullscreenTransitioning = true
+        player?.isFullscreenTransitioning = true
+        if let window = notification.object as? NSWindow {
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
         }
     }
 
-    public func windowDidEnterFullScreen(_ notification: Notification) {
-        player?.setFullscreenState(true)
-    }
-
     public func windowDidExitFullScreen(_ notification: Notification) {
+        isFullscreenTransitioning = false
+        player?.isFullscreenTransitioning = false
         player?.setFullscreenState(false)
+
+        if let window = notification.object as? NSWindow {
+            let screen = window.screen ?? NSScreen.main
+            let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+
+            var targetFrame: NSRect
+            if let saved = savedPreFullScreenFrame {
+                let clampedW = min(saved.width, screenFrame.width)
+                let clampedH = min(saved.height, screenFrame.height)
+                let clampedX = max(screenFrame.minX, min(screenFrame.maxX - clampedW, saved.origin.x))
+                let clampedY = max(screenFrame.minY, min(screenFrame.maxY - clampedH, saved.origin.y))
+                targetFrame = NSRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
+                savedPreFullScreenFrame = nil
+            } else {
+                let aspect = player?.effectiveAspectRatio ?? (16.0 / 9.0)
+                let stdW = round(screenFrame.width * 0.55)
+                let stdH = round(stdW / max(0.001, aspect))
+                let clampedW = min(stdW, screenFrame.width)
+                let clampedH = min(stdH, screenFrame.height)
+                let cx = round(screenFrame.midX - clampedW / 2)
+                let cy = round(screenFrame.midY - clampedH / 2)
+                targetFrame = NSRect(x: cx, y: cy, width: clampedW, height: clampedH)
+            }
+
+            if targetFrame.height > screenFrame.height {
+                targetFrame.size.height = screenFrame.height
+            }
+            if targetFrame.origin.y < screenFrame.minY {
+                targetFrame.origin.y = screenFrame.minY
+            }
+            if targetFrame.maxY > screenFrame.maxY {
+                targetFrame.origin.y = max(screenFrame.minY, screenFrame.maxY - targetFrame.height)
+            }
+
+            if abs(window.frame.width - targetFrame.width) > 2.0 ||
+               abs(window.frame.height - targetFrame.height) > 2.0 ||
+               abs(window.frame.origin.x - targetFrame.origin.x) > 2.0 ||
+               abs(window.frame.origin.y - targetFrame.origin.y) > 2.0 {
+                isAdjustingWindowFrame = true
+                window.setFrame(targetFrame, display: true, animate: false)
+                isAdjustingWindowFrame = false
+            }
+        }
+
         player?.applyContentAspectRatioLock()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             if let player = self?.player, !player.isPlaying {
                 player.renderCurrentFrameImmediately()
             }
         }
+    }
+
+    public func windowDidFailToEnterFullScreen(_ window: NSWindow) {
+        isFullscreenTransitioning = false
+        player?.isFullscreenTransitioning = false
+    }
+
+    public func windowDidFailToExitFullScreen(_ window: NSWindow) {
+        isFullscreenTransitioning = false
+        player?.isFullscreenTransitioning = false
     }
 
     public func windowWillClose(_ notification: Notification) {

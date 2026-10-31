@@ -139,6 +139,7 @@ public struct PlayerContainerView: View {
                 }
 
                 // Right-Edge Floating Side Triangle Pull Tab (always accessible on right border)
+                let isHandleVisible = (player.isHUDVisible || isHoveringRightEdge) && !player.isPlaylistDrawerVisible
                 PlaylistDrawerHandleTab(
                     isDrawerVisible: player.isPlaylistDrawerVisible,
                     drawerWidth: drawerWidth
@@ -148,8 +149,9 @@ public struct PlayerContainerView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(player.isHUDVisible || isHoveringRightEdge || player.isPlaylistDrawerVisible ? 1.0 : 0.0)
-                .animation(.easeInOut(duration: 0.2), value: player.isHUDVisible || isHoveringRightEdge || player.isPlaylistDrawerVisible)
+                .opacity(isHandleVisible ? 1.0 : 0.0)
+                .allowsHitTesting(isHandleVisible)
+                .animation(.easeInOut(duration: 0.2), value: isHandleVisible)
                 .zIndex(26)
 
                 // Interactive Backdrop for Drawer Dismissal:

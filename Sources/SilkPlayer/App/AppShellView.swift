@@ -100,17 +100,20 @@ public struct AppShellView: View {
                     .transition(.opacity)
 
                     // Right-Edge Floating Side Triangle Pull Tab (always accessible on right border)
-                    PlaylistDrawerHandleTab(
-                        isDrawerVisible: player.isPlaylistDrawerVisible,
-                        drawerWidth: drawerWidth
-                    ) {
-                        withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                            player.togglePlaylistDrawer()
+                    if !player.isPlaylistDrawerVisible {
+                        PlaylistDrawerHandleTab(
+                            isDrawerVisible: player.isPlaylistDrawerVisible,
+                            drawerWidth: drawerWidth
+                        ) {
+                            withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                player.togglePlaylistDrawer()
+                            }
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .edgesIgnoringSafeArea(.all)
+                        .allowsHitTesting(true)
+                        .zIndex(18)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .edgesIgnoringSafeArea(.all)
-                    .zIndex(18)
 
                     if player.isPlaylistDrawerVisible {
                         Color.black.opacity(0.001)

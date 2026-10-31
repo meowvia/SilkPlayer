@@ -63,9 +63,9 @@ public struct EmptyPlaybackView: View {
             .edgesIgnoringSafeArea(.all)
             .allowsHitTesting(false)
 
-            // 3.5 Native Window Background Drag Canvas (padded by 12pt to preserve all 4 edge & 4 corner resize handles)
+            // 3.5 Native Window Background Drag Canvas (padded by 8pt to preserve edge resize handles)
             WindowDragGestureView()
-                .padding(12)
+                .padding(8)
                 .edgesIgnoringSafeArea(.all)
 
             // 4. Centered Interactive Logo (Pure Minimalist Entrypoint)
@@ -207,40 +207,49 @@ public struct WindowDragGestureView: NSViewRepresentable {
 
 public final class WindowDragCanvasView: NSView {
     private var initialMouseLocation: NSPoint = .zero
+    private var downEvent: NSEvent? = nil
+    private var canDrag: Bool = false
 
     override public func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override public func mouseDown(with event: NSEvent) {
         guard let window = self.window else { return }
-        let isFullscreen = window.styleMask.contains(.fullScreen)
         let loc = self.convert(event.locationInWindow, from: nil)
         let b = bounds
 
-        // Edge resize zone protection (8pt)
-        if !isFullscreen {
-            let margin: CGFloat = 8.0
-            if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
-                super.mouseDown(with: event)
-                return
-            }
-        }
-
-        if event.clickCount == 2 {
-            if loc.y >= b.height - 52.0 {
-                PlayerWindowManager.shared.toggleMaximize(window: window)
-            } else if AppSettings.shared.doubleClickAction == .openFile {
-                PlayerWindowManager.shared.openFilePicker()
+        if event.clickCount >= 2 {
+            canDrag = false
+            downEvent = nil
+            if event.clickCount == 2 {
+                if loc.y >= b.height - 52.0 {
+                    PlayerWindowManager.shared.toggleMaximize(window: window)
+                } else if AppSettings.shared.doubleClickAction == .openFile {
+                    PlayerWindowManager.shared.openFilePicker()
+                }
             }
             return
         }
+
         initialMouseLocation = NSEvent.mouseLocation
+        downEvent = event
+        canDrag = !window.styleMask.contains(.fullScreen)
     }
 
     override public func mouseDragged(with event: NSEvent) {
-        guard let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
+        guard canDrag, let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
         let current = NSEvent.mouseLocation
-        if hypot(current.x - initialMouseLocation.x, current.y - initialMouseLocation.y) > 3.0 {
-            window.performDrag(with: event)
+        let dx = current.x - initialMouseLocation.x
+        let dy = current.y - initialMouseLocation.y
+        if hypot(dx, dy) > 3.0 {
+            guard let down = downEvent else { return }
+            canDrag = false
+            downEvent = nil
+            window.performDrag(with: down)
         }
+    }
+
+    override public func mouseUp(with event: NSEvent) {
+        canDrag = false
+        downEvent = nil
     }
 }

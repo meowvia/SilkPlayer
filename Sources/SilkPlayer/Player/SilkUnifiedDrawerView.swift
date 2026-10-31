@@ -914,8 +914,9 @@ public struct PlaylistDrawerHandleTab: View {
     }
 
     public var body: some View {
-        HStack {
+        HStack(spacing: 0) {
             Spacer()
+                .allowsHitTesting(false)
             Button(action: action) {
                 ZStack {
                     UnevenRoundedRectangle(

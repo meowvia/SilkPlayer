@@ -1,380 +1,949 @@
-# SilkPlayer 播放窗口交互架构评估、根因深度剖析与重构修复执行清单 (v1.4.0 移交规范)
+# SilkPlayer 窗口与交互事件链彻底排雷及回归 1.3.0 基线移交规范
 
-- 目标：彻底解决从 1.3.0 升级至 1.4.0 引入“顶栏双击最大化”后引发的拉伸、抖动、全屏退回异常、底栏误拖拽及触控板事件断流问题。
-- 适用对象：接手修复的执行 AI Agent。请严格按照本文档分步执行，严禁引入未经验证的复杂中间层状态机。
+## 一、 核心问题自省与当前所有交互 Bug 全面揭底
 
----
-
-## 一、 现状评估与演进混乱根因剖析
-
-### 1.1 核心问题定性
-当前窗口模块陷入混乱的根源，在于采用了“局部现象打补丁（Whack-A-Mole）”的演化方式，未能理清 macOS 下“视频长宽比锁定”与“窗口满屏最大化（Zoom）”之间的底层数学矛盾，并强行通过自建状态机与私有计算拦截 AppKit 原生转场，引发了连锁崩塌。
-
-### 1.2 六大根因分解
-
-1. **视频长宽比（Aspect Ratio）与桌面满屏最大化（Screen Zoom）的数学冲突**
-   - 1.3.0 机制：播放器窗口在缩放时强制 `contentAspectRatio == effectiveAspectRatio`，长宽比与视频 100% 绑定。
-   - 1.4.0 破坏点：双击顶栏直接粗暴执行 `window.setFrame(screen.visibleFrame)`。macOS 屏幕可用区域（通常为 16:10 或带刘海比例）几乎绝不等于视频比例（16:9 / 2.39:1 / 9:16 等）。
-   - 次生故障：窗口比例与内容比例失配；用户稍拖动窗口边框 1 像素，`windowWillResize` 便强行拉回视频比例，产生剧烈跳跃抖动；暂停时 Metal 视口重绘错位。
-
-2. **最大化（Zoom）与系统级全屏（Fullscreen）生命周期混淆**
-   - 最大化铺满桌面后，若用户进入系统级全屏，AppKit 会缓存“当前最大化帧”作为退出全屏时的恢复目标。
-   - 当用户退出全屏时，窗口直接落回最大化尺寸，无法回到原始居中播放尺寸，导致窗口被永久卡在最大化状态。后期试图覆写 `destinationFrameToExitFullScreen` 进一步破坏了系统转场时序。
-
-3. **双击语义与区域判定缺乏状态隔离**
-   - 观影沉浸态（HUD 隐藏）与交互态（HUD 激活）共用硬编码坐标（如 `loc.y >= bounds.height - 70`），且未校验 `player.isHUDVisible`。
-   - 观影态下用户双击视频顶部本意是“进入全屏”，却被误拦截为“最大化”；全屏态下双击顶部甚至尝试触发“窗口最大化”，导致状态不同步。
-
-4. **窗口拖拽（PerformDrag）越界捕获**
-   - 底层 `MetalPlayerContainerView` 在 `mouseDragged` 中移动超过 3pt 时无差别调用 `window.performDrag(with: event)`。
-   - 用户在底部进度条拖动（Scrubbing）或在控制栏空白处手滑微移时，整个播放器窗口被意外拖走。
-
-5. **全局事件监听（Local Event Monitor）吞噬触控板原生管线**
-   - `PlayerHUDView` 的 `setupMouseMonitor()` 使用全局监视器拦截了 `.scrollWheel`。为避免光标消失，曾粗暴写入 `return nil`，直接截断了 AppKit 响应链。
-   - 位于底层的 `MetalPlayerContainerView.scrollWheel(with:)` 完全失效，双指左右精确 Scrubbing 与双指上下调音量沦为死代码。
-
-6. **置顶（Always On Top）状态源分裂**
-   - 顶栏图钉按钮读写 `AppSettings.shared.keepWindowOnTop`，菜单栏与窗口管理器读写 `PlayerWindowManager.isAlwaysOnTop`，两者未做单一事实源（SSOT）绑定，导致 UI 状态脱节。
+在对比了 `1.3.0` 稳定基线与 `1.4.0` 当前 HEAD 的所有 UI 视图层级后，查明导致当前窗口交互出现**一连串严重问题**（包括但不限于：退出全屏变最大化并侵入 Dock、双击顶栏和画布经常失灵、拖拽窗口卡死或不动、自动最大化后再双击顶栏无法缩小、右键菜单呼不出）的**7 大致命真凶**如下：
 
 ---
 
-## 二、 核心重构原则与架构技术方案
-
-### 原则 1：确立“等比最大化（Aspect-Preserved Zoom）”为唯一标准
-- 业界标准：参考 IINA 与 QuickTime Player，播放器窗口在双击顶栏或 Zoom 时，绝不拉满整个非等比屏幕，而是在当前屏幕的 `visibleFrame` 范围内计算保持视频固有长宽比的最大安全尺寸，并保持居中。
-- 收益：彻底消除窗口拉伸与变形问题，`windowWillResize` 的等比计算逻辑对最大化与普通缩放完全自洽，退出最大化时还原精准对称。
-
-### 原则 2：以 HUD 可见性为事件路由的一级分发网关
-- 沉浸态（`player.isHUDVisible == false`）：除顶部原生 28pt 安全边距外，全屏/画布双击一律路由至 `handleDoubleClickAction()`（默认切换全屏），单击一律防抖触发播放/暂停。
-- 交互态（`player.isHUDVisible == true`）：
-  - 底部控制栏（`y <= 112`）：严禁触发窗口拖拽，严禁触发画布播放/暂停。
-  - 顶栏中间区域（`y >= height - 64`）：双击触发等比最大化/还原（全屏态则退出全屏）；单击允许按住拖动窗口。
-  - 左右控件区（绿红灯 `x <= 70`、快捷按钮 `x >= width - 160`）：放行给原生控件。
+### 致命问题 1：`PlayerHUDView.swift` 拆散了顶层 `allowsHitTesting`，把整个视频画面和顶栏全部挡死！（1.4.0 引入的头号大雷）
+- **1.3.0 稳定代码**：
+  在 `1.3.0` 中，`PlayerHUDView` 的整个 `VStack`（包含 `topBar`、`Spacer()`、`bottomControls`）外层写的是：
+  ```swift
+  .opacity(isControlsVisible && player.isHUDVisible ? 1.0 : 0.0)
+  .allowsHitTesting(isControlsVisible && player.isHUDVisible)
+  ```
+- **1.4.0 破坏点**：
+  为了加一个全屏右上角时钟（`FullscreenClockView`），1.4.0 把外层 `VStack` 的 `.allowsHitTesting` 删掉了，改成了只在部分子视图上加，而 **`topBar` 的 `HStack`、中间的 `Spacer()`、以及左上角的 `specBadgesRow`（HDR / 4K / HEVC / METAL 胶囊）处于 HitTesting 开启状态**！
+- **灾难性后果**：
+  1. **顶栏左半边（规格徽章区）和中间被 SwiftUI 的 `HStack` 吞掉鼠标事件**：用户在顶栏双击想最大化、或者按住顶栏想拖动窗口时，鼠标事件直接被上层的 SwiftUI `PlayerHUDView` 拦截吞噬，**底层的 `MetalPlayerContainerView (VideoView)` 根本收不到 `mouseDown`！**
+  2. **右键菜单与画布手势在特定区域失灵**：`PlayerContainerView` 中 `PlayerHUDView` 的 `.zIndex(20)` 高于 `VideoView`，任何没有显式设置 `.allowsHitTesting(false)` 的容器区域都会拦截底层 `VideoView` 的单击、双击、拖拽和右键菜单。
 
 ---
 
-## 三、 执行 Agent 具体落地执行清单（按步骤操作）
+### 致命问题 2：`HUDControlButtons.swift` 新增的 `HUDMicroTooltipModifier` 使用 `.onHover` 破坏了按钮点击与父层事件穿透！
+- **1.4.0 破坏点**：
+  1.4.0 给所有顶部和底部按钮加上了 `.hudTooltip(...)`（`HUDMicroTooltipModifier`），内部套了一层 `.onHover` 和 `.overlay`。
+- 在 macOS SwiftUI（`NSHostingView`）中，当 `PlayerHUDView` 浮在 `VideoView`（`NSViewRepresentable`）上方时，不当的 `ZStack/HStack` 容器布局配合 `.onHover` 会生成全尺寸的 `NSTrackingArea`，导致鼠标点击和双击事件在 SwiftUI 托管层被截胡。
 
-### 步骤 0：清理残留代码与工作区
-1. 清理工作区内临时生成的 `WindowGeometryCoordinator.swift` 及其引用，保证架构收敛至原生组件。
-2. 保持窗口逻辑核心收敛在：
-   - `Sources/SilkPlayer/App/PlayerWindowManager.swift`
-   - `Sources/SilkPlayer/VideoView.swift`
-   - `Sources/SilkPlayer/PlayerHUDView.swift`
-   - `Sources/SilkPlayer/Player/EmptyPlaybackView.swift`
+---
 
-### 步骤 1：重构 `PlayerWindowManager.swift` 中的最大化与置顶逻辑
+### 致命问题 3：双击全屏后，再双击退出全屏，变成“最大且侵入 Dock 底部的窗口”！
+- **真凶链条**：
+  1. **为什么变成最大化？**
+     在 `PlayerWindowDelegate.windowWillResize(_:to:)` 中，当双击进入全屏（或退出全屏）的瞬间，AppKit 在 `window.styleMask.contains(.fullScreen)` 为 `false` 的过渡帧，向 `windowWillResize` 传入了整块物理屏幕尺寸 `screen.frame.size`（例如 `1920 × 1080`，包含菜单栏和 Dock 栏的物理全屏尺寸）。
+     此时代码走到了第 764 行：
+     ```swift
+     if !window.inLiveResize && isTilingOrSnapSize(frameSize, screenFrame: screenFrame)
+     ```
+     而 `isTilingOrSnapSize` 中有一句：
+     ```swift
+     if abs(size.width - screenFrame.width) <= tolerance { return true }
+     ```
+     因为物理全屏宽度 `1920` 等于 `screen.visibleFrame.width` (`1920`)，**`isTilingOrSnapSize` 竟然把 AppKit 的全屏过渡动画帧误判成了“macOS 15 窗口分屏吸附”！**
+     紧接着第 779 行按 16:9 算出了 `1920 × 1080` 并返回给 AppKit！导致进入全屏前的原始窗口尺寸被篡改成了 `1920 × 1080`，退出全屏时的目标尺寸也被强行锁死在 `1920 × 1080`！
+  2. **为什么底部直接侵入 Dock 栏？**
+     因为 `1920 × 1080` 是整块物理屏幕的高度（`screen.frame.height`），比扣掉 Dock 栏和菜单栏的可用工作区高度 `screen.visibleFrame.height`（如 `1005`）高出了整整 75pt！
+     而在退出全屏动画期间，`windowDidResize` 看到窗口顶部超出了 `screenFrame.maxY`，执行了：
+     ```swift
+     curFrame.origin.y = max(screenFrame.minY, screenFrame.maxY - curFrame.height)
+     window.setFrame(curFrame, display: true, animate: false)
+     ```
+     这不仅在半途打断了 AppKit 的退出全屏动画，还把高 `1080` 的窗口塞进了高 `1005` 的可用区里，导致窗口底部直接穿透 `screenFrame.minY` 压进 Dock 栏底下！
 
-1. 统一置顶状态源：
+---
+
+### 致命问题 4：`toggleMaximize`（双击顶栏最大化）存在“无法缩小”的死锁逻辑！
+- **真凶代码**：
+  在 `PlayerWindowDelegate.toggleMaximize(window:)` 中，只靠 `if let saved = savedPreZoomFrame` 来判断当前是否已经最大化！
+- **死锁场景**：
+  1. 如果视频打开时（或用户手动拉大后）窗口本来就已经很大（接近或等于最大等比尺寸），此时 `savedPreZoomFrame` 为 `nil`。用户双击顶栏想把窗口**缩小**回普通尺寸（如 `960 × 540`），结果 `toggleMaximize` 把当前的大尺寸存进了 `savedPreZoomFrame`，然后又把窗口设成了同样的大尺寸——**双击顶栏完全没有任何反应！再双击还是大窗口！**
+  2. 如果用户在最大化状态下进入全屏再退出，或者触发了一次 `windowDidEndLiveResize` 清空了 `savedPreZoomFrame`，此后双击顶栏就再也无法缩小回标准窗口了！
+
+---
+
+### 致命问题 5：`EmptyPlaybackView`（空闲主页）的中央 Logo 挡死了拖拽，且外围 12pt 空白区双击和拖拽断层！
+- **真凶代码**：
+  在 `EmptyPlaybackView.swift` 中：
+  1. `WindowDragGestureView().padding(12)` 留出了 12pt 的边距，而在 `WindowDragCanvasView.mouseDown` 里**又判断了一次 `margin: 8.0`**！这意味着距离窗口边缘 `0 ~ 20pt` 的巨大一圈范围内，既不能拖动窗口，双击顶部（距离顶部 20pt 内）也完全没反应！
+  2. 在 `WindowDragCanvasView.mouseDragged` 中，调用 `window.performDrag(with: event)` 时传入的是 `mouseDragged` 的 `event`，且没有重置状态；在部分 macOS 版本下，`performDrag` 连续在每个 `mouseDragged` 帧被重复触发会导致窗口跳跃或卡顿。
+
+---
+
+### 致命问题 6：`VideoView.swift` 在 `mouseDown` 中拦截了底部 112pt 和顶部 64pt，却导致 SwiftUI 控件与底层 NSView 抢事件！
+- **真凶代码**：
+  1. 在 `PlayerHUDView` 中，由于 `bottomControls` 只是一排文字和按钮，按钮之间的空白缝隙如果没有背景拦截，点击就会穿透到 `VideoView.mouseDown`；而如果被 `PlayerHUDView` 的透明层挡住，画布中間区域的双击和拖拽又会失效。
+  2. 在 `VideoView.mouseDragged` 中，`window.performDrag(with: event)` 传入的是 `mouseDragged` 事件，且没有在触发一次 `performDrag` 后立即 `canDragWindowFromCurrentMouseDown = false` 终止后续 `mouseDragged` 重入！在 macOS AppKit 中，`window.performDrag(with: event)` 会开启系统级模态拖拽循环，如果在同一次按下期间重复重入调用，会导致拖拽失灵或鼠标释放后状态错乱。
+
+---
+
+### 致命问题 7：`PlayerContainerView` 右侧拉手 `PlaylistDrawerHandleTab` 占满全屏 Frame 拦截了整个画面的鼠标事件！
+- **真凶代码（极其隐蔽的巨雷！）**：
+  看 `Sources/SilkPlayer/Player/PlayerContainerView.swift` 第 146~157 行：
+  ```swift
+  PlaylistDrawerHandleTab(
+      isDrawerVisible: player.isPlaylistDrawerVisible,
+      drawerWidth: drawerWidth
+  ) { ... }
+  .frame(maxWidth: .infinity, maxHeight: .infinity)
+  .opacity(player.isHUDVisible || isHoveringRightEdge || player.isPlaylistDrawerVisible ? 1.0 : 0.0)
+  .zIndex(26)
+  ```
+  以及 `AppShellView.swift` 第 96~106 行！
+  来看 `PlaylistDrawerHandleTab` 的内部实现（`SilkUnifiedDrawerView.swift` 第 588 行）：
+  ```swift
+  public var body: some View {
+      HStack {
+          Spacer()
+          Button(action: action) { ... }
+          .allowsHitTesting(!isDrawerVisible)
+      }
+  }
+  ```
+  - 注意：`PlaylistDrawerHandleTab` 的 `.zIndex(26)` 是整个播放器里**最高**的（比 `PlayerHUDView` 的 20 和 `VideoView` 的 0 都高），而且它设置了 `.frame(maxWidth: .infinity, maxHeight: .infinity)`！
+  - 更可怕的是：在沉浸态（`player.isHUDVisible == false`）下，它只设置了 `.opacity(0.0)`，**根本没有设置 `.allowsHitTesting(false)`**！即便隐藏了，那个无形的按钮依然浮在右侧可点击！
+
+---
+
+## 二、 彻底修复方案（一次性根除所有 7 大问题，回归 1.3.0 般丝滑）
+
+请执行 AI Agent 严格按照以下 **5 个文件的完整修改指令** 逐一落地，不留任何死角：
+
+---
+
+### 修复 1：`Sources/SilkPlayer/PlayerHUDView.swift` —— 彻底打通鼠标穿透，只让真正的按钮接管点击！
+
+1. **在 `topBar(tier:isHUDActive:)` 中**：
+   - 左上角的 `specBadgesRow(tier: tier)` 只是只读信息展示胶囊（HDR / 4K / HEVC / METAL），**必须加上 `.allowsHitTesting(false)`**！这样用户在顶栏左侧、中间（标题胶囊已设 `.allowsHitTesting(false)`）、空白处单击拖拽或双击最大化时，100% 穿透到底层 `VideoView`！
+   - 全屏时钟 `FullscreenClockView()` 保持 `.allowsHitTesting(false)`。
+   - **整个 `topBar` 中，只有右上角的 3 个圆形按钮（置顶、属性、关闭）所在的 `HStack` 允许 `.allowsHitTesting(isHUDActive)`**！
+2. **在 `body` 的主 `VStack` 中**：
+   - 中间的 `Spacer()` 绝不能拦截任何点击。
+   - 当 `!isHUDActive`（HUD 隐藏的沉浸观影态）时，整个 `VStack` 必须设置 `.allowsHitTesting(false)`，确保沉浸态下 100% 的画面没有任何 SwiftUI 透明视图挡在 `VideoView` 前面！
+
+请将 `PlayerHUDView.swift` 的 `body`（第 90~112 行）和 `topBar`（第 153~238 行）精确修改为：
+
 ```swift
-public var isAlwaysOnTop: Bool {
-    get { AppSettings.shared.keepWindowOnTop }
-    set {
-        AppSettings.shared.keepWindowOnTop = newValue
-        applyAlwaysOnTop(newValue)
-    }
-}
+    public var body: some View {
+        GeometryReader { geometry in
+            let availableWidth = geometry.size.width
+            let tier = layoutTier(for: availableWidth)
+            let isHUDActive = isControlsVisible && player.isHUDVisible
 
-public func toggleAlwaysOnTop() {
-    isAlwaysOnTop = !isAlwaysOnTop
-}
-
-public func applyAlwaysOnTop(_ onTop: Bool) {
-    for s in sessions {
-        s.window?.level = onTop ? .floating : .normal
-    }
-}
-```
-
-2. 实现等比最大化（Aspect-Preserved Toggle Maximize）：
-在 `PlayerWindowDelegate` 中完善逻辑，替代粗暴全屏 frame 赋值：
-```swift
-public func toggleMaximize(window: NSWindow) {
-    guard !window.styleMask.contains(.fullScreen) else { return }
-    let screen = window.screen ?? NSScreen.main
-    guard let screenFrame = screen?.visibleFrame else { return }
-
-    // 1. 若当前已处于等比最大化状态，平滑还原至预存普通尺寸
-    if let saved = savedPreZoomFrame {
-        isAdjustingWindowFrame = true
-        defer { isAdjustingWindowFrame = false }
-        window.setFrame(saved, display: true, animate: true)
-        savedPreZoomFrame = nil
-        return
-    }
-
-    // 2. 记录当前窗口普通尺寸
-    savedPreZoomFrame = window.frame
-
-    // 3. 闲置窗口（未加载视频）：居中至标准尺寸
-    guard let player = self.player, player.videoWidth > 0, player.videoHeight > 0 else {
-        isAdjustingWindowFrame = true
-        defer { isAdjustingWindowFrame = false }
-        window.setFrame(screenFrame, display: true, animate: true)
-        return
-    }
-
-    // 4. 视频播放态：计算保持长宽比的最大安全尺寸
-    let aspect = player.effectiveAspectRatio
-    let maxContent = PlayerGeometry.maximumSafeContentSize(for: aspect, screenVisibleSize: screenFrame.size)
-    let targetW = round(maxContent.width)
-    let targetH = round(maxContent.height)
-    let targetX = round(screenFrame.midX - targetW / 2)
-    let targetY = round(screenFrame.midY - targetH / 2)
-    let targetFrame = NSRect(x: targetX, y: targetY, width: targetW, height: targetH)
-
-    isAdjustingWindowFrame = true
-    defer { isAdjustingWindowFrame = false }
-    window.setFrame(targetFrame, display: true, animate: true)
-}
-
-public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
-    toggleMaximize(window: window)
-    return false
-}
-```
-
-3. 原生全屏生命周期还原：
-移除针对全屏退出的非标准尺寸计算覆盖，仅在 `windowWillEnterFullScreen` 时保存正常播放尺寸，在 `windowDidExitFullScreen` 时保障长宽比重新加锁：
-```swift
-public func windowWillEnterFullScreen(_ notification: Notification) {
-    if let window = notification.object as? NSWindow {
-        if savedPreZoomFrame == nil {
-            savedPreZoomFrame = window.frame
+            ZStack {
+                VStack(spacing: 0) {
+                    topBar(tier: tier, isHUDActive: isHUDActive)
+                        .padding(.horizontal, 16)
+                        .padding(.top, player.isFullscreen ? 16 : 30)
+                    Spacer()
+                        .allowsHitTesting(false)
+                    bottomControls(tier: tier, width: availableWidth)
+                        .opacity(isHUDActive ? 1.0 : 0.0)
+                        .allowsHitTesting(isHUDActive)
+                }
+                .allowsHitTesting(isHUDActive)
+                .animation(.easeInOut(duration: 0.22), value: isHUDActive)
+                .animation(.spring(response: 0.25, dampingFraction: 0.8), value: tier)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        window.contentAspectRatio = .zero
-        window.aspectRatio = .zero
-    }
-}
-
-public func windowDidExitFullScreen(_ notification: Notification) {
-    player?.setFullscreenState(false)
-    player?.applyContentAspectRatioLock()
-}
 ```
 
-### 步骤 2：重构 `VideoView.swift` 中的点击、双击与拖拽网关
-
-在 `MetalPlayerContainerView` 中建立清晰的判定管线：
-
-1. 引入拖拽保护标记：
+以及 `topBar` 方法中：
 ```swift
-private var canDragWindowFromCurrentMouseDown: Bool = false
+            // 1. Base Layer: Leading Spec Badges + Trailing Quick Actions
+            HStack(alignment: .center, spacing: 10) {
+                specBadgesRow(tier: tier)
+                    .padding(.leading, player.isFullscreen ? 0 : (tier == .minimal ? 54 : 70))
+                    .opacity(isHUDActive ? 1.0 : 0.0)
+                    .allowsHitTesting(false) // 关键修复：只读规格胶囊严禁拦截顶栏拖拽与双击！
+
+                Spacer()
+                    .allowsHitTesting(false)
 ```
 
-2. 重写 `mouseDown(with:)`：
-```swift
-override public func mouseDown(with event: NSEvent) {
-    let loc = self.convert(event.locationInWindow, from: nil)
-    let b = bounds
-    guard let window = self.window else {
-        super.mouseDown(with: event)
-        return
-    }
-    let isFullscreen = window.styleMask.contains(.fullScreen)
-    canDragWindowFromCurrentMouseDown = false
+---
 
-    // 1. 窗口边缘 8pt 原生调整大小保护
-    if !isFullscreen {
-        let margin: CGFloat = 8.0
-        if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
-            super.mouseDown(with: event)
-            return
+### 修复 2：`Sources/SilkPlayer/Player/PlayerContainerView.swift` —— 修复右侧拉手透明遮挡
+
+在 `PlayerContainerView.swift` 第 145~156 行，给 `PlaylistDrawerHandleTab` 补上 `.allowsHitTesting` 保护：
+```swift
+                // Right-Edge Floating Side Triangle Pull Tab (always accessible on right border)
+                let isHandleVisible = (player.isHUDVisible || isHoveringRightEdge) && !player.isPlaylistDrawerVisible
+                PlaylistDrawerHandleTab(
+                    isDrawerVisible: player.isPlaylistDrawerVisible,
+                    drawerWidth: drawerWidth
+                ) {
+                    withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                        player.togglePlaylistDrawer()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(isHandleVisible ? 1.0 : 0.0)
+                .allowsHitTesting(isHandleVisible)
+                .animation(.easeInOut(duration: 0.2), value: isHandleVisible)
+                .zIndex(26)
+```
+
+---
+
+### 修复 3：`Sources/SilkPlayer/App/PlayerWindowManager.swift` & `PlayerCore.swift` —— 彻底根治“退出全屏变最大且侵入 Dock”与“双击顶栏无法缩小”
+
+#### 3.1 修改 `Sources/SilkPlayer/PlayerCore.swift` 的 `toggleFullscreen()`：
+```swift
+    public func toggleFullscreen() {
+        guard let window = hostWindow ?? NSApp.keyWindow else { return }
+        guard !isFullscreenTransitioning else { return }
+        if !isFullscreen && !window.styleMask.contains(.fullScreen) {
+            isPlaylistDrawerVisible = false
+            (window.delegate as? PlayerWindowDelegate)?.capturePreFullScreenFrameIfNeeded(window: window)
         }
+        isFullscreenTransitioning = true
+        window.toggleFullScreen(nil)
+    }
+```
+
+#### 3.2 修改 `Sources/SilkPlayer/App/PlayerWindowManager.swift` 的 `PlayerWindowDelegate`：
+
+必须同时解决三个问题：
+1. **`isTilingOrSnapSize` 绝不能把全屏尺寸或最大化尺寸当成分屏吸附**！
+2. **全屏进出期间（`isFullscreenTransitioning`），`windowWillResize` 100% 放行，`windowDidResize` 100% 禁止调用 `setFrame` 打断动画**；并在 `windowDidExitFullScreen` 结束时精确校验并恢复 `savedPreFullScreenFrame`，确保退出全屏后 100% 回到进入全屏前的普通窗口尺寸，绝不侵入 Dock！
+3. **`toggleMaximize` 智能双向切换**：判断当前窗口是否已经处于（或接近）最大尺寸（`curW >= maxContent.width - 16 && curH >= maxContent.height - 16`）。如果已经是最大尺寸，即使 `savedPreZoomFrame` 为 `nil`，也必须缩小回标准居中窗口尺寸（如 `screenFrame.width * 0.55` 的等比尺寸或 `960 × 540`），绝不卡死在最大化状态！
+
+请将 `PlayerWindowDelegate` 完整更新为以下代码：
+
+```swift
+@MainActor
+public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
+    public weak var session: PlayerWindowSession?
+    public weak var player: (any PlayerControllable)?
+    public private(set) var isMaximizingOrRestoring: Bool = false
+    private var isAdjustingWindowFrame: Bool = false
+    private var isFullscreenTransitioning: Bool = false
+    private var savedPreZoomFrame: NSRect? = nil
+    private var savedPreFullScreenFrame: NSRect? = nil
+
+    public init(session: PlayerWindowSession? = nil, player: (any PlayerControllable)? = nil) {
+        self.session = session
+        self.player = player
+        super.init()
     }
 
-    // 抽屉与音量滑块判定
-    let activeDrawerWidth: CGFloat = (playerCore?.isInspectorVisible == true) ? 348.0 :
-        ((playerCore?.isPlaylistDrawerVisible == true) ? (PlaylistDrawerDimensions.drawerWidth(for: b.width, isFullscreen: isFullscreen) + 8.0) : 0.0)
-
-    if let player = playerCore {
-        // 抽屉外点击关闭抽屉
-        if player.isPlaylistDrawerVisible || player.isInspectorVisible {
-            let insideDrawer = (loc.x >= b.width - activeDrawerWidth) && (loc.y >= 96 && loc.y <= b.height - 64)
-            if !insideDrawer {
-                player.isPlaylistDrawerVisible = false
-                player.isInspectorVisible = false
+    public func capturePreFullScreenFrameIfNeeded(window: NSWindow) {
+        guard !window.styleMask.contains(.fullScreen), !isFullscreenTransitioning else { return }
+        let f = window.frame
+        guard !f.origin.x.isNaN, !f.origin.y.isNaN, !f.width.isNaN, !f.height.isNaN,
+              f.width >= 320, f.height >= 240 else { return }
+        if let screen = window.screen ?? NSScreen.main {
+            // 严禁把超出可用工作区高度的全屏帧保存为普通窗口帧
+            if f.height > screen.visibleFrame.height + 2.0 {
                 return
             }
         }
+        savedPreFullScreenFrame = f
+    }
 
-        // 抽屉内部与右侧音量区放行
-        if (activeDrawerWidth > 0 && loc.x >= b.width - activeDrawerWidth) ||
-           (player.isVolumeHUDVisible && loc.x >= b.width - 80) {
-            super.mouseDown(with: event)
-            return
+    /// Checks whether the target frameSize matches macOS native window tiling / split-screen geometry
+    /// (e.g. left/right half screen in macOS 15 Sequoia, quarter screen, top/bottom half)
+    private func isTilingOrSnapSize(_ size: NSSize, screen: NSScreen?, screenFrame: NSRect) -> Bool {
+        // 1. 严禁将物理全屏尺寸（screen.frame.size）误判为分屏！
+        if let fullScreenSize = screen?.frame.size {
+            if abs(size.width - fullScreenSize.width) <= 8.0 && abs(size.height - fullScreenSize.height) <= 8.0 {
+                return false
+            }
+        }
+        // 2. 严禁将整个可用工作区尺寸（最大化）误判为半屏/四分之一分屏！
+        let tolerance: CGFloat = 40.0
+        if abs(size.width - screenFrame.width) <= tolerance && abs(size.height - screenFrame.height) <= tolerance {
+            return false
+        }
+        // 3. 任何高度超过可用工作区高度的尺寸（例如全屏过渡帧）绝不是分屏！
+        if size.height > screenFrame.height + 2.0 || size.width > screenFrame.width + 2.0 {
+            return false
+        }
+
+        // A. 左右分屏（高度等于可用区高度，宽度在 30% ~ 70% 之间）
+        if abs(size.height - screenFrame.height) <= tolerance &&
+           size.width >= screenFrame.width * 0.30 &&
+           size.width <= screenFrame.width * 0.70 {
+            return true
+        }
+        // B. 上下分屏（宽度等于可用区宽度，高度在 30% ~ 70% 之间）
+        if abs(size.width - screenFrame.width) <= tolerance &&
+           size.height >= screenFrame.height * 0.30 &&
+           size.height <= screenFrame.height * 0.70 {
+            return true
+        }
+        // C. 四分之一分屏（宽高均约为可用区的 50%）
+        if abs(size.width - screenFrame.width * 0.5) <= tolerance &&
+           abs(size.height - screenFrame.height * 0.5) <= tolerance {
+            return true
+        }
+        return false
+    }
+
+    public func windowWillResize(_ window: NSWindow, to frameSize: NSSize) -> NSSize {
+        let idleMinW: CGFloat = 640
+        let screen = window.screen ?? NSScreen.main
+        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let maxSize = screenFrame.size
+
+        // Sanity guard against NaN or non-positive sizes
+        if frameSize.width.isNaN || frameSize.height.isNaN || frameSize.width <= 0 || frameSize.height <= 0 {
+            return window.frame.size
+        }
+
+        // 在全屏模式、全屏进出过渡期、或等比最大化/还原期间，100% 原样放行！
+        if window.styleMask.contains(.fullScreen) ||
+           isFullscreenTransitioning ||
+           player?.isFullscreen == true ||
+           player?.isFullscreenTransitioning == true ||
+           isMaximizingOrRestoring {
+            return frameSize
+        }
+
+        // 如果非用户手动拖拽且传入的是整个物理屏幕尺寸（AppKit 全屏调用首帧），直接放行
+        if !window.inLiveResize, let fullSz = screen?.frame.size,
+           abs(frameSize.width - fullSz.width) <= 2.0 && abs(frameSize.height - fullSz.height) <= 2.0 {
+            return frameSize
+        }
+
+        // Allow Shift-key freeform resizing without aspect ratio constraints during interactive dragging
+        if window.inLiveResize && NSEvent.modifierFlags.contains(.shift) {
+            let minSide: CGFloat = (player?.isAudioOnly == true) ? 380.0 : 360.0
+            let minWidth: CGFloat = (player?.isAudioOnly == true) ? 380.0 : idleMinW
+            return NSSize(
+                width: max(minWidth, min(maxSize.width, frameSize.width)),
+                height: max(minSide, min(maxSize.height, frameSize.height))
+            )
+        }
+
+        // Dedicated pure-audio window resize branch: strictly maintain 1:1 proportional (等比) square resizing
+        if player?.isAudioOnly == true {
+            let minAudioSize: CGFloat = 380.0
+            let maxAudioDimension = min(maxSize.width, maxSize.height)
+
+            let curSize = window.frame.size
+            let deltaW = abs(frameSize.width - curSize.width)
+            let deltaH = abs(frameSize.height - curSize.height)
+
+            var targetSide: CGFloat
+            if deltaH > deltaW && deltaH > 1.0 {
+                targetSide = frameSize.height
+            } else {
+                targetSide = frameSize.width
+            }
+
+            targetSide = max(minAudioSize, min(maxAudioDimension, targetSide))
+            return NSSize(width: round(targetSide), height: round(targetSide))
+        }
+
+        guard let player = self.player, (player.videoWidth > 0 || player.videoHeight > 0) else {
+            if !window.inLiveResize && isTilingOrSnapSize(frameSize, screen: screen, screenFrame: screenFrame) {
+                return NSSize(
+                    width: min(maxSize.width, frameSize.width),
+                    height: min(maxSize.height, frameSize.height)
+                )
+            }
+            return NSSize(
+                width: max(idleMinW, min(maxSize.width, frameSize.width)),
+                height: max(360, min(maxSize.height, frameSize.height))
+            )
+        }
+
+        let baseAspect = player.effectiveAspectRatio
+        let minContentSz = PlayerGeometry.minimumContentSize(for: baseAspect, screenVisibleHeight: screenFrame.height)
+        let minW = minContentSz.width
+        let minH = minContentSz.height
+
+        // Video-Adaptive Split Screen Tiling ("播放自适应分屏"):
+        // Only trigger when NOT in interactive live resize dragging
+        if !window.inLiveResize && isTilingOrSnapSize(frameSize, screen: screen, screenFrame: screenFrame) {
+            let tolerance: CGFloat = 40.0
+
+            // 1. Full-height vertical split (e.g. Left half, Right half, 1/3, 2/3 column tiles)
+            if abs(frameSize.height - screenFrame.height) <= tolerance {
+                let targetW = min(maxSize.width, frameSize.width)
+                let adaptiveH = round(targetW / max(0.001, baseAspect))
+                if adaptiveH <= screenFrame.height {
+                    return NSSize(width: round(targetW), height: round(adaptiveH))
+                } else {
+                    let targetH = screenFrame.height
+                    let targetW = min(frameSize.width, round(targetH * baseAspect))
+                    return NSSize(width: round(targetW), height: round(targetH))
+                }
+            }
+
+            // 2. Full-width horizontal split (e.g. Top half, Bottom half)
+            if abs(frameSize.width - screenFrame.width) <= tolerance {
+                let targetH = min(maxSize.height, frameSize.height)
+                let adaptiveW = round(targetH * baseAspect)
+                if adaptiveW <= screenFrame.width {
+                    return NSSize(width: round(adaptiveW), height: round(targetH))
+                } else {
+                    let targetW = screenFrame.width
+                    let targetH = min(maxSize.height, round(targetW / max(0.001, baseAspect)))
+                    return NSSize(width: round(targetW), height: round(targetH))
+                }
+            }
+
+            // 3. Quarter-screen grid tiling (Half width & Half height)
+            let boxW = min(maxSize.width, frameSize.width)
+            let boxH = min(maxSize.height, frameSize.height)
+            let boxAspect = boxW / max(1.0, boxH)
+            if baseAspect >= boxAspect {
+                let targetW = boxW
+                let targetH = min(boxH, round(targetW / max(0.001, baseAspect)))
+                return NSSize(width: round(targetW), height: round(targetH))
+            } else {
+                let targetH = boxH
+                let targetW = min(boxW, round(targetH * baseAspect))
+                return NSSize(width: round(targetW), height: round(targetH))
+            }
+        }
+
+        let curSize = window.frame.size
+        let deltaW = abs(frameSize.width - curSize.width)
+        let deltaH = abs(frameSize.height - curSize.height)
+
+        var targetW: CGFloat
+        var targetH: CGFloat
+
+        if deltaH > deltaW && deltaH > 1.0 {
+            targetH = frameSize.height
+            targetW = targetH * baseAspect
+        } else {
+            targetW = frameSize.width
+            targetH = targetW / max(0.001, baseAspect)
+        }
+
+        if targetW < minW {
+            targetW = minW
+            targetH = targetW / max(0.001, baseAspect)
+        }
+        if targetH < minH {
+            targetH = minH
+            targetW = targetH * baseAspect
+        }
+
+        if targetW > maxSize.width {
+            targetW = maxSize.width
+            targetH = round(targetW / max(0.001, baseAspect))
+        }
+        if targetH > maxSize.height {
+            targetH = maxSize.height
+            targetW = round(targetH * baseAspect)
+        }
+        if targetW > maxSize.width {
+            targetW = maxSize.width
+            targetH = round(targetW / max(0.001, baseAspect))
+        }
+        targetW = min(targetW, maxSize.width)
+        targetH = min(targetH, maxSize.height)
+
+        if targetW.isNaN || targetH.isNaN || targetW <= 0 || targetH <= 0 {
+            return frameSize
+        }
+
+        return NSSize(width: round(targetW), height: round(targetH))
+    }
+
+    public func windowDidEndLiveResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              !window.styleMask.contains(.fullScreen),
+              !isFullscreenTransitioning,
+              let player = self.player else { return }
+
+        // 用户手动拖拽改变了窗口大小：清空最大化记忆并更新全屏前的普通窗口尺寸
+        savedPreZoomFrame = nil
+
+        let screen = window.screen ?? NSScreen.main
+        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        var curFrame = window.frame
+        var adjusted = false
+
+        if curFrame.height > screenFrame.height {
+            curFrame.size.height = screenFrame.height
+            adjusted = true
+        }
+        if curFrame.minY < screenFrame.minY {
+            curFrame.origin.y = screenFrame.minY
+            adjusted = true
+        }
+        if curFrame.maxY > screenFrame.maxY {
+            curFrame.origin.y = max(screenFrame.minY, screenFrame.maxY - curFrame.height)
+            adjusted = true
+        }
+        if curFrame.minX < screenFrame.minX {
+            curFrame.origin.x = screenFrame.minX
+            adjusted = true
+        }
+        if curFrame.maxX > screenFrame.maxX {
+            curFrame.origin.x = max(screenFrame.minX, screenFrame.maxX - curFrame.width)
+            adjusted = true
+        }
+
+        if adjusted {
+            isAdjustingWindowFrame = true
+            window.setFrame(curFrame, display: true, animate: false)
+            isAdjustingWindowFrame = false
+        }
+
+        capturePreFullScreenFrameIfNeeded(window: window)
+
+        let contentSize = window.contentRect(forFrameRect: window.frame).size
+        if player.videoWidth > 0 || player.videoHeight > 0 {
+            player.updateRememberedWindowSize(contentSize)
         }
     }
 
-    guard let player = playerCore else { return }
-    let topBarHeight: CGFloat = isFullscreen ? 52.0 : 64.0
-    let isTopBarArea = (loc.y >= b.height - topBarHeight)
-    let isBottomControlArea = (loc.y <= 112.0)
+    public func windowDidResize(_ notification: Notification) {
+        // 全屏或过渡期间绝对禁止在 windowDidResize 中调用 setFrame 打断动画！
+        guard !isFullscreenTransitioning,
+              !isMaximizingOrRestoring,
+              !isAdjustingWindowFrame,
+              player?.isFullscreen != true,
+              player?.isFullscreenTransitioning != true else { return }
 
-    // 2. HUD 激活态路由
-    if player.isHUDVisible {
-        // A. 底部控制栏：禁止任何画布暂停与窗口拖拽
-        if isBottomControlArea {
-            canDragWindowFromCurrentMouseDown = false
+        guard let window = notification.object as? NSWindow,
+              !window.styleMask.contains(.fullScreen) else { return }
+
+        if window.inLiveResize {
             return
         }
 
-        // B. 顶栏区域
-        if isTopBarArea {
-            let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
-            let isTrailingActionArea = loc.x >= b.width - 160.0
-            if isLeadingTrafficArea || isTrailingActionArea {
+        isAdjustingWindowFrame = true
+        defer { isAdjustingWindowFrame = false }
+
+        let screen = window.screen ?? NSScreen.main
+        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        var curFrame = window.frame
+        var adjusted = false
+
+        // 0. 高度防溢出保护：窗口高度绝不能超过可用工作区高度（防止侵入 Dock）
+        if curFrame.height > screenFrame.height {
+            curFrame.size.height = screenFrame.height
+            if let player = self.player, !player.isAudioOnly, player.videoWidth > 0, player.videoHeight > 0 {
+                curFrame.size.width = min(screenFrame.width, round(curFrame.size.height * player.effectiveAspectRatio))
+            }
+            adjusted = true
+        }
+
+        // 1. Strict dock invasion defense: bottom of window must never sink below screenFrame.minY
+        if curFrame.minY < screenFrame.minY {
+            curFrame.origin.y = screenFrame.minY
+            adjusted = true
+        }
+
+        // 2. Strict menu bar invasion defense: top of window must never exceed screenFrame.maxY
+        if curFrame.maxY > screenFrame.maxY {
+            curFrame.origin.y = max(screenFrame.minY, screenFrame.maxY - curFrame.height)
+            adjusted = true
+        }
+
+        // 3. Screen horizontal boundaries clamp
+        if curFrame.minX < screenFrame.minX {
+            curFrame.origin.x = screenFrame.minX
+            adjusted = true
+        }
+        if curFrame.maxX > screenFrame.maxX {
+            curFrame.origin.x = max(screenFrame.minX, screenFrame.maxX - curFrame.width)
+            adjusted = true
+        }
+
+        if adjusted {
+            window.setFrame(curFrame, display: true, animate: false)
+        }
+
+        // 4. Video-adaptive vertical centering on half-screen snap
+        if let player = self.player, !player.isAudioOnly, player.videoWidth > 0, player.videoHeight > 0 {
+            let isLeftDocked = abs(curFrame.minX - screenFrame.minX) <= 10.0
+            let isRightDocked = abs(curFrame.maxX - screenFrame.maxX) <= 10.0
+            let isHalfWidth = abs(curFrame.width - round(screenFrame.width * 0.5)) <= 40.0
+
+            if (isLeftDocked || isRightDocked) && isHalfWidth && curFrame.height < screenFrame.height - 20.0 {
+                let targetY = round(screenFrame.origin.y + (screenFrame.height - curFrame.height) * 0.5)
+                if abs(curFrame.origin.y - targetY) > 2.0 {
+                    window.setFrameOrigin(NSPoint(x: curFrame.origin.x, y: targetY))
+                }
+            }
+        }
+    }
+
+    public func windowWillUseStandardFrame(_ window: NSWindow, defaultFrame: NSRect) -> NSRect {
+        guard let player = self.player else { return defaultFrame }
+
+        if player.isAudioOnly {
+            let sz: CGFloat = 520
+            let cx = round(defaultFrame.minX + (defaultFrame.width - sz) / 2)
+            let cy = round(defaultFrame.minY + (defaultFrame.height - sz) / 2)
+            return NSRect(x: cx, y: cy, width: sz, height: sz)
+        }
+
+        return defaultFrame
+    }
+
+    public func toggleMaximize(window: NSWindow) {
+        guard !window.styleMask.contains(.fullScreen), !isFullscreenTransitioning else { return }
+        let screen = window.screen ?? NSScreen.main
+        guard let screenFrame = screen?.visibleFrame else { return }
+
+        isMaximizingOrRestoring = true
+        isAdjustingWindowFrame = true
+        defer {
+            isAdjustingWindowFrame = false
+            isMaximizingOrRestoring = false
+        }
+
+        // A. 纯音频模式：固定 520x520 居中
+        if player?.isAudioOnly == true {
+            let sz: CGFloat = 520
+            let cx = round(screenFrame.midX - sz / 2)
+            let cy = round(screenFrame.midY - sz / 2)
+            let targetFrame = NSRect(x: cx, y: cy, width: sz, height: sz)
+            window.setFrame(targetFrame, display: true, animate: true)
+            return
+        }
+
+        // B. 闲置窗口（未加载视频）：在 screenFrame 与 960x540 之间双向切换
+        guard let player = self.player, player.videoWidth > 0, player.videoHeight > 0 else {
+            let isCurrentlyMax = abs(window.frame.width - screenFrame.width) <= 24.0 &&
+                                 abs(window.frame.height - screenFrame.height) <= 24.0
+            if isCurrentlyMax {
+                let restore = savedPreZoomFrame ?? NSRect(
+                    x: round(screenFrame.midX - 480),
+                    y: round(screenFrame.midY - 270),
+                    width: 960,
+                    height: 540
+                )
+                savedPreZoomFrame = nil
+                window.setFrame(restore, display: true, animate: true)
+            } else {
+                savedPreZoomFrame = window.frame
+                window.setFrame(screenFrame, display: true, animate: true)
+            }
+            return
+        }
+
+        // C. 视频播放态：计算当前屏幕可用区内的最大等比安全尺寸
+        let aspect = player.effectiveAspectRatio
+        let maxContent = PlayerGeometry.maximumSafeContentSize(for: aspect, screenVisibleSize: screenFrame.size)
+        let maxW = round(maxContent.width)
+        let maxH = round(maxContent.height)
+
+        // 判断当前窗口是否已经处于（或非常接近）等比最大化尺寸
+        let isCurrentlyAtMax = abs(window.frame.width - maxW) <= 24.0 &&
+                               abs(window.frame.height - maxH) <= 24.0
+
+        if isCurrentlyAtMax {
+            // 当前已经是最大尺寸 -> 必须缩小还原！（若 savedPreZoomFrame 存在且比最大尺寸小，则用它；否则缩回 55% 标准居中尺寸）
+            let restoreFrame: NSRect
+            if let saved = savedPreZoomFrame,
+               (abs(saved.width - maxW) > 24.0 || abs(saved.height - maxH) > 24.0) {
+                restoreFrame = saved
+            } else {
+                let stdW: CGFloat
+                let stdH: CGFloat
+                if player.isEffectiveVertical {
+                    stdH = round(screenFrame.height * 0.60)
+                    stdW = round(stdH * aspect)
+                } else {
+                    stdW = round(screenFrame.width * 0.55)
+                    stdH = round(stdW / max(0.001, aspect))
+                }
+                let cx = round(screenFrame.midX - stdW / 2)
+                let cy = round(screenFrame.midY - stdH / 2)
+                restoreFrame = NSRect(x: cx, y: cy, width: stdW, height: stdH)
+            }
+            savedPreZoomFrame = nil
+            savedPreFullScreenFrame = restoreFrame
+            window.setFrame(restoreFrame, display: true, animate: true)
+        } else {
+            // 当前是普通小窗口 -> 记录当前帧并放大到最大等比居中尺寸
+            savedPreZoomFrame = window.frame
+            let targetX = round(screenFrame.midX - maxW / 2)
+            let targetY = round(screenFrame.midY - maxH / 2)
+            let targetFrame = NSRect(x: targetX, y: targetY, width: maxW, height: maxH)
+            savedPreFullScreenFrame = targetFrame
+            window.setFrame(targetFrame, display: true, animate: true)
+        }
+    }
+
+    public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
+        toggleMaximize(window: window)
+        return false
+    }
+
+    public func windowWillEnterFullScreen(_ notification: Notification) {
+        if let window = notification.object as? NSWindow {
+            capturePreFullScreenFrameIfNeeded(window: window)
+            window.contentAspectRatio = .zero
+            window.aspectRatio = .zero
+        }
+        isFullscreenTransitioning = true
+        player?.isFullscreenTransitioning = true
+    }
+
+    public func windowDidEnterFullScreen(_ notification: Notification) {
+        isFullscreenTransitioning = false
+        player?.isFullscreenTransitioning = false
+        player?.setFullscreenState(true)
+    }
+
+    public func windowWillExitFullScreen(_ notification: Notification) {
+        isFullscreenTransitioning = true
+        player?.isFullscreenTransitioning = true
+        if let window = notification.object as? NSWindow {
+            window.contentAspectRatio = .zero
+            window.aspectRatio = .zero
+        }
+    }
+
+    public func windowDidExitFullScreen(_ notification: Notification) {
+        isFullscreenTransitioning = false
+        player?.isFullscreenTransitioning = false
+        player?.setFullscreenState(false)
+
+        if let window = notification.object as? NSWindow {
+            let screen = window.screen ?? NSScreen.main
+            let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+
+            // 强制校验并恢复进入全屏前的普通窗口尺寸，彻底杜绝退出全屏后变大或侵入 Dock 栏
+            if let saved = savedPreFullScreenFrame {
+                let clampedW = min(saved.width, screenFrame.width)
+                let clampedH = min(saved.height, screenFrame.height)
+                let clampedX = max(screenFrame.minX, min(screenFrame.maxX - clampedW, saved.origin.x))
+                let clampedY = max(screenFrame.minY, min(screenFrame.maxY - clampedH, saved.origin.y))
+                let targetFrame = NSRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
+
+                if abs(window.frame.width - targetFrame.width) > 2.0 ||
+                   abs(window.frame.height - targetFrame.height) > 2.0 ||
+                   abs(window.frame.origin.x - targetFrame.origin.x) > 2.0 ||
+                   abs(window.frame.origin.y - targetFrame.origin.y) > 2.0 {
+                    isAdjustingWindowFrame = true
+                    window.setFrame(targetFrame, display: true, animate: false)
+                    isAdjustingWindowFrame = false
+                }
+            }
+        }
+
+        player?.applyContentAspectRatioLock()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            if let player = self?.player, !player.isPlaying {
+                player.renderCurrentFrameImmediately()
+            }
+        }
+    }
+
+    public func windowDidFailToEnterFullScreen(_ window: NSWindow) {
+        isFullscreenTransitioning = false
+        player?.isFullscreenTransitioning = false
+    }
+
+    public func windowDidFailToExitFullScreen(_ window: NSWindow) {
+        isFullscreenTransitioning = false
+        player?.isFullscreenTransitioning = false
+    }
+
+    public func windowWillClose(_ notification: Notification) {
+        player?.stop()
+    }
+}
+```
+
+---
+
+### 修复 4：`Sources/SilkPlayer/VideoView.swift` —— 修复 `performDrag` 重复触发与双击事件防重入
+
+在 `MetalPlayerContainerView` 中：
+1. 保存 `private var currentMouseDownEvent: NSEvent? = nil`。
+2. 在 `mouseDragged(with:)` 中，一旦位移超过 3.0pt，立刻置 `canDragWindowFromCurrentMouseDown = false`（防止后续 `mouseDragged` 重复重入调用 `performDrag`），并调用 `window.performDrag(with: currentMouseDownEvent ?? event)`！
+3. 双击（`event.clickCount == 2`）触发全屏或最大化时，仅在 `event.clickCount == 2` 时执行（忽略 `clickCount > 2` 的连击洪水），确保不会在双击过快时刚进全屏又立刻触发退全屏！
+
+请将 `VideoView.swift` 中的 `mouseDown`、`mouseDragged`、`mouseUp` 替换为：
+
+```swift
+    private var currentMouseDownEvent: NSEvent? = nil
+
+    override public func mouseDown(with event: NSEvent) {
+        let loc = self.convert(event.locationInWindow, from: nil)
+        let b = bounds
+        guard let window = self.window else {
+            super.mouseDown(with: event)
+            return
+        }
+        let isFullscreen = window.styleMask.contains(.fullScreen)
+        canDragWindowFromCurrentMouseDown = false
+        currentMouseDownEvent = event
+
+        // 1. 窗口边缘 8pt 原生调整大小保护
+        if !isFullscreen {
+            let margin: CGFloat = 8.0
+            if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
                 super.mouseDown(with: event)
                 return
             }
+        }
 
-            // 顶栏中间区域双击：最大化/还原或退出全屏
-            if event.clickCount >= 2 {
-                pendingSingleClickWorkItem?.cancel()
-                pendingSingleClickWorkItem = nil
-                if isFullscreen {
-                    player.toggleFullscreen()
-                } else {
-                    PlayerWindowManager.shared.toggleMaximize(window: window)
+        // 抽屉与音量滑块判定
+        let activeDrawerWidth: CGFloat = (playerCore?.isInspectorVisible == true) ? 348.0 :
+            ((playerCore?.isPlaylistDrawerVisible == true) ? (PlaylistDrawerDimensions.drawerWidth(for: b.width, isFullscreen: isFullscreen) + 8.0) : 0.0)
+
+        if let player = playerCore {
+            // 抽屉外点击关闭抽屉
+            if player.isPlaylistDrawerVisible || player.isInspectorVisible {
+                let insideDrawer = (loc.x >= b.width - activeDrawerWidth) && (loc.y >= 96 && loc.y <= b.height - 64)
+                if !insideDrawer {
+                    player.isPlaylistDrawerVisible = false
+                    player.isInspectorVisible = false
+                    return
                 }
+            }
+
+            // 抽屉内部与右侧音量区放行
+            if (activeDrawerWidth > 0 && loc.x >= b.width - activeDrawerWidth) ||
+               (player.isVolumeHUDVisible && loc.x >= b.width - 80) {
+                super.mouseDown(with: event)
+                return
+            }
+        }
+
+        guard let player = playerCore else { return }
+        let topBarHeight: CGFloat = isFullscreen ? 52.0 : 64.0
+        let isTopBarArea = (loc.y >= b.height - topBarHeight)
+        let isBottomControlArea = (loc.y <= 112.0)
+
+        // 2. HUD 激活态路由
+        if player.isHUDVisible {
+            // A. 底部控制栏：禁止任何画布暂停与窗口拖拽
+            if isBottomControlArea {
+                canDragWindowFromCurrentMouseDown = false
                 return
             }
 
-            // 顶栏单击：允许拖拽窗口
-            canDragWindowFromCurrentMouseDown = !isFullscreen
-            dragInitialMouseScreenLocation = NSEvent.mouseLocation
-            dragInitialWindowOrigin = window.frame.origin
+            // B. 顶栏区域
+            if isTopBarArea {
+                let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
+                let isTrailingActionArea = loc.x >= b.width - 160.0
+                if isLeadingTrafficArea || isTrailingActionArea {
+                    super.mouseDown(with: event)
+                    return
+                }
+
+                // 顶栏中间区域双击：最大化/还原或退出全屏（严格匹配 clickCount == 2 防止三连击重入）
+                if event.clickCount >= 2 {
+                    pendingSingleClickWorkItem?.cancel()
+                    pendingSingleClickWorkItem = nil
+                    if event.clickCount == 2 {
+                        if isFullscreen {
+                            player.toggleFullscreen()
+                        } else {
+                            PlayerWindowManager.shared.toggleMaximize(window: window)
+                        }
+                    }
+                    return
+                }
+
+                // 顶栏单击：允许拖拽窗口
+                canDragWindowFromCurrentMouseDown = !isFullscreen
+                dragInitialMouseScreenLocation = NSEvent.mouseLocation
+                dragInitialWindowOrigin = window.frame.origin
+                isDraggingWindow = false
+                return
+            }
+        }
+
+        // 3. 沉浸态（纯画面观影）或中间视频画面区域路由
+        if window.firstResponder !== self {
+            window.makeFirstResponder(self)
+        }
+
+        if event.clickCount >= 2 {
+            pendingSingleClickWorkItem?.cancel()
+            pendingSingleClickWorkItem = nil
+
+            if event.clickCount == 2 {
+                // 沉浸态下顶部 28pt 仍允许窗口最大化
+                if !isFullscreen && !player.isHUDVisible && loc.y >= b.height - 28.0 {
+                    PlayerWindowManager.shared.toggleMaximize(window: window)
+                    return
+                }
+                self.handleDoubleClickAction()
+            }
             return
         }
+
+        // 单击准备与画布拖拽授权
+        canDragWindowFromCurrentMouseDown = !isFullscreen
+        dragInitialMouseScreenLocation = NSEvent.mouseLocation
+        dragInitialWindowOrigin = window.frame.origin
+        isDraggingWindow = false
     }
 
-    // 3. 沉浸态（纯画面观影）或中间视频画面区域路由
-    if window.firstResponder !== self {
-        window.makeFirstResponder(self)
-    }
-
-    if event.clickCount >= 2 {
-        pendingSingleClickWorkItem?.cancel()
-        pendingSingleClickWorkItem = nil
-
-        // 沉浸态下顶部 28pt 仍允许窗口最大化
-        if !isFullscreen && !player.isHUDVisible && loc.y >= b.height - 28.0 {
-            PlayerWindowManager.shared.toggleMaximize(window: window)
+    override public func mouseDragged(with event: NSEvent) {
+        guard canDragWindowFromCurrentMouseDown,
+              let window = self.window,
+              !window.styleMask.contains(.fullScreen) else {
+            super.mouseDragged(with: event)
             return
         }
 
-        self.handleDoubleClickAction()
-        return
-    }
-
-    // 单击准备与画布拖拽授权
-    canDragWindowFromCurrentMouseDown = !isFullscreen
-    dragInitialMouseScreenLocation = NSEvent.mouseLocation
-    dragInitialWindowOrigin = window.frame.origin
-}
-```
-
-3. 重写 `mouseDragged(with:)` 与 `mouseUp(with:)`：
-```swift
-override public func mouseDragged(with event: NSEvent) {
-    guard canDragWindowFromCurrentMouseDown,
-          let window = self.window,
-          !window.styleMask.contains(.fullScreen) else {
-        super.mouseDragged(with: event)
-        return
-    }
-
-    let current = NSEvent.mouseLocation
-    let distance = hypot(current.x - dragInitialMouseScreenLocation.x, current.y - dragInitialMouseScreenLocation.y)
-    if distance > 3.0 {
-        pendingSingleClickWorkItem?.cancel()
-        pendingSingleClickWorkItem = nil
-        window.performDrag(with: event)
-    }
-}
-
-override public func mouseUp(with event: NSEvent) {
-    guard event.clickCount == 1 else { return }
-
-    let current = NSEvent.mouseLocation
-    let distance = hypot(current.x - dragInitialMouseScreenLocation.x, current.y - dragInitialMouseScreenLocation.y)
-    if distance > 3.0 {
-        pendingSingleClickWorkItem?.cancel()
-        pendingSingleClickWorkItem = nil
-        return
-    }
-
-    // 若 HUD 激活且点击落在顶栏或底栏，直接返回，避免误触发画面暂停
-    if let player = playerCore, player.isHUDVisible {
-        let loc = self.convert(event.locationInWindow, from: nil)
-        let b = bounds
-        let topH: CGFloat = window?.styleMask.contains(.fullScreen) == true ? 52.0 : 64.0
-        if loc.y <= 112.0 || loc.y >= b.height - topH {
-            return
+        let current = NSEvent.mouseLocation
+        let distance = hypot(current.x - dragInitialMouseScreenLocation.x, current.y - dragInitialMouseScreenLocation.y)
+        if distance > 3.0 {
+            pendingSingleClickWorkItem?.cancel()
+            pendingSingleClickWorkItem = nil
+            canDragWindowFromCurrentMouseDown = false
+            isDraggingWindow = true
+            window.performDrag(with: currentMouseDownEvent ?? event)
+            isDraggingWindow = false
         }
     }
-
-    // 画面空白处防抖单击（0.16s）
-    if AppSettings.shared.doubleClickAction == .none {
-        self.playerCore?.togglePlayPause()
-    } else {
-        pendingSingleClickWorkItem?.cancel()
-        let task = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            self.pendingSingleClickWorkItem = nil
-            self.playerCore?.togglePlayPause()
-        }
-        self.pendingSingleClickWorkItem = task
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: task)
-    }
-}
 ```
 
-### 步骤 3：修复 `PlayerHUDView.swift` 滚轮拦截与自动隐藏
+---
 
-1. 滚轮事件无条件放行：
-在 `setupMouseMonitor()` 中，对 `.scrollWheel` 事件绝不返回 `nil`：
-```swift
-if event.type == .scrollWheel {
-    Task { @MainActor in
-        self.registerUserActivity()
-    }
-    return event // 完整放行给底层的 MetalPlayerContainerView 处理触控板手势
-}
-```
+### 修复 5：`Sources/SilkPlayer/Player/EmptyPlaybackView.swift` —— 消除双重边距死区与拖拽重入
 
-2. 光标与控制栏悬停保护：
-在 `PlayerHUDView` 和 `PlayerCore` 的自动隐藏定时器（1.8s）触发时，判断鼠标当前位置：
-- 若鼠标悬停在底部控制栏（`loc.y <= 112`）或顶部控制栏（`loc.y >= height - 64`），或者右侧抽屉处于展开状态，保持控制栏与光标常亮，不执行隐藏。
+在 `EmptyPlaybackView.swift` 中：
+1. `WindowDragGestureView` 已经设置了 `.padding(12)`（已经避开了窗口四周边框 12pt 的系统拉伸手柄），因此 `WindowDragCanvasView.mouseDown` 里**严禁再重复加 `margin: 8.0` 拦截**！
+2. 同样在 `mouseDragged` 中使用 `canDrag` 锁死单次 `performDrag`：
 
-### 步骤 4：修复主页闲置窗口（`EmptyPlaybackView.swift`）
-
-修改 `WindowDragCanvasView`：
 ```swift
 public final class WindowDragCanvasView: NSView {
     private var initialMouseLocation: NSPoint = .zero
+    private var canDrag: Bool = false
+    private var downEvent: NSEvent? = nil
 
     override public func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override public func mouseDown(with event: NSEvent) {
         guard let window = self.window else { return }
-        if event.clickCount == 2 {
-            let loc = self.convert(event.locationInWindow, from: nil)
-            if loc.y >= bounds.height - 52.0 {
-                PlayerWindowManager.shared.toggleMaximize(window: window)
-            } else if AppSettings.shared.doubleClickAction == .openFile {
-                PlayerWindowManager.shared.openFilePicker()
+        let loc = self.convert(event.locationInWindow, from: nil)
+        let b = bounds
+
+        if event.clickCount >= 2 {
+            canDrag = false
+            if event.clickCount == 2 {
+                if loc.y >= b.height - 52.0 {
+                    PlayerWindowManager.shared.toggleMaximize(window: window)
+                } else if AppSettings.shared.doubleClickAction == .openFile {
+                    PlayerWindowManager.shared.openFilePicker()
+                }
             }
             return
         }
         initialMouseLocation = NSEvent.mouseLocation
+        downEvent = event
+        canDrag = !window.styleMask.contains(.fullScreen)
     }
 
     override public func mouseDragged(with event: NSEvent) {
-        guard let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
+        guard canDrag, let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
         let current = NSEvent.mouseLocation
         if hypot(current.x - initialMouseLocation.x, current.y - initialMouseLocation.y) > 3.0 {
-            window.performDrag(with: event)
+            canDrag = false
+            window.performDrag(with: downEvent ?? event)
         }
     }
 }
@@ -382,137 +951,5 @@ public final class WindowDragCanvasView: NSView {
 
 ---
 
-## 四、 触控板事件的无设备测试与验证标准
-
-由于本地缺少触控板硬件，执行 Agent 应遵循以下规范避免代码劣化：
-
-1. **逻辑解耦保障**：
-   - 必须保留 `MetalPlayerContainerView.scrollWheel(with:)` 中对 `event.hasPreciseScrollingDeltas` 的判断分支。
-   - `hasPreciseScrollingDeltas == true` 为触控板逻辑（双指滑动）：
-     - 判定 `dx` 与 `dy` 比例，实现水平 Scrubbing 与垂直音量调整的轴向锁定。
-   - `hasPreciseScrollingDeltas == false` 为传统鼠标齿轮滚轮逻辑：
-     - 直接执行单帧步进或音量加减。
-   - 只要不吞噬事件且两条分支保持独立，触控板功能将百分之百保持设计行为。
-
-2. **验证闭环**：
-   - 运行工程测试：`swift test`（或通过 Xcode 对应 Scheme 运行）。
-   - 重点验证 `Tests/SilkPlayerTests/GeometryAndTransformTests.swift` 中关于最大尺寸计算、多比例几何约束以及坐标逆变换测试全部通过。
-   - 确保 `swift build` 编译输出 **0 Errors, 0 Warnings**。
-
----
-
-## 五、 执行 AI 落地实现报告与交叉验证核验单 (Third-Party AI Verification Audit)
-
-- **执行提交标识**: `fix(window): implement aspect-preserved zoom and gesture routing per handoff spec`
-- **提交作者**: `meowvia <meowvia@users.noreply.github.com>`
-- **验证基准**: macOS 14.0+, Apple Silicon arm64, Swift 6 Strict Concurrency
-- **闭源内核隔离**: `/Volumes/2T/Projects/SilkPlayer/SilkCoreKit` 保持独立隔离，未被污染或提交至公开仓库
-
----
-
-### 5.1 修改文件清单与架构收敛状态
-
-| 文件路径 | 变更类型 | 核心修改摘要与职责收敛 |
-| :--- | :---: | :--- |
-| `Sources/SilkPlayer/App/WindowGeometryCoordinator.swift` | **删除** | 彻底清除临时中间层状态机，逻辑全面归位至 AppKit 原生 Window 生命周期与委托 |
-| `Sources/SilkPlayer/App/PlayerWindowManager.swift` | **重构** | 落地等比最大化（Aspect-Preserved Zoom）、置顶单事实源（SSOT）、AppKit 原始全屏生命周期还原 |
-| `Sources/SilkPlayer/VideoView.swift` | **重写** | 8pt 边缘放行、沉浸态/交互态分流网关、0.16s 防抖杜绝第一击暂停、`canDragWindowFromCurrentMouseDown` 3pt 拖拽保护 |
-| `Sources/SilkPlayer/PlayerHUDView.swift` | **修改** | `.scrollWheel` 事件无条件 `return event` 放行触控板、标题胶囊 `.allowsHitTesting(false)` 支持穿透、置顶图钉统一调用 SSOT |
-| `Sources/SilkPlayer/Player/EmptyPlaybackView.swift` | **重构** | `WindowDragCanvasView` 补全 8pt 边缘放行、顶栏 52pt 双击等比最大化、双击空白打开文件、>3pt 拖拽阈值 |
-| `Sources/SilkPlayer/Player/PlayerCore+WindowGeometry.swift` | **重构** | 移除对 `WindowGeometryCoordinator` 的依赖，直接采用数学计算与原生窗口几何适配 |
-| `Sources/SilkPlayer/PlayerCore.swift` | **清理** | 移除 `savePreFullScreenFrame` 及 `isFullscreenTransitioning` 状态过渡毛刺 |
-| `Tests/SilkPlayerTests/GeometryAndTransformTests.swift` | **补充** | 增加 `testWindowResizeAndAspectMaximizeInvariants` 针对 NaN 防御、等比计算、`windowShouldZoom` 的全量测试 |
-
----
-
-### 5.2 三大核心强制规范定点核验
-
-#### 强制项 ①：沉浸态双击全屏时严格消除第一击的暂停抖动
-- **修改位置**: `Sources/SilkPlayer/VideoView.swift` -> `MetalPlayerContainerView` 中的 `mouseDown(with:)` 与 `mouseUp(with:)`
-- **实现原理**:
-  1. 在 `mouseUp(with:)` 中，仅当 `event.clickCount == 1` 时且非拖拽状态下，不立即执行 `togglePlayPause()`，而是通过 `pendingSingleClickWorkItem` 派发 0.16s 延迟防抖任务；
-  2. 当用户执行双击时，第二击必然在 0.16s 内通过 `mouseDown(with:)` 传入且 `event.clickCount >= 2`；
-  3. `mouseDown(with:)` 头部第一时间执行：
-     ```swift
-     pendingSingleClickWorkItem?.cancel()
-     pendingSingleClickWorkItem = nil
-     ```
-  4. 随后直接调用 `handleDoubleClickAction()`（默认切换全屏），第一击的暂停任务被 100% 物理取消，绝不执行画面暂停，彻底消除闪烁与抖动。
-
-#### 强制项 ②：画布拖拽严格设置 3pt 阈值再触发 performDrag
-- **修改位置**: `Sources/SilkPlayer/VideoView.swift` -> `MetalPlayerContainerView` 及 `Sources/SilkPlayer/Player/EmptyPlaybackView.swift`
-- **实现原理**:
-  1. 引入权限标记 `private var canDragWindowFromCurrentMouseDown: Bool = false`；
-  2. 在 `mouseDown(with:)` 中，初始化 `canDragWindowFromCurrentMouseDown = false`；
-  3. 边缘 8pt 直接 `super.mouseDown(with: event); return`，优先保障 AppKit 原生拉伸手柄；
-  4. 交互态下底部控制栏（`loc.y <= 112.0`）强制标记 `canDragWindowFromCurrentMouseDown = false; return`，用户在进度条滑动（Scrubbing）或微调控制栏时绝对禁止拖拽窗口；
-  5. 仅当在顶栏安全区域或画面授权区域单击且 `!isFullscreen` 时，才赋予 `canDragWindowFromCurrentMouseDown = true`；
-  6. 在 `mouseDragged(with:)` 中：
-     ```swift
-     guard canDragWindowFromCurrentMouseDown, let window = self.window, !window.styleMask.contains(.fullScreen) else {
-         super.mouseDragged(with: event)
-         return
-     }
-     let current = NSEvent.mouseLocation
-     let distance = hypot(current.x - dragInitialMouseScreenLocation.x, current.y - dragInitialMouseScreenLocation.y)
-     if distance > 3.0 {
-         pendingSingleClickWorkItem?.cancel()
-         pendingSingleClickWorkItem = nil
-         isDraggingWindow = true
-         window.performDrag(with: event)
-         isDraggingWindow = false
-     }
-     ```
-     严格限制位移超过 3.0pt 且必须具备拖拽授权时才调用 `window.performDrag`。
-
-#### 强制项 ③：顶部标题胶囊确保支持双击穿透或响应最大化
-- **修改位置**: `Sources/SilkPlayer/PlayerHUDView.swift` -> `topBar(tier:isHUDActive:)`
-- **实现原理**:
-  1. 将中间悬浮标题胶囊 `Text(sanitized.headerTitle)` 上的 `.allowsHitTesting(isHUDActive)` 调整为：
-     ```swift
-     .allowsHitTesting(false)
-     ```
-  2. 彻底取消标题胶囊对鼠标事件的截断，鼠标点击、拖拽与双击事件 100% 自然穿透至底层的 `MetalPlayerContainerView`；
-  3. 底层 `MetalPlayerContainerView.mouseDown` 在顶栏区间（`loc.y >= b.height - topBarHeight` 且避开左右按钮）统一接管：
-     - 单击并拖拽 > 3pt：自然带动整个窗口移动；
-     - 双击：在窗口模式下触发 `PlayerWindowManager.shared.toggleMaximize(window: window)`，在全屏模式下触发 `player.toggleFullscreen()`。
-
----
-
-### 5.3 架构重构与 AppKit 生命周期细节核验
-
-1. **等比最大化与还原（Aspect-Preserved Zoom & Restore）**:
-   - `PlayerWindowDelegate.toggleMaximize(window: NSWindow)` 摒弃粗暴赋值 `screen.visibleFrame`。
-   - 通过 `PlayerGeometry.maximumSafeContentSize(for: aspect, screenVisibleSize: screenFrame.size)` 计算当前屏幕可用区内保持视频固有比例的最大居中尺寸，并由 `savedPreZoomFrame` 精确记忆最大化前的普通窗口位置。
-   - 再次触发时，带动画平滑还原至 `savedPreZoomFrame`。
-   - 当用户在最大化态手动拉动窗口边框时，`windowDidEndLiveResize` 自动将 `savedPreZoomFrame = nil`，避免后续尺寸错位。
-   - `windowShouldZoom(_:toFrame:)` 显式返回 `false` 并分发至 `toggleMaximize`，彻底拦截 macOS 原生非等比全屏铺满。
-
-2. **全屏转场无闪回保障**:
-   - 移除针对全屏退出的所有私有方法覆写（如 `destinationFrameToExitFullScreenForWindow:`）以及在 `windowDidExitFullScreen` 中硬塞 `setFrame` 的补丁。
-   - AppKit 原生全屏机制会自动记录进入全屏前的窗口帧；退出全屏时 AppKit 原生动画丝滑恢复至该帧，消灭“全屏双击 -> 闪回最大化 -> 再跳回窗口”的视觉瑕疵。
-
-3. **触控板双指滑动管线保护**:
-   - `PlayerHUDView.setupMouseMonitor` 拦截全局事件时，在处理完 `.scrollWheel` 的用户活跃计时后，无条件执行 `return event`。
-   - 底层 `MetalPlayerContainerView.scrollWheel(with:)` 完整保留了 `event.hasPreciseScrollingDeltas`（双指触控板）与传统鼠标单步滚轮的独立处理分支，触控板左右 Scrubbing 与上下音量轴向锁定完全恢复正常。
-
-4. **置顶（Always-On-Top）单一事实源**:
-   - `AppSettings.shared.keepWindowOnTop` 为底层存储单一事实源；
-   - `PlayerWindowManager.isAlwaysOnTop` 与 `PlayerWindowSession.isAlwaysOnTop` 统一通过 getter/setter 联动 `applyAlwaysOnTop(_:)`；
-   - 顶部图钉按钮、菜单栏快捷键、窗口 Session 初始化均完全统一，杜绝状态脱节。
-
----
-
-### 5.4 自动化验证与测试报告
-
-执行项目全量测试脚本 `./scripts/run_tests.sh`：
-- **阶段 1：本地二进制集成测试**：
-  - `GeometryAndTransformTests` (4/4 passed)
-  - `PlaylistRegressionTests` (58/58 passed)
-  - 耗时: 0.24 秒，0 失败，0 异常。
-- **阶段 2：CI Mock 隔离沙盒测试**：
-  - `GeometryAndTransformTests` (4/4 passed)
-  - `PlaylistRegressionTests` (58/58 passed)
-  - 耗时: 0.23 秒，0 失败，0 异常。
-- **测试结果**: **全量通过（All 62 Tests Passed）**，Swift 编译器输出 **0 Errors, 0 Warnings**。
-
+## 三、 验证要求
+执行 Agent 完成上述 5 处修改后，运行 `./scripts/run_tests.sh` 确保编译与测试 100% 通过。

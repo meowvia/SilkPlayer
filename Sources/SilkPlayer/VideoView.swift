@@ -7,9 +7,8 @@ import SilkCoreKit
 public final class MetalPlayerContainerView: NSView {
     public weak var playerCore: PlayerCore?
     private var trackingArea: NSTrackingArea?
+    private var currentMouseDownEvent: NSEvent? = nil
     private var dragInitialMouseScreenLocation: NSPoint = .zero
-    private var dragInitialWindowOrigin: NSPoint = .zero
-    private var isDraggingWindow: Bool = false
     private var canDragWindowFromCurrentMouseDown: Bool = false
     private var pendingSingleClickWorkItem: DispatchWorkItem?
     private var lastMouseActivityTime: TimeInterval = 0
@@ -336,7 +335,7 @@ public final class MetalPlayerContainerView: NSView {
                 // 顶栏单击：允许拖拽窗口
                 canDragWindowFromCurrentMouseDown = !isFullscreen
                 dragInitialMouseScreenLocation = NSEvent.mouseLocation
-                dragInitialWindowOrigin = window.frame.origin
+                currentMouseDownEvent = event
                 return
             }
         }
@@ -363,7 +362,7 @@ public final class MetalPlayerContainerView: NSView {
         // 单击准备与画布拖拽授权
         canDragWindowFromCurrentMouseDown = !isFullscreen
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
-        dragInitialWindowOrigin = window.frame.origin
+        currentMouseDownEvent = event
     }
 
     override public func mouseDragged(with event: NSEvent) {
@@ -375,23 +374,28 @@ public final class MetalPlayerContainerView: NSView {
         }
 
         let current = NSEvent.mouseLocation
-        let distance = hypot(current.x - dragInitialMouseScreenLocation.x, current.y - dragInitialMouseScreenLocation.y)
+        let dx = current.x - dragInitialMouseScreenLocation.x
+        let dy = current.y - dragInitialMouseScreenLocation.y
+        let distance = hypot(dx, dy)
         if distance > 3.0 {
+            guard let down = currentMouseDownEvent else { return }
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-            isDraggingWindow = true
-            window.performDrag(with: event)
-            isDraggingWindow = false
+            canDragWindowFromCurrentMouseDown = false
+            currentMouseDownEvent = nil
+            window.performDrag(with: down)
         }
     }
 
     override public func mouseUp(with event: NSEvent) {
+        canDragWindowFromCurrentMouseDown = false
+        currentMouseDownEvent = nil
+
         guard event.clickCount == 1 else { return }
 
         let current = NSEvent.mouseLocation
         let distance = hypot(current.x - dragInitialMouseScreenLocation.x, current.y - dragInitialMouseScreenLocation.y)
-        if distance > 3.0 || isDraggingWindow {
-            isDraggingWindow = false
+        if distance > 3.0 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
             return
