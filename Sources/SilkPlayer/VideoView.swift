@@ -6,15 +6,6 @@ import SilkCoreKit
 // MARK: - Metal Native Player Container View
 public final class MetalPlayerContainerView: NSView {
     public weak var playerCore: PlayerCore?
-    private enum EdgeResizeHandle {
-        case left, right, top, bottom
-        case topLeft, topRight, bottomLeft, bottomRight
-    }
-    private var activeResizeHandle: EdgeResizeHandle? = nil
-    private var isResizingWindow: Bool = false
-    private var resizeInitialMouseScreenLocation: NSPoint = .zero
-    private var resizeInitialWindowFrame: NSRect = .zero
-
     private var trackingArea: NSTrackingArea?
     private var dragInitialMouseScreenLocation: NSPoint = .zero
     private var dragInitialWindowOrigin: NSPoint = .zero
@@ -61,6 +52,18 @@ public final class MetalPlayerContainerView: NSView {
         playerCore?.playerLayer?.player.view as? SilkMetalRenderView
     }
 
+    override public func viewWillStartLiveResize() {
+        super.viewWillStartLiveResize()
+    }
+
+    override public func viewDidEndLiveResize() {
+        super.viewDidEndLiveResize()
+        applyRenderViewLayout()
+        if let p = playerCore, !p.isPlaying {
+            p.renderCurrentFrameImmediately()
+        }
+    }
+
     public func applyRenderViewLayout() {
         if let p = playerCore, p.isAudioOnly {
             self.layer?.backgroundColor = NSColor.clear.cgColor
@@ -73,6 +76,10 @@ public final class MetalPlayerContainerView: NSView {
         guard let view = playerCore?.playerLayer?.player.view else { return }
         let b = bounds
         guard b.width > 0, b.height > 0 else { return }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
 
         view.wantsLayer = true
         view.layer?.contentsGravity = .resizeAspect
@@ -94,7 +101,7 @@ public final class MetalPlayerContainerView: NSView {
         }
 
         // 精准计算保持视频原始比例的画面视口帧，居中悬浮于黑色底座之上：
-        // 确保全屏/窗口转场动画期间，Metal 纹理宽高比始终与视频完全一致，绝不发生画面拉伸或人物变形
+        // 彻底杜绝全屏与窗口拉伸期间的画面撕裂与人物变形
         var videoFrame = b
         if let p = playerCore, p.videoWidth > 0, p.videoHeight > 0 {
             let aspect = p.transform.displayAspectRatio(
@@ -122,7 +129,7 @@ public final class MetalPlayerContainerView: NSView {
             }
         }
 
-        view.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+        view.autoresizingMask = []
         view.layer?.setAffineTransform(.identity)
         view.frame = videoFrame
     }
@@ -165,58 +172,6 @@ public final class MetalPlayerContainerView: NSView {
             return true
         }
         return false
-    }
-
-    // MARK: - Edge Resize Helper
-    private func edgeResizeHandle(at loc: NSPoint, in bounds: NSRect) -> EdgeResizeHandle? {
-        guard let window = self.window,
-              !window.styleMask.contains(.fullScreen) else { return nil }
-
-        // 若当前窗口已经铺满工作区，四周已在屏幕边缘，不触发拉伸
-        if let screen = window.screen ?? NSScreen.main {
-            let sf = screen.visibleFrame
-            if abs(window.frame.width - sf.width) <= 16.0 && abs(window.frame.height - sf.height) <= 16.0 {
-                return nil
-            }
-        }
-
-        let margin: CGFloat = 8.0
-        let isLeft = (loc.x >= 0 && loc.x <= margin)
-        let isRight = (loc.x >= bounds.width - margin && loc.x <= bounds.width)
-        let isBottom = (loc.y >= 0 && loc.y <= margin)
-        let isTop = (loc.y >= bounds.height - margin && loc.y <= bounds.height)
-
-        // 顶栏红绿灯区域排除（左上角 x <= 72 且属于顶部时留给红绿灯交互）
-        if isTop && loc.x <= 72.0 {
-            return nil
-        }
-
-        if isTop && isLeft { return .topLeft }
-        if isTop && isRight { return .topRight }
-        if isBottom && isLeft { return .bottomLeft }
-        if isBottom && isRight { return .bottomRight }
-
-        if isLeft { return .left }
-        if isRight { return .right }
-        if isTop { return .top }
-        if isBottom { return .bottom }
-
-        return nil
-    }
-
-    private func updateCursorForHandle(_ handle: EdgeResizeHandle?) {
-        guard let handle = handle else {
-            NSCursor.arrow.set()
-            return
-        }
-        switch handle {
-        case .left, .right:
-            NSCursor.resizeLeftRight.set()
-        case .top, .bottom:
-            NSCursor.resizeUpDown.set()
-        case .topLeft, .bottomRight, .topRight, .bottomLeft:
-            NSCursor.crosshair.set()
-        }
     }
 
     // MARK: - Trackpad & Scroll Gesture Handling (Volume & Scrubbing)
@@ -336,12 +291,6 @@ public final class MetalPlayerContainerView: NSView {
 
     override public func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
-        let loc = self.convert(event.locationInWindow, from: nil)
-        let handle = edgeResizeHandle(at: loc, in: bounds)
-        if !isResizingWindow && !isDraggingWindow {
-            updateCursorForHandle(handle)
-        }
-
         let now = CACurrentMediaTime()
         guard now - lastMouseActivityTime >= 0.05 else { return }
         lastMouseActivityTime = now
@@ -359,12 +308,19 @@ public final class MetalPlayerContainerView: NSView {
 
     override public func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
-        if !isResizingWindow && !isDraggingWindow {
-            NSCursor.arrow.set()
-        }
     }
 
     override public func hitTest(_ point: NSPoint) -> NSView? {
+        guard let window = self.window, !window.styleMask.contains(.fullScreen) else {
+            return super.hitTest(point)
+        }
+        let loc = (superview != nil) ? self.convert(point, from: superview) : self.convert(point, from: nil)
+        let b = bounds
+        let margin: CGFloat = 6.0
+        // 四周边框与四角（6pt）绝对放行：返回 nil，直通 AppKit 系统 NSThemeFrame，激活原生八向缩放手柄与原生拖拽循环
+        if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
+            return nil
+        }
         return super.hitTest(point)
     }
 
@@ -378,17 +334,12 @@ public final class MetalPlayerContainerView: NSView {
         let isFullscreen = window.styleMask.contains(.fullScreen)
         canDragWindowFromCurrentMouseDown = false
 
-        // 1. 边缘 8pt 拉伸敏感区检测（非全屏状态下）
-        if let handle = edgeResizeHandle(at: loc, in: b) {
-            isResizingWindow = true
-            activeResizeHandle = handle
-            resizeInitialMouseScreenLocation = NSEvent.mouseLocation
-            resizeInitialWindowFrame = window.frame
-            canDragWindowFromCurrentMouseDown = false
-            isDraggingWindow = false
-            pendingSingleClickWorkItem?.cancel()
-            pendingSingleClickWorkItem = nil
-            return
+        // 1. 边缘 6pt 预留给 AppKit 原生 NSThemeFrame 八向拉伸，绝不在此拦截
+        if !isFullscreen {
+            let margin: CGFloat = 6.0
+            if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
+                return
+            }
         }
 
         // 抽屉与音量滑块判定
@@ -485,135 +436,6 @@ public final class MetalPlayerContainerView: NSView {
     }
 
     override public func mouseDragged(with event: NSEvent) {
-        // A. 边框拖拽拉伸
-        if isResizingWindow, let handle = activeResizeHandle, let window = self.window {
-            let currentMouse = NSEvent.mouseLocation
-            let dx = currentMouse.x - resizeInitialMouseScreenLocation.x
-            let dy = currentMouse.y - resizeInitialMouseScreenLocation.y
-
-            let initF = resizeInitialWindowFrame
-            let screen = window.screen ?? NSScreen.main
-            let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-            let isShiftPressed = NSEvent.modifierFlags.contains(.shift)
-
-            let aspect: CGFloat
-            if let player = playerCore, player.videoWidth > 0, player.videoHeight > 0 {
-                aspect = player.effectiveAspectRatio
-            } else {
-                aspect = 16.0 / 9.0
-            }
-
-            let minSz = PlayerGeometry.minimumContentSize(for: aspect, screenVisibleHeight: screenFrame.height)
-            let minW: CGFloat = minSz.width
-            let minH: CGFloat = minSz.height
-
-            var newX = initF.origin.x
-            var newY = initF.origin.y
-            var newW = initF.width
-            var newH = initF.height
-
-            if isShiftPressed {
-                // 自由拉伸（不锁定宽高比）
-                switch handle {
-                case .right:
-                    newW = max(minW, initF.width + dx)
-                case .left:
-                    newW = max(minW, initF.width - dx)
-                    newX = initF.maxX - newW
-                case .top:
-                    newH = max(minH, initF.height + dy)
-                case .bottom:
-                    newH = max(minH, initF.height - dy)
-                    newY = initF.maxY - newH
-                case .topRight:
-                    newW = max(minW, initF.width + dx)
-                    newH = max(minH, initF.height + dy)
-                case .topLeft:
-                    newW = max(minW, initF.width - dx)
-                    newX = initF.maxX - newW
-                    newH = max(minH, initF.height + dy)
-                case .bottomRight:
-                    newW = max(minW, initF.width + dx)
-                    newH = max(minH, initF.height - dy)
-                    newY = initF.maxY - newH
-                case .bottomLeft:
-                    newW = max(minW, initF.width - dx)
-                    newX = initF.maxX - newW
-                    newH = max(minH, initF.height - dy)
-                    newY = initF.maxY - newH
-                }
-            } else {
-                // 等比拉伸（维持视频原生宽高比）
-                switch handle {
-                case .right:
-                    newW = max(minW, min(screenFrame.width, initF.width + dx))
-                    newH = round(newW / max(0.001, aspect))
-                    newY = round(initF.midY - newH / 2.0)
-                case .left:
-                    newW = max(minW, min(screenFrame.width, initF.width - dx))
-                    newH = round(newW / max(0.001, aspect))
-                    newX = initF.maxX - newW
-                    newY = round(initF.midY - newH / 2.0)
-                case .top:
-                    newH = max(minH, min(screenFrame.height, initF.height + dy))
-                    newW = round(newH * aspect)
-                    newX = round(initF.midX - newW / 2.0)
-                case .bottom:
-                    newH = max(minH, min(screenFrame.height, initF.height - dy))
-                    newW = round(newH * aspect)
-                    newX = round(initF.midX - newW / 2.0)
-                    newY = initF.maxY - newH
-                case .topRight:
-                    let rawW = initF.width + dx
-                    let rawH = initF.height + dy
-                    let scaleW = rawW / max(1.0, initF.width)
-                    let scaleH = rawH / max(1.0, initF.height)
-                    let scale = max(0.2, (scaleW + scaleH) / 2.0)
-                    newW = max(minW, min(screenFrame.width, round(initF.width * scale)))
-                    newH = round(newW / max(0.001, aspect))
-                case .topLeft:
-                    let rawW = initF.width - dx
-                    let rawH = initF.height + dy
-                    let scaleW = rawW / max(1.0, initF.width)
-                    let scaleH = rawH / max(1.0, initF.height)
-                    let scale = max(0.2, (scaleW + scaleH) / 2.0)
-                    newW = max(minW, min(screenFrame.width, round(initF.width * scale)))
-                    newH = round(newW / max(0.001, aspect))
-                    newX = initF.maxX - newW
-                case .bottomRight:
-                    let rawW = initF.width + dx
-                    let rawH = initF.height - dy
-                    let scaleW = rawW / max(1.0, initF.width)
-                    let scaleH = rawH / max(1.0, initF.height)
-                    let scale = max(0.2, (scaleW + scaleH) / 2.0)
-                    newW = max(minW, min(screenFrame.width, round(initF.width * scale)))
-                    newH = round(newW / max(0.001, aspect))
-                    newY = initF.maxY - newH
-                case .bottomLeft:
-                    let rawW = initF.width - dx
-                    let rawH = initF.height - dy
-                    let scaleW = rawW / max(1.0, initF.width)
-                    let scaleH = rawH / max(1.0, initF.height)
-                    let scale = max(0.2, (scaleW + scaleH) / 2.0)
-                    newW = max(minW, min(screenFrame.width, round(initF.width * scale)))
-                    newH = round(newW / max(0.001, aspect))
-                    newX = initF.maxX - newW
-                    newY = initF.maxY - newH
-                }
-            }
-
-            // 严格约束在可用工作区范围内
-            newW = min(newW, screenFrame.width)
-            newH = min(newH, screenFrame.height)
-            newX = max(screenFrame.minX, min(screenFrame.maxX - newW, newX))
-            newY = max(screenFrame.minY, min(screenFrame.maxY - newH, newY))
-
-            let targetFrame = NSRect(x: newX, y: newY, width: newW, height: newH)
-            window.setFrame(targetFrame, display: true, animate: false)
-            return
-        }
-
-        // B. 窗口拖拽移动
         guard canDragWindowFromCurrentMouseDown,
               let window = self.window,
               !window.styleMask.contains(.fullScreen) else {
@@ -634,20 +456,6 @@ public final class MetalPlayerContainerView: NSView {
     }
 
     override public func mouseUp(with event: NSEvent) {
-        if isResizingWindow {
-            isResizingWindow = false
-            activeResizeHandle = nil
-            NSCursor.arrow.set()
-            if let window = self.window, let player = self.playerCore {
-                let contentSize = window.contentRect(forFrameRect: window.frame).size
-                player.updateRememberedWindowSize(contentSize)
-                if let delegate = window.delegate as? PlayerWindowDelegate {
-                    delegate.capturePreFullScreenFrameIfNeeded(window: window)
-                }
-            }
-            return
-        }
-
         if isDraggingWindow {
             isDraggingWindow = false
             canDragWindowFromCurrentMouseDown = false

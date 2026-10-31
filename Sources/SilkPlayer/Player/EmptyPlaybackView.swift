@@ -214,10 +214,31 @@ public final class WindowDragCanvasView: NSView {
 
     override public func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    override public func hitTest(_ point: NSPoint) -> NSView? {
+        guard let window = self.window, !window.styleMask.contains(.fullScreen) else {
+            return super.hitTest(point)
+        }
+        let loc = (superview != nil) ? self.convert(point, from: superview) : self.convert(point, from: nil)
+        let b = bounds
+        let margin: CGFloat = 6.0
+        // 四周边框与四角（6pt）绝对放行：返回 nil，直通 AppKit 系统 NSThemeFrame，激活原生八向缩放手柄与原生拖拽循环
+        if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
+            return nil
+        }
+        return super.hitTest(point)
+    }
+
     override public func mouseDown(with event: NSEvent) {
         guard let window = self.window else { return }
         let loc = self.convert(event.locationInWindow, from: nil)
         let b = bounds
+
+        if !window.styleMask.contains(.fullScreen) {
+            let margin: CGFloat = 6.0
+            if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
+                return
+            }
+        }
 
         if event.clickCount == 2 {
             isDragging = false
