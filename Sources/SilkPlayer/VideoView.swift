@@ -368,7 +368,9 @@ public final class MetalPlayerContainerView: NSView {
         guard let player = playerCore else { return }
 
         let isMaximized: Bool
-        if let screen = window.screen ?? NSScreen.main {
+        if let delegate = window.delegate as? PlayerWindowDelegate {
+            isMaximized = (delegate.currentInteractiveMode == .maximized)
+        } else if let screen = window.screen ?? NSScreen.main {
             let sf = screen.visibleFrame
             isMaximized = (abs(window.frame.width - sf.width) <= 16.0 && abs(window.frame.height - sf.height) <= 16.0)
         } else {
@@ -424,7 +426,11 @@ public final class MetalPlayerContainerView: NSView {
         if event.clickCount >= 2 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-            self.handleDoubleClickAction()
+            if isFullscreen {
+                player.toggleFullscreen()
+            } else {
+                self.handleDoubleClickAction()
+            }
             return
         }
 

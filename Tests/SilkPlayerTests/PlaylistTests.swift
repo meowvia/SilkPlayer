@@ -1709,18 +1709,31 @@ final class PlaylistRegressionTests: XCTestCase {
     maxDelegate.toggleMaximize(window: maxWindow)
     XCTAssertEqual(maxWindow.frame.width, maxScreenFrame.width, accuracy: 2.0, "Window width fills visible screen frame")
     XCTAssertEqual(maxWindow.frame.height, maxScreenFrame.height, accuracy: 2.0, "Window height fills visible screen frame")
+    XCTAssertEqual(maxDelegate.currentInteractiveMode, .maximized, "Mode is maximized")
 
-    // B. Rapid double-clicks (<0.35s) are debounced to eliminate flicker
+    // B. Rapid double-clicks (<0.22s) are debounced to eliminate flicker
     maxDelegate.toggleMaximize(window: maxWindow)
     XCTAssertEqual(maxWindow.frame.width, maxScreenFrame.width, accuracy: 2.0, "Rapid second click is debounced")
 
-    // C. Manual inward drag shrinks proportionally
+    // C. Maximized state strictly locks window size (no drag resize in maximized)
     let shrinkProposal = NSSize(width: 960, height: 540)
-    let shrinkResult = maxDelegate.windowWillResize(maxWindow, to: shrinkProposal)
-    XCTAssertEqual(shrinkResult.width, 960, accuracy: 2.0, "Inward resize accepts width 960")
-    XCTAssertEqual(shrinkResult.height, 540, accuracy: 2.0, "Inward resize preserves 16:9 height 540")
+    let shrinkLockedResult = maxDelegate.windowWillResize(maxWindow, to: shrinkProposal)
+    XCTAssertEqual(shrinkLockedResult.width, maxScreenFrame.width, accuracy: 2.0, "Maximized window width is locked")
+    XCTAssertEqual(shrinkLockedResult.height, maxScreenFrame.height, accuracy: 2.0, "Maximized window height is locked")
 
-    // D. Over-aspect outward drag expands width without getting locked
+    // D. Second valid double-click restores original size, position and normal mode
+    try? await Task.sleep(nanoseconds: 250_000_000)
+    maxDelegate.toggleMaximize(window: maxWindow)
+    XCTAssertEqual(maxWindow.frame.width, maxInitFrame.width, accuracy: 2.0, "Restores original normal width")
+    XCTAssertEqual(maxWindow.frame.height, maxInitFrame.height, accuracy: 2.0, "Restores original normal height")
+    XCTAssertEqual(maxDelegate.currentInteractiveMode, .normal, "Mode returned to normal")
+
+    // E. In normal mode: manual 8-way drag adjusts window size
+    let normalResizeResult = maxDelegate.windowWillResize(maxWindow, to: shrinkProposal)
+    XCTAssertEqual(normalResizeResult.width, 960, accuracy: 2.0, "Normal resize accepts width 960")
+    XCTAssertEqual(normalResizeResult.height, 540, accuracy: 2.0, "Normal resize preserves 16:9 height 540")
+
+    // F. Over-aspect outward drag caps at visible screen height
     let overExpandProposal = NSSize(width: maxScreenFrame.width, height: maxScreenFrame.height)
     let overExpandResult = maxDelegate.windowWillResize(maxWindow, to: overExpandProposal)
     XCTAssertEqual(overExpandResult.width, maxScreenFrame.width, accuracy: 2.0, "Outward drag expands up to max width")

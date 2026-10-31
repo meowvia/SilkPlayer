@@ -665,14 +665,26 @@ private final class WindowObserverView: NSView {
 /// 2. Strict minimum dimensions (640x360) and maximum screen visible frame clamp
 /// 3. Seamless fullscreen lifecycle notification routing
 @MainActor
+public enum WindowInteractiveMode: Equatable {
+    case normal
+    case maximized
+}
+
+private enum PreFullScreenState: Equatable {
+    case normal(frame: NSRect)
+    case maximized(preZoomFrame: NSRect)
+}
+
+@MainActor
 public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public weak var session: PlayerWindowSession?
     public weak var player: (any PlayerControllable)?
+    public private(set) var currentInteractiveMode: WindowInteractiveMode = .normal
     public private(set) var isMaximizingOrRestoring: Bool = false
     private var isAdjustingWindowFrame: Bool = false
     private var isFullscreenTransitioning: Bool = false
     private var savedPreZoomFrame: NSRect? = nil
-    private var savedPreFullScreenFrame: NSRect? = nil
+    private var preFullScreenState: PreFullScreenState? = nil
     private var lastToggleMaximizeTime: TimeInterval = 0
 
     public init(session: PlayerWindowSession? = nil, player: (any PlayerControllable)? = nil) {
@@ -681,21 +693,56 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         super.init()
     }
 
+    @MainActor
+    private func defaultNormalFrame(for screenFrame: NSRect) -> NSRect {
+        if let player = self.player, player.videoWidth > 0, player.videoHeight > 0 {
+            let aspect = player.effectiveAspectRatio
+            let stdW: CGFloat
+            let stdH: CGFloat
+            if player.isEffectiveVertical {
+                stdH = round(screenFrame.height * 0.60)
+                stdW = round(stdH * aspect)
+            } else {
+                stdW = round(screenFrame.width * 0.55)
+                stdH = round(stdW / max(0.001, aspect))
+            }
+            let cx = round(screenFrame.midX - stdW / 2)
+            let cy = round(screenFrame.midY - stdH / 2)
+            return NSRect(x: cx, y: cy, width: stdW, height: stdH)
+        } else {
+            return NSRect(
+                x: round(screenFrame.midX - 480),
+                y: round(screenFrame.midY - 270),
+                width: 960,
+                height: 540
+            )
+        }
+    }
+
+    @MainActor
     public func capturePreFullScreenFrameIfNeeded(window: NSWindow) {
         guard !window.styleMask.contains(.fullScreen), !isFullscreenTransitioning else { return }
         let f = window.frame
         guard !f.origin.x.isNaN, !f.origin.y.isNaN, !f.width.isNaN, !f.height.isNaN,
               f.width >= 320, f.height >= 240 else { return }
         if let screen = window.screen ?? NSScreen.main {
-            // 严禁把超出可用工作区尺寸（如物理全屏帧 2752x1152）保存为退出全屏恢复帧
-            if f.height > screen.visibleFrame.height + 2.0 || f.width > screen.frame.width + 2.0 {
+            let sf = screen.visibleFrame
+            if f.height > sf.height + 2.0 || f.width > screen.frame.width + 2.0 {
                 return
             }
             if abs(f.width - screen.frame.width) <= 2.0 && abs(f.height - screen.frame.height) <= 2.0 {
                 return
             }
+            let isMax = (currentInteractiveMode == .maximized) ||
+                (abs(f.width - sf.width) <= 16.0 && abs(f.height - sf.height) <= 16.0)
+            if isMax {
+                let preZoom = savedPreZoomFrame ?? defaultNormalFrame(for: sf)
+                savedPreZoomFrame = preZoom
+                preFullScreenState = .maximized(preZoomFrame: preZoom)
+                return
+            }
         }
-        savedPreFullScreenFrame = f
+        preFullScreenState = .normal(frame: f)
     }
 
     /// Checks whether the target frameSize matches macOS native window tiling / split-screen geometry
@@ -756,6 +803,12 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
            isMaximizingOrRestoring ||
            frameSize == screenFrame.size {
             return frameSize
+        }
+
+        // 1. 【最大化模式：锁定窗口尺寸】
+        // 最大化占据可用工作区期间严格锁定尺寸，禁止边框拖拽缩小或变形
+        if currentInteractiveMode == .maximized {
+            return screenFrame.size
         }
 
         // 如果非用户手动拖拽且传入的是整个物理屏幕尺寸（AppKit 全屏调用首帧），直接放行
@@ -1108,45 +1161,33 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return
         }
 
-        // B & C. 闲置窗口 或 视频播放态：铺满屏幕除状态栏及 Dock 外可用工作区（screenFrame），或还原
-        // 窗口铺满可用屏幕，视频内部保持原生纵横比等比居中渲染并由播放器黑色底座提供自然衬底
-        let isCurrentlyMax = abs(window.frame.width - screenFrame.width) <= 16.0 &&
-                             abs(window.frame.height - screenFrame.height) <= 16.0
+        // B & C. 闲置窗口 或 视频播放态
+        let isCurrentlyMax = (currentInteractiveMode == .maximized) ||
+            (abs(window.frame.width - screenFrame.width) <= 16.0 && abs(window.frame.height - screenFrame.height) <= 16.0)
 
         let targetFrame: NSRect
         if isCurrentlyMax {
+            // 【最大化 -> 双击顶栏 -> 恢复原尺寸】
+            // 恢复最大化前的窗口宽度、高度、位置，回到普通窗口
             let restoreFrame: NSRect
             if let saved = savedPreZoomFrame,
                (abs(saved.width - screenFrame.width) > 16.0 || abs(saved.height - screenFrame.height) > 16.0) {
-                restoreFrame = saved
-            } else if let player = self.player, player.videoWidth > 0, player.videoHeight > 0 {
-                let aspect = player.effectiveAspectRatio
-                let stdW: CGFloat
-                let stdH: CGFloat
-                if player.isEffectiveVertical {
-                    stdH = round(screenFrame.height * 0.60)
-                    stdW = round(stdH * aspect)
-                } else {
-                    stdW = round(screenFrame.width * 0.55)
-                    stdH = round(stdW / max(0.001, aspect))
-                }
-                let cx = round(screenFrame.midX - stdW / 2)
-                let cy = round(screenFrame.midY - stdH / 2)
-                restoreFrame = NSRect(x: cx, y: cy, width: stdW, height: stdH)
+                let clampedW = min(saved.width, screenFrame.width)
+                let clampedH = min(saved.height, screenFrame.height)
+                let clampedX = max(screenFrame.minX, min(screenFrame.maxX - clampedW, saved.origin.x))
+                let clampedY = max(screenFrame.minY, min(screenFrame.maxY - clampedH, saved.origin.y))
+                restoreFrame = NSRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
             } else {
-                restoreFrame = NSRect(
-                    x: round(screenFrame.midX - 480),
-                    y: round(screenFrame.midY - 270),
-                    width: 960,
-                    height: 540
-                )
+                restoreFrame = defaultNormalFrame(for: screenFrame)
             }
             savedPreZoomFrame = nil
-            savedPreFullScreenFrame = restoreFrame
+            currentInteractiveMode = .normal
             targetFrame = restoreFrame
         } else {
+            // 【普通窗口 -> 双击顶栏 -> 最大化】
+            // 占据屏幕可用区域，不覆盖系统菜单栏，不覆盖 Dock，锁定窗口尺寸，记录最大化前的窗口尺寸与位置
             savedPreZoomFrame = window.frame
-            savedPreFullScreenFrame = screenFrame
+            currentInteractiveMode = .maximized
             targetFrame = screenFrame
         }
 
@@ -1176,7 +1217,23 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
     public func windowWillEnterFullScreen(_ notification: Notification) {
         if let window = notification.object as? NSWindow {
-            capturePreFullScreenFrameIfNeeded(window: window)
+            let screen = window.screen ?? NSScreen.main
+            let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+            let isMax = (currentInteractiveMode == .maximized) ||
+                (abs(window.frame.width - screenFrame.width) <= 16.0 && abs(window.frame.height - screenFrame.height) <= 16.0)
+
+            if isMax {
+                // 【最大化 -> 双击播放区 -> 全屏】
+                // 记录进入全屏前的状态：最大化
+                let preZoom = savedPreZoomFrame ?? defaultNormalFrame(for: screenFrame)
+                savedPreZoomFrame = preZoom
+                preFullScreenState = .maximized(preZoomFrame: preZoom)
+            } else {
+                // 【普通窗口 -> 双击播放区 -> 全屏】
+                // 记录进入全屏前的状态：普通窗口
+                preFullScreenState = .normal(frame: window.frame)
+            }
+
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
         }
@@ -1199,32 +1256,29 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             let screen = window.screen ?? NSScreen.main
             let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
 
-            var targetFrame: NSRect
-            if let saved = savedPreFullScreenFrame {
-                let clampedW = min(saved.width, screenFrame.width)
-                let clampedH = min(saved.height, screenFrame.height)
-                let clampedX = max(screenFrame.minX, min(screenFrame.maxX - clampedW, saved.origin.x))
-                let clampedY = max(screenFrame.minY, min(screenFrame.maxY - clampedH, saved.origin.y))
-                targetFrame = NSRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
+            let targetFrame: NSRect
+            if let preState = preFullScreenState {
+                switch preState {
+                case .maximized(let preZoom):
+                    // 【全屏 -> 双击播放区 -> 恢复最大化】
+                    // 保持最大化状态、保持屏幕可用区域尺寸、不恢复成普通窗口
+                    targetFrame = screenFrame
+                    currentInteractiveMode = .maximized
+                    savedPreZoomFrame = preZoom
+                case .normal(let saved):
+                    // 【全屏 -> 双击播放区 -> 恢复普通窗口】
+                    // 恢复普通窗口（原宽度、原高度、原位置）
+                    let clampedW = min(saved.width, screenFrame.width)
+                    let clampedH = min(saved.height, screenFrame.height)
+                    let clampedX = max(screenFrame.minX, min(screenFrame.maxX - clampedW, saved.origin.x))
+                    let clampedY = max(screenFrame.minY, min(screenFrame.maxY - clampedH, saved.origin.y))
+                    targetFrame = NSRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
+                    currentInteractiveMode = .normal
+                    savedPreZoomFrame = nil
+                }
             } else {
-                let aspect = player?.effectiveAspectRatio ?? (16.0 / 9.0)
-                let stdW = round(screenFrame.width * 0.55)
-                let stdH = round(stdW / max(0.001, aspect))
-                let clampedW = min(stdW, screenFrame.width)
-                let clampedH = min(stdH, screenFrame.height)
-                let cx = round(screenFrame.midX - clampedW / 2)
-                let cy = round(screenFrame.midY - clampedH / 2)
-                targetFrame = NSRect(x: cx, y: cy, width: clampedW, height: clampedH)
-            }
-
-            if targetFrame.height > screenFrame.height {
-                targetFrame.size.height = screenFrame.height
-            }
-            if targetFrame.origin.y < screenFrame.minY {
-                targetFrame.origin.y = screenFrame.minY
-            }
-            if targetFrame.maxY > screenFrame.maxY {
-                targetFrame.origin.y = max(screenFrame.minY, screenFrame.maxY - targetFrame.height)
+                targetFrame = defaultNormalFrame(for: screenFrame)
+                currentInteractiveMode = .normal
             }
 
             // 预设桌面空间窗口恢复帧，使 AppKit 全屏退出转场动画直接平滑缩回该目标帧，避免从 (0,0) 左下角缩放跳跃
@@ -1243,33 +1297,26 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             let screen = window.screen ?? NSScreen.main
             let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
 
-            var targetFrame: NSRect
-            if let saved = savedPreFullScreenFrame {
-                let clampedW = min(saved.width, screenFrame.width)
-                let clampedH = min(saved.height, screenFrame.height)
-                let clampedX = max(screenFrame.minX, min(screenFrame.maxX - clampedW, saved.origin.x))
-                let clampedY = max(screenFrame.minY, min(screenFrame.maxY - clampedH, saved.origin.y))
-                targetFrame = NSRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
-                savedPreFullScreenFrame = nil
+            let targetFrame: NSRect
+            if let preState = preFullScreenState {
+                switch preState {
+                case .maximized(let preZoom):
+                    targetFrame = screenFrame
+                    currentInteractiveMode = .maximized
+                    savedPreZoomFrame = preZoom
+                case .normal(let saved):
+                    let clampedW = min(saved.width, screenFrame.width)
+                    let clampedH = min(saved.height, screenFrame.height)
+                    let clampedX = max(screenFrame.minX, min(screenFrame.maxX - clampedW, saved.origin.x))
+                    let clampedY = max(screenFrame.minY, min(screenFrame.maxY - clampedH, saved.origin.y))
+                    targetFrame = NSRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
+                    currentInteractiveMode = .normal
+                    savedPreZoomFrame = nil
+                }
+                preFullScreenState = nil
             } else {
-                let aspect = player?.effectiveAspectRatio ?? (16.0 / 9.0)
-                let stdW = round(screenFrame.width * 0.55)
-                let stdH = round(stdW / max(0.001, aspect))
-                let clampedW = min(stdW, screenFrame.width)
-                let clampedH = min(stdH, screenFrame.height)
-                let cx = round(screenFrame.midX - clampedW / 2)
-                let cy = round(screenFrame.midY - clampedH / 2)
-                targetFrame = NSRect(x: cx, y: cy, width: clampedW, height: clampedH)
-            }
-
-            if targetFrame.height > screenFrame.height {
-                targetFrame.size.height = screenFrame.height
-            }
-            if targetFrame.origin.y < screenFrame.minY {
-                targetFrame.origin.y = screenFrame.minY
-            }
-            if targetFrame.maxY > screenFrame.maxY {
-                targetFrame.origin.y = max(screenFrame.minY, screenFrame.maxY - targetFrame.height)
+                targetFrame = defaultNormalFrame(for: screenFrame)
+                currentInteractiveMode = .normal
             }
 
             if abs(window.frame.width - targetFrame.width) > 2.0 ||
@@ -1279,6 +1326,11 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
                 isAdjustingWindowFrame = true
                 window.setFrame(targetFrame, display: true, animate: false)
                 isAdjustingWindowFrame = false
+            }
+
+            let contentSize = window.contentRect(forFrameRect: window.frame).size
+            if let p = self.player, p.videoWidth > 0 || p.videoHeight > 0 {
+                p.updateRememberedWindowSize(contentSize)
             }
         }
 
