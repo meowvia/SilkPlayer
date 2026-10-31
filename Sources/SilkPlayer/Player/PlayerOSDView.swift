@@ -79,7 +79,7 @@ public struct PlayerOSDView: View {
                 .font(.system(size: 12.5, weight: .bold))
                 .foregroundColor(.cyan)
 
-            if abs(offset) > 0.05 {
+            if abs(offset) >= 0.5 {
                 Text(String(format: "%@%.1fs", offset >= 0 ? "+" : "", offset))
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .monospacedDigit()
