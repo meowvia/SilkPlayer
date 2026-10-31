@@ -217,9 +217,14 @@ public final class WindowDragCanvasView: NSView {
         if event.clickCount == 2 {
             let loc = self.convert(event.locationInWindow, from: nil)
             if loc.y >= bounds.height - 52.0 {
-                PlayerWindowManager.shared.toggleMaximize(window: window)
+                DispatchQueue.main.async { [weak window] in
+                    guard let window = window else { return }
+                    PlayerWindowManager.shared.toggleMaximize(window: window)
+                }
             } else if AppSettings.shared.doubleClickAction == .openFile {
-                PlayerWindowManager.shared.openFilePicker()
+                DispatchQueue.main.async {
+                    PlayerWindowManager.shared.openFilePicker()
+                }
             }
             return
         }

@@ -162,4 +162,42 @@ final class GeometryAndTransformTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - 4. Fullscreen Exit Destination Frame & NaN Defense Invariants
+    @MainActor
+    func testFullscreenExitDestinationFrameAndNaNDefense() {
+        let delegate = PlayerWindowDelegate()
+        let window = NSWindow(
+            contentRect: NSRect(x: 200, y: 150, width: 1280, height: 720),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+
+        // 1. Verify delegate responds to destinationFrameToExitFullScreenForWindow: selector
+        let sel = NSSelectorFromString("destinationFrameToExitFullScreenForWindow:")
+        XCTAssertTrue(delegate.responds(to: sel), "Delegate must respond to destinationFrameToExitFullScreenForWindow:")
+
+        // 2. Default destination frame without pre-saved frame must be valid, positive, non-NaN
+        let defaultDest = delegate.destinationFrameToExitFullScreen(for: window)
+        XCTAssertFalse(defaultDest.origin.x.isNaN, "Destination frame origin.x must not be NaN")
+        XCTAssertFalse(defaultDest.origin.y.isNaN, "Destination frame origin.y must not be NaN")
+        XCTAssertFalse(defaultDest.size.width.isNaN, "Destination frame width must not be NaN")
+        XCTAssertFalse(defaultDest.size.height.isNaN, "Destination frame height must not be NaN")
+        XCTAssertGreaterThan(defaultDest.size.width, 300, "Destination frame width must be reasonable")
+        XCTAssertGreaterThan(defaultDest.size.height, 200, "Destination frame height must be reasonable")
+
+        // 3. windowWillResize with NaN or non-positive sizes must gracefully return current frame size without crashing
+        let nanSize = NSSize(width: 1280, height: CGFloat.nan)
+        let safeResized = delegate.windowWillResize(window, to: nanSize)
+        XCTAssertFalse(safeResized.width.isNaN, "Resized width must not be NaN")
+        XCTAssertFalse(safeResized.height.isNaN, "Resized height must not be NaN")
+        XCTAssertGreaterThan(safeResized.width, 0, "Resized width must be positive")
+        XCTAssertGreaterThan(safeResized.height, 0, "Resized height must be positive")
+
+        let zeroSize = NSSize(width: 0, height: 0)
+        let zeroResized = delegate.windowWillResize(window, to: zeroSize)
+        XCTAssertGreaterThan(zeroResized.width, 0, "Resized width must be positive for zero input")
+        XCTAssertGreaterThan(zeroResized.height, 0, "Resized height must be positive for zero input")
+    }
 }

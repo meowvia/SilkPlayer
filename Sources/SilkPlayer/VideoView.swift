@@ -343,10 +343,13 @@ public final class MetalPlayerContainerView: NSView {
                     if event.clickCount == 2 {
                         pendingSingleClickWorkItem?.cancel()
                         pendingSingleClickWorkItem = nil
-                        if isFullscreen {
-                            player.toggleFullscreen()
-                        } else {
-                            PlayerWindowManager.shared.toggleMaximize(window: window)
+                        DispatchQueue.main.async { [weak self, weak window] in
+                            guard let self = self, let window = window else { return }
+                            if isFullscreen {
+                                self.playerCore?.toggleFullscreen()
+                            } else {
+                                PlayerWindowManager.shared.toggleMaximize(window: window)
+                            }
                         }
                         return
                     } else if event.clickCount > 2 {
@@ -369,7 +372,10 @@ public final class MetalPlayerContainerView: NSView {
                     if event.clickCount == 2 {
                         pendingSingleClickWorkItem?.cancel()
                         pendingSingleClickWorkItem = nil
-                        PlayerWindowManager.shared.toggleMaximize(window: window)
+                        DispatchQueue.main.async { [weak window] in
+                            guard let window = window else { return }
+                            PlayerWindowManager.shared.toggleMaximize(window: window)
+                        }
                         return
                     } else if event.clickCount > 2 {
                         pendingSingleClickWorkItem?.cancel()
@@ -394,7 +400,9 @@ public final class MetalPlayerContainerView: NSView {
             // Cancel pending single click task immediately - 100% zero playback glitch or stutter!
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-            self.handleDoubleClickAction()
+            DispatchQueue.main.async { [weak self] in
+                self?.handleDoubleClickAction()
+            }
             return
         } else if event.clickCount > 2 {
             // Ignore click counts > 2 to prevent re-entrant event flooding or window state deadlock
