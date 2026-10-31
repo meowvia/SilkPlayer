@@ -1197,7 +1197,6 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         guard let window = hostWindow ?? NSApp.keyWindow else { return }
         if !isFullscreen {
             isPlaylistDrawerVisible = false
-            (window.delegate as? PlayerWindowDelegate)?.savePreFullScreenFrame(window: window)
         }
         window.toggleFullScreen(nil)
     }
@@ -1211,11 +1210,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     public func setFullscreenState(_ fullscreen: Bool) {
         isFullscreen = fullscreen
-        isFullscreenTransitioning = false
         if fullscreen {
             isPlaylistDrawerVisible = false
-        } else {
-            isHUDVisible = true
         }
         updateTrafficLightsVisibility()
     }

@@ -132,13 +132,6 @@ public struct PlayerHUDView: View {
                 registerUserActivity()
             }
         }
-        .onChange(of: player.isFullscreen) { _, isFullscreen in
-            registerUserActivity()
-            if !isFullscreen {
-                showCursor()
-                player.setTrafficLightsHidden(false)
-            }
-        }
         .onChange(of: player.isAudioOnly) { _, isAudio in
             if isAudio {
                 showCursor()
@@ -184,8 +177,8 @@ public struct PlayerHUDView: View {
                             isActive: settings.keepWindowOnTop,
                             helpText: settings.keepWindowOnTop ? L10n.tr("Unpin Window", "取消窗口置顶") : L10n.tr("Keep Window on Top", "保持窗口置顶")
                         ) {
-                            let next = !settings.keepWindowOnTop
-                            settings.keepWindowOnTop = next
+                            PlayerWindowManager.shared.toggleAlwaysOnTop()
+                            let next = PlayerWindowManager.shared.isAlwaysOnTop
                             player.showOSD(.pictureAdjustment(name: L10n.tr("Always on Top", "窗口置顶"), value: next ? L10n.tr("On", "开启") : L10n.tr("Off", "关闭")))
                         }
 
@@ -239,7 +232,7 @@ public struct PlayerHUDView: View {
                     .frame(maxWidth: max(160, tier == .expanded ? 460 : 280))
                     .help(player.mediaTitle)
                     .opacity(isHUDActive ? 1.0 : 0.0)
-                    .allowsHitTesting(isHUDActive)
+                    .allowsHitTesting(false)
             }
         }
     }

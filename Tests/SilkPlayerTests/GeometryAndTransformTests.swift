@@ -163,9 +163,9 @@ final class GeometryAndTransformTests: XCTestCase {
         }
     }
 
-    // MARK: - 4. Window Resize & Fullscreen Destination Invariants
+    // MARK: - 4. Window Resize & Aspect Maximize Invariants
     @MainActor
-    func testWindowResizeNaNDefense() {
+    func testWindowResizeAndAspectMaximizeInvariants() {
         let delegate = PlayerWindowDelegate()
         let window = NSWindow(
             contentRect: NSRect(x: 200, y: 150, width: 1280, height: 720),
@@ -174,17 +174,11 @@ final class GeometryAndTransformTests: XCTestCase {
             defer: false
         )
 
-        // 1. Verify delegate responds to destinationFrameToExitFullScreenForWindow: selector
-        let sel = NSSelectorFromString("destinationFrameToExitFullScreenForWindow:")
-        XCTAssertTrue(delegate.responds(to: sel), "Delegate must respond to destinationFrameToExitFullScreenForWindow:")
+        // 1. windowShouldZoom must return false to intercept native zoom and perform aspect-preserved zoom
+        let shouldZoom = delegate.windowShouldZoom(window, toFrame: window.frame)
+        XCTAssertFalse(shouldZoom, "windowShouldZoom must return false to prioritize aspect-preserved zoom")
 
-        // 2. Pre-saved window frame must be restored accurately, never maximized to full screen
-        delegate.savePreFullScreenFrame(window: window)
-        let dest = delegate.destinationFrameToExitFullScreen(for: window)
-        XCTAssertEqual(dest.size.width, window.frame.width, accuracy: 1.0, "Exit destination width must match saved normal window")
-        XCTAssertEqual(dest.size.height, window.frame.height, accuracy: 1.0, "Exit destination height must match saved normal window")
-
-        // 3. windowWillResize with NaN or non-positive sizes must gracefully return current frame size without crashing
+        // 2. windowWillResize with NaN or non-positive sizes must gracefully return current frame size without crashing
         let nanSize = NSSize(width: 1280, height: CGFloat.nan)
         let safeResized = delegate.windowWillResize(window, to: nanSize)
         XCTAssertFalse(safeResized.width.isNaN, "Resized width must not be NaN")
@@ -196,5 +190,29 @@ final class GeometryAndTransformTests: XCTestCase {
         let zeroResized = delegate.windowWillResize(window, to: zeroSize)
         XCTAssertGreaterThan(zeroResized.width, 0, "Resized width must be positive for zero input")
         XCTAssertGreaterThan(zeroResized.height, 0, "Resized height must be positive for zero input")
+
+        // 3. Aspect-preserved maximum safe content size calculations
+        let screenSize = NSSize(width: 1920, height: 1080)
+
+        // 16:9
+        let max169 = PlayerGeometry.maximumSafeContentSize(for: 16.0 / 9.0, screenVisibleSize: screenSize)
+        let ratio169 = max169.width / max169.height
+        XCTAssertEqual(ratio169, 16.0 / 9.0, accuracy: 0.02, "16:9 maximum safe size must preserve aspect ratio")
+        XCTAssertLessThanOrEqual(max169.width, screenSize.width * 0.88 + 1.0)
+        XCTAssertLessThanOrEqual(max169.height, screenSize.height * 0.85 + 1.0)
+
+        // 2.39:1 (Cinemascope)
+        let maxCinemascope = PlayerGeometry.maximumSafeContentSize(for: 2.39, screenVisibleSize: screenSize)
+        let ratioCinemascope = maxCinemascope.width / maxCinemascope.height
+        XCTAssertEqual(ratioCinemascope, 2.39, accuracy: 0.02, "2.39:1 maximum safe size must preserve aspect ratio")
+        XCTAssertLessThanOrEqual(maxCinemascope.width, screenSize.width * 0.88 + 1.0)
+        XCTAssertLessThanOrEqual(maxCinemascope.height, screenSize.height * 0.85 + 1.0)
+
+        // 9:16 (Vertical)
+        let maxVertical = PlayerGeometry.maximumSafeContentSize(for: 9.0 / 16.0, screenVisibleSize: screenSize)
+        let ratioVertical = maxVertical.width / maxVertical.height
+        XCTAssertEqual(ratioVertical, 9.0 / 16.0, accuracy: 0.02, "9:16 maximum safe size must preserve aspect ratio")
+        XCTAssertLessThanOrEqual(maxVertical.width, screenSize.width * 0.88 + 1.0)
+        XCTAssertLessThanOrEqual(maxVertical.height, screenSize.height * 0.85 + 1.0)
     }
 }

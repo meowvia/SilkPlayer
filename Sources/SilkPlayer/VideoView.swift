@@ -66,9 +66,6 @@ public final class MetalPlayerContainerView: NSView {
         guard b.width > 0, b.height > 0 else { return }
 
         view.wantsLayer = true
-        view.autoresizingMask = [.width, .height]
-        view.layer?.setAffineTransform(.identity)
-        view.frame = b
 
         if let metalView = view as? SilkMetalRenderView, let p = playerCore {
             metalView.transformUniforms = MetalTransformUniforms(
@@ -85,6 +82,10 @@ public final class MetalPlayerContainerView: NSView {
                 metalView.updateMetalGeometryAndRedraw()
             }
         }
+
+        view.autoresizingMask = [.width, .height]
+        view.layer?.setAffineTransform(.identity)
+        view.frame = b
     }
 
     // MARK: - Drag and Drop Destination
@@ -259,188 +260,155 @@ public final class MetalPlayerContainerView: NSView {
     override public func mouseDown(with event: NSEvent) {
         let loc = self.convert(event.locationInWindow, from: nil)
         let b = bounds
-
         guard let window = self.window else {
             super.mouseDown(with: event)
             return
         }
-
         let isFullscreen = window.styleMask.contains(.fullScreen)
         canDragWindowFromCurrentMouseDown = false
 
-        // 0. Window Edge Resize Zone Protection:
-        // When in windowed mode, clicks within 8pt of the window outer border belong to AppKit
-        // native resize handles. Must never capture or engage performDrag!
+        // 1. 窗口边缘 8pt 原生调整大小保护
         if !isFullscreen {
-            let resizeBorderMargin: CGFloat = 8.0
-            let isAtResizeBorder = (loc.x <= resizeBorderMargin ||
-                                    loc.x >= b.width - resizeBorderMargin ||
-                                    loc.y <= resizeBorderMargin ||
-                                    loc.y >= b.height - resizeBorderMargin)
-            if isAtResizeBorder {
+            let margin: CGFloat = 8.0
+            if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
                 super.mouseDown(with: event)
                 return
             }
         }
 
-        // Dynamic active drawer width calculation
-        let activeDrawerWidth: CGFloat
-        if playerCore?.isInspectorVisible == true {
-            activeDrawerWidth = 348.0
-        } else if playerCore?.isPlaylistDrawerVisible == true {
-            activeDrawerWidth = PlaylistDrawerDimensions.drawerWidth(for: b.width, isFullscreen: isFullscreen) + 8.0
-        } else {
-            activeDrawerWidth = 0.0
-        }
+        // 抽屉与音量滑块判定
+        let activeDrawerWidth: CGFloat = (playerCore?.isInspectorVisible == true) ? 348.0 :
+            ((playerCore?.isPlaylistDrawerVisible == true) ? (PlaylistDrawerDimensions.drawerWidth(for: b.width, isFullscreen: isFullscreen) + 8.0) : 0.0)
 
-        // 1. Dismiss drawer on clicking outside without pausing playback or dragging window
         if let player = playerCore {
+            // 抽屉外点击关闭抽屉
             if player.isPlaylistDrawerVisible || player.isInspectorVisible {
-                let isInsideDrawer = (loc.x >= b.width - activeDrawerWidth) && (loc.y >= 96 && loc.y <= b.height - 64)
-                if !isInsideDrawer {
+                let insideDrawer = (loc.x >= b.width - activeDrawerWidth) && (loc.y >= 96 && loc.y <= b.height - 64)
+                if !insideDrawer {
                     player.isPlaylistDrawerVisible = false
                     player.isInspectorVisible = false
                     return
                 }
             }
 
-            // Right-side drawers (playlist or inspector)
-            if activeDrawerWidth > 0 && loc.x >= b.width - activeDrawerWidth {
+            // 抽屉内部与右侧音量区放行
+            if (activeDrawerWidth > 0 && loc.x >= b.width - activeDrawerWidth) ||
+               (player.isVolumeHUDVisible && loc.x >= b.width - 80) {
                 super.mouseDown(with: event)
                 return
-            }
-
-            // Right-side vertical volume slider
-            if player.isVolumeHUDVisible && loc.x >= b.width - 80 {
-                super.mouseDown(with: event)
-                return
-            }
-
-            let topBarHeight: CGFloat = isFullscreen ? 52.0 : 64.0
-            let isTopBarArea = (loc.y >= b.height - topBarHeight)
-            let isBottomControlArea = (loc.y <= 112.0)
-
-            // 2. Control bar regions handling when HUD is visible:
-            if player.isHUDVisible {
-                // A. Bottom control area: never drag window, never toggle canvas play/pause
-                if isBottomControlArea {
-                    canDragWindowFromCurrentMouseDown = false
-                    return
-                }
-
-                // B. Top information bar
-                if isTopBarArea {
-                    let isTrailingActionArea = loc.x >= b.width - 160.0
-                    let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
-                    if isTrailingActionArea || isLeadingTrafficArea {
-                        super.mouseDown(with: event)
-                        return
-                    }
-
-                    // Top bar double-click: uniform double click action (toggle fullscreen)
-                    if event.clickCount >= 2 {
-                        pendingSingleClickWorkItem?.cancel()
-                        pendingSingleClickWorkItem = nil
-                        DispatchQueue.main.async { [weak self] in
-                            self?.handleDoubleClickAction()
-                        }
-                        return
-                    }
-
-                    // Single click on top bar area: record anchor for dragging, never pass through to canvas
-                    canDragWindowFromCurrentMouseDown = !isFullscreen
-                    dragInitialMouseScreenLocation = NSEvent.mouseLocation
-                    dragInitialWindowOrigin = window.frame.origin
-                    isDraggingWindow = false
-                    return
-                }
             }
         }
 
+        guard let player = playerCore else { return }
+        let topBarHeight: CGFloat = isFullscreen ? 52.0 : 64.0
+        let isTopBarArea = (loc.y >= b.height - topBarHeight)
+        let isBottomControlArea = (loc.y <= 112.0)
+
+        // 2. HUD 激活态路由
+        if player.isHUDVisible {
+            // A. 底部控制栏：禁止任何画布暂停与窗口拖拽
+            if isBottomControlArea {
+                canDragWindowFromCurrentMouseDown = false
+                return
+            }
+
+            // B. 顶栏区域
+            if isTopBarArea {
+                let isLeadingTrafficArea = !isFullscreen && loc.x <= 70.0
+                let isTrailingActionArea = loc.x >= b.width - 160.0
+                if isLeadingTrafficArea || isTrailingActionArea {
+                    super.mouseDown(with: event)
+                    return
+                }
+
+                // 顶栏中间区域双击：最大化/还原或退出全屏
+                if event.clickCount >= 2 {
+                    pendingSingleClickWorkItem?.cancel()
+                    pendingSingleClickWorkItem = nil
+                    if isFullscreen {
+                        player.toggleFullscreen()
+                    } else {
+                        PlayerWindowManager.shared.toggleMaximize(window: window)
+                    }
+                    return
+                }
+
+                // 顶栏单击：允许拖拽窗口
+                canDragWindowFromCurrentMouseDown = !isFullscreen
+                dragInitialMouseScreenLocation = NSEvent.mouseLocation
+                dragInitialWindowOrigin = window.frame.origin
+                return
+            }
+        }
+
+        // 3. 沉浸态（纯画面观影）或中间视频画面区域路由
         if window.firstResponder !== self {
             window.makeFirstResponder(self)
         }
 
-        // 4. Double-Click Handling (strictly on playback canvas):
-        if event.clickCount == 2 {
-            // Cancel pending single click task immediately - 100% zero playback glitch or stutter!
+        if event.clickCount >= 2 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-            DispatchQueue.main.async { [weak self] in
-                self?.handleDoubleClickAction()
+
+            // 沉浸态下顶部 28pt 仍允许窗口最大化
+            if !isFullscreen && !player.isHUDVisible && loc.y >= b.height - 28.0 {
+                PlayerWindowManager.shared.toggleMaximize(window: window)
+                return
             }
-            return
-        } else if event.clickCount > 2 {
-            // Ignore click counts > 2 to prevent re-entrant event flooding or window state deadlock
-            pendingSingleClickWorkItem?.cancel()
-            pendingSingleClickWorkItem = nil
+
+            self.handleDoubleClickAction()
             return
         }
 
-        // 5. Record mouse-down anchor for potential canvas window dragging
+        // 单击准备与画布拖拽授权
         canDragWindowFromCurrentMouseDown = !isFullscreen
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
         dragInitialWindowOrigin = window.frame.origin
-        isDraggingWindow = false
     }
 
     override public func mouseDragged(with event: NSEvent) {
-        guard canDragWindowFromCurrentMouseDown, let window = self.window, !window.styleMask.contains(.fullScreen) else {
+        guard canDragWindowFromCurrentMouseDown,
+              let window = self.window,
+              !window.styleMask.contains(.fullScreen) else {
             super.mouseDragged(with: event)
             return
         }
 
-        let currentMouseScreen = NSEvent.mouseLocation
-        let dx = currentMouseScreen.x - dragInitialMouseScreenLocation.x
-        let dy = currentMouseScreen.y - dragInitialMouseScreenLocation.y
-        let distance = hypot(dx, dy)
-
-        // Once movement exceeds threshold (3.0pt), engage native macOS window dragging
+        let current = NSEvent.mouseLocation
+        let distance = hypot(current.x - dragInitialMouseScreenLocation.x, current.y - dragInitialMouseScreenLocation.y)
         if distance > 3.0 {
-            // Cancel pending single click if mouse is being dragged
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
-
             isDraggingWindow = true
             window.performDrag(with: event)
             isDraggingWindow = false
-            return
         }
     }
 
     override public func mouseUp(with event: NSEvent) {
-        // Double-click guard: clickCount >= 2 is handled by mouseDown
         guard event.clickCount == 1 else { return }
 
-        // 1. If user was dragging the window, finish dragging cleanly
-        let currentMouseScreen = NSEvent.mouseLocation
-        let dx = currentMouseScreen.x - dragInitialMouseScreenLocation.x
-        let dy = currentMouseScreen.y - dragInitialMouseScreenLocation.y
-        let distance = hypot(dx, dy)
-
-        if isDraggingWindow || distance > 3.0 {
+        let current = NSEvent.mouseLocation
+        let distance = hypot(current.x - dragInitialMouseScreenLocation.x, current.y - dragInitialMouseScreenLocation.y)
+        if distance > 3.0 || isDraggingWindow {
             isDraggingWindow = false
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
             return
         }
 
-        // 2. Control bar regions protection: clicks in top bar or bottom controls never toggle canvas play/pause when HUD is visible
-        let loc = self.convert(event.locationInWindow, from: nil)
-        let b = bounds
-        let isFullscreen = window?.styleMask.contains(.fullScreen) ?? false
-        let topBarHeight: CGFloat = isFullscreen ? 52.0 : 64.0
-        let isBottomControlArea = (loc.y <= 112.0)
-        let isTopControlArea = (loc.y >= b.height - topBarHeight)
-        if playerCore?.isHUDVisible == true && (isBottomControlArea || isTopControlArea) {
-            return
+        // 若 HUD 激活且点击落在顶栏或底栏，直接返回，避免误触发画面暂停
+        if let player = playerCore, player.isHUDVisible {
+            let loc = self.convert(event.locationInWindow, from: nil)
+            let b = bounds
+            let topH: CGFloat = window?.styleMask.contains(.fullScreen) == true ? 52.0 : 64.0
+            if loc.y <= 112.0 || loc.y >= b.height - topH {
+                return
+            }
         }
 
-        // 3. Stationary in-place click on canvas:
-        // Schedule single-click play/pause with standard debounce delay (0.16s).
-        // If a second click arrives within this interval, it cancels cleanly without pausing or glitching!
-        let hasDoubleClickAction = (AppSettings.shared.doubleClickAction != .none)
-        if !hasDoubleClickAction {
+        // 画面空白处防抖单击（0.16s）
+        if AppSettings.shared.doubleClickAction == .none {
             self.playerCore?.togglePlayPause()
         } else {
             pendingSingleClickWorkItem?.cancel()
