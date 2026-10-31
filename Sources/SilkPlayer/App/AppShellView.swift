@@ -481,6 +481,9 @@ public struct AppShellView: View {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.level = AppSettings.shared.keepWindowOnTop ? .floating : .normal
+        window.contentView?.wantsLayer = true
+        window.contentView?.layer?.cornerRadius = player.isFullscreen ? 0.0 : 10.0
+        window.contentView?.layer?.masksToBounds = true
         if isPlaying {
             if !player.isFullscreen {
                 player.applyContentAspectRatioLock()

@@ -866,18 +866,15 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         let minH = minContentSz.height
 
         // 在用户实时拖拽窗口边框/四角（inLiveResize）期间：
-        // 100% 顺应用户拖拽轨迹放行提议尺寸，仅施加最小尺寸（320x240 / minContentSz）与屏幕最大可用区保护，
-        // 彻底杜绝强行改写单向尺寸导致的 AppKit / WindowServer 几何脱节死锁（避免边框锁死拉不动）！
-        // 内部 MetalPlayerContainerView 已具有精准等比居中渲染与黑色底座，画面绝不拉伸变形。
+        // 顺应用户拖拽轨迹放行提议尺寸，施加与静止窗口和几何标准一致的最小尺寸保护（横屏 640x360，竖屏宽 280pt）
+        // 杜绝窗口被异常缩小为 320x240 等失真尺寸，内部 MetalPlayerContainerView 等比居中渲染
         if window.inLiveResize {
-            let minWidth: CGFloat = 320.0
-            let minHeight: CGFloat = 240.0
-            if window.minSize.width > minWidth || window.minSize.height > minHeight {
-                window.minSize = NSSize(width: minWidth, height: minHeight)
-                window.contentMinSize = NSSize(width: minWidth, height: minHeight)
+            if window.minSize.width != minW || window.minSize.height != minH {
+                window.minSize = NSSize(width: minW, height: minH)
+                window.contentMinSize = NSSize(width: minW, height: minH)
             }
-            let clampedW = max(minWidth, min(maxSize.width, frameSize.width))
-            let clampedH = max(minHeight, min(maxSize.height, frameSize.height))
+            let clampedW = max(minW, min(maxSize.width, frameSize.width))
+            let clampedH = max(minH, min(maxSize.height, frameSize.height))
             return NSSize(width: round(clampedW), height: round(clampedH))
         }
 
@@ -1248,6 +1245,9 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         isFullscreenTransitioning = false
         player?.isFullscreenTransitioning = false
         player?.setFullscreenState(true)
+        if let window = notification.object as? NSWindow {
+            window.contentView?.layer?.cornerRadius = 0.0
+        }
     }
 
     public func windowWillExitFullScreen(_ notification: Notification) {
@@ -1297,6 +1297,9 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         isFullscreenTransitioning = false
         player?.isFullscreenTransitioning = false
         player?.setFullscreenState(false)
+        if let window = notification.object as? NSWindow {
+            window.contentView?.layer?.cornerRadius = 10.0
+        }
 
         if let window = notification.object as? NSWindow {
             let screen = window.screen ?? NSScreen.main

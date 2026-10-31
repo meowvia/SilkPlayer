@@ -93,7 +93,23 @@ public struct PlayerHUDView: View {
             let tier = layoutTier(for: availableWidth)
             let isHUDActive = isControlsVisible && player.isHUDVisible
 
-            ZStack {
+            ZStack(alignment: .top) {
+                // Top Scrim Vignette Gradient (provides deep contrast for traffic lights & header badges)
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.55),
+                        Color.black.opacity(0.20),
+                        Color.clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: player.isFullscreen ? 80 : 96)
+                .edgesIgnoringSafeArea(.all)
+                .opacity(isHUDActive ? 1.0 : 0.0)
+                .allowsHitTesting(false)
+
                 VStack(spacing: 0) {
                     topBar(tier: tier, isHUDActive: isHUDActive)
                         .padding(.horizontal, 16)
@@ -104,12 +120,12 @@ public struct PlayerHUDView: View {
                         .opacity(isHUDActive ? 1.0 : 0.0)
                         .allowsHitTesting(isHUDActive)
                 }
+                .padding(player.isFullscreen ? 0 : 8)
                 .allowsHitTesting(isHUDActive)
                 .animation(.easeInOut(duration: 0.22), value: isHUDActive)
                 .animation(.spring(response: 0.25, dampingFraction: 0.8), value: tier)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(player.isFullscreen ? 0 : 8)
             .allowsHitTesting(isHUDActive)
         }
         .allowsHitTesting(isControlsVisible && player.isHUDVisible)

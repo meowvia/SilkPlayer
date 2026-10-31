@@ -21,6 +21,7 @@ public final class MetalPlayerContainerView: NSView {
         super.init(frame: .zero)
         self.wantsLayer = true
         self.layer?.backgroundColor = playerCore.isAudioOnly ? NSColor.clear.cgColor : NSColor.black.cgColor
+        self.layer?.masksToBounds = true
 
         // Register for file drag & drop
         registerForDraggedTypes([.fileURL])
@@ -65,6 +66,7 @@ public final class MetalPlayerContainerView: NSView {
     }
 
     public func applyRenderViewLayout() {
+        let isFullscreen = playerCore?.isFullscreen == true
         if let p = playerCore, p.isAudioOnly {
             self.layer?.backgroundColor = NSColor.clear.cgColor
             metalRenderView?.isHidden = true
@@ -73,6 +75,9 @@ public final class MetalPlayerContainerView: NSView {
             self.layer?.backgroundColor = NSColor.black.cgColor
             metalRenderView?.isHidden = false
         }
+        self.layer?.cornerRadius = isFullscreen ? 0.0 : 10.0
+        self.layer?.masksToBounds = true
+
         guard let view = playerCore?.playerLayer?.player.view else { return }
         let b = bounds
         guard b.width > 0, b.height > 0 else { return }
@@ -82,6 +87,8 @@ public final class MetalPlayerContainerView: NSView {
         defer { CATransaction.commit() }
 
         view.wantsLayer = true
+        view.layer?.cornerRadius = isFullscreen ? 0.0 : 9.0
+        view.layer?.masksToBounds = true
         view.layer?.contentsGravity = .resizeAspect
 
         if let metalView = view as? SilkMetalRenderView, let p = playerCore {
@@ -101,8 +108,16 @@ public final class MetalPlayerContainerView: NSView {
         }
 
         // 精准计算保持视频原始比例的画面视口帧，居中悬浮于黑色底座之上：
-        // 彻底杜绝全屏与窗口拉伸期间的画面撕裂与人物变形
-        var videoFrame = b
+        // 窗口模式下施加 1pt 安全内缩，确保四周完整露出系统 1pt 黑色边框底衬，彻底消除边缘溢出断层
+        let inset: CGFloat = isFullscreen ? 0.0 : 1.0
+        let safeBounds = NSRect(
+            x: inset,
+            y: inset,
+            width: max(1.0, b.width - inset * 2.0),
+            height: max(1.0, b.height - inset * 2.0)
+        )
+
+        var videoFrame = safeBounds
         if let p = playerCore, p.videoWidth > 0, p.videoHeight > 0 {
             let aspect = p.transform.displayAspectRatio(
                 rawWidth: p.displayVideoWidth > 0 ? p.displayVideoWidth : p.videoWidth,
@@ -110,21 +125,21 @@ public final class MetalPlayerContainerView: NSView {
                 ratioSetting: p.videoAspectRatio
             )
             let safeAspect = max(0.001, aspect)
-            let containerAspect = b.width / max(1.0, b.height)
+            let containerAspect = safeBounds.width / max(1.0, safeBounds.height)
 
             if abs(containerAspect - safeAspect) > 0.002 {
                 if containerAspect > safeAspect {
-                    // 容器更宽（如 21:9 全屏播放 16:9 视频）：高度撑满，宽度等比居中
-                    let vH = b.height
+                    // 容器更宽（如拉宽窗口产生立柱黑边）：高度撑满安全区，宽度等比居中
+                    let vH = safeBounds.height
                     let vW = round(vH * safeAspect)
-                    let vX = round((b.width - vW) / 2.0)
-                    videoFrame = NSRect(x: vX, y: 0, width: vW, height: vH)
+                    let vX = round(safeBounds.minX + (safeBounds.width - vW) / 2.0)
+                    videoFrame = NSRect(x: vX, y: safeBounds.minY, width: vW, height: vH)
                 } else {
-                    // 容器更高（如宽屏播放竖屏视频）：宽度撑满，高度等比居中
-                    let vW = b.width
+                    // 容器更高（如拉高窗口产生信箱黑边）：宽度撑满安全区，高度等比居中
+                    let vW = safeBounds.width
                     let vH = round(vW / safeAspect)
-                    let vY = round((b.height - vH) / 2.0)
-                    videoFrame = NSRect(x: 0, y: vY, width: vW, height: vH)
+                    let vY = round(safeBounds.minY + (safeBounds.height - vH) / 2.0)
+                    videoFrame = NSRect(x: safeBounds.minX, y: vY, width: vW, height: vH)
                 }
             }
         }
