@@ -460,6 +460,11 @@ public struct AppShellView: View {
             } else if window.delegate == nil {
                 window.delegate = session.windowDelegate
             }
+            if let zoomBtn = window.standardWindowButton(.zoomButton),
+               let delegate = window.delegate as? PlayerWindowDelegate {
+                zoomBtn.target = delegate
+                zoomBtn.action = #selector(PlayerWindowDelegate.handleZoomButtonClick(_:))
+            }
         }
         player.hostWindow = window
         window.toolbar = nil
