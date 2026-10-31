@@ -18,12 +18,15 @@
 | 提案 003 | 极简无感化 SMB 局域网共享 (Native SMB) | 待落地评估 (未开始) | v1.1.0 候选 |
 | 提案 004 | 局域网轻量投屏功能 (DLNA / Screencast) | 待落地评估 (未开始) | v1.1.0 候选 |
 | ~~提案 005~~ | ~~纯音频播放体验与原生极简封面动效 (Audio Artwork & Waveform)~~ | ~~待落地评估 (未开始)~~ **已落地销项** | **v1.1.0** |
-| 提案 006 | 音视频双轨独立列表与智能分流管理 (Dual-Track Media Playlist) | 核心需求 2.4 已落地，主界面双轨待落地 | v1.4.0 候选 |
-| 提案 007 | VP9 硬件加速解码与色彩管线 (VP9 Hardware Decoding) | 待落地评估 (未开始) | v1.4.0 候选 |
-| 提案 008 | 外挂字幕自动检索与同名关联推荐 (External Subtitle Auto-Search) | 待落地评估 (未开始) | v1.4.0 候选 |
-| 提案 009 | 杜比视界 Profile 5 动态色调映射与 macOS EDR 管线优化 (Dolby Vision Profile 5 EDR & DTM) | 待落地评估 (未开始) | v1.4.0 候选 |
+| ~~提案 006~~ | ~~音视频双轨独立列表与智能分流管理 (Dual-Track Media Playlist)~~ | ~~核心需求 2.4 已落地，主界面双轨待落地~~ **已落地销项** | **v1.4.0** |
+| 提案 007 | VP9 硬件加速解码与色彩管线 (VP9 Hardware Decoding) | 待落地评估 (未开始) | v1.5.0 候选 |
+| 提案 008 | 外挂字幕自动检索与同名关联推荐 (External Subtitle Auto-Search) | 待落地评估 (未开始) | v1.5.0 候选 |
+| 提案 009 | 杜比视界 Profile 5 动态色调映射与 macOS EDR 管线优化 (Dolby Vision Profile 5 EDR & DTM) | 待落地评估 (未开始) | v1.5.0 候选 |
 | 提案 010 | 私有自用增强分支与端侧离线听译/网络流沙盒 (Personal Edition & On-Device ASR/Radio Pipeline) | 需求立项 (自用验证中) | 自用专用分支 / 待成熟毕业 |
-| 提案 011 | 非原生预览格式文稿图标与品牌 Logo 占位替换 (Document Types Iconography & Fallback Branding) | 正式立项 (下个版本解决) | **v1.4.0 核心排期** |
+| ~~提案 011~~ | ~~非原生预览格式文稿图标与品牌 Logo 占位替换 (Document Types Iconography & Fallback Branding)~~ | ~~正式立项 (下个版本解决)~~ **已落地销项** | **v1.4.0** |
+| 提案 012 | 智能片头片尾静默探测与无缝连播跳过 (Smart Opening/Ending Skip Pipeline) | 需求定稿 (技术方案就绪) | **v1.5.0 核心排期** |
+| 提案 013 | HDR10 与杜比视界动态 EDR 高光软滚降压制 (Dynamic EDR Tone-Mapping & Highlight Roll-off) | 需求立项 (方案设计完成) | **v1.5.0 核心排期** |
+| 提案 014 | 全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion) | 技术攻关立项 (算法探索) | **v1.5.0 核心排期** |
 
 
 ---
@@ -409,6 +412,70 @@
 2. 针对无章节标签但同季多集的美剧，在后台静默提取音频指纹后准确计算出带有不同冷开场时长的片头区间；
 3. 纯音频播放模式与单集独立视频模式下，不启动跨集比对，保障系统资源零消耗；
 4. 任何跳转行为均具备单键撤销链路。
+
+---
+
+## 提案 013: HDR10 与杜比视界动态 EDR 高光软滚降压制 (Dynamic EDR Tone-Mapping & Highlight Roll-off)
+
+### 1. 提案背景与物理根因
+- **场景痛点**:
+  - 当前 `kernel.metal` 中的 HDR10（`f2`）与杜比视界（`f0`）片元着色器在完成逆 PQ 变换后，直接通过 `*(10000.0 / 203.0)` 线性无损缩放为 EDR 亮度；
+  - 片源中超过屏幕物理头顶高度（`edrHeadroom`）的高光像素未经过任何肩部平滑过渡，遭遇 macOS 显示合成器硬截断（Hard-clipping）；
+  - 在大光比场景下（例如户外蓝天白云、直射阳光照耀、高光反光面），漫反射的蓝天（约 300~500 nits）尚在屏幕硬件线性显示舒适区，但白云向阳面（1,500~4,000+ nits）超出显示器硬件极限，导致白云内部棉絮阴影与卷积纹理全部糊成大面积死白，轮廓局部过曝。
+- **目标定位**:
+  - **纳入 v1.5.0 核心排期**；
+  - 建立“中低光 1:1 绝对保真 + 高光区自适应软滚降”的动态 EDR 色调映射管线。
+
+### 2. 架构设计与技术路径
+#### 2.1 动态物理 Headroom 注入
+- `SilkMetalRenderView.swift` 在渲染编码前，将已有的 `cachedEDRHeadroom` 打包为 Uniform 结构体，通过 `setFragmentBytes` 注入 `f2`（HDR10）与 `f0`（杜比视界）着色器。
+
+#### 2.2 软拐点肩部滚降算法 (Soft-Knee Shoulder Roll-off)
+- **安全拐点（Knee Point）**:
+  - 以 ITU-R BT.2408 漫反射白电平（203 nits，EDR = 1.0）为基准安全拐点；
+  - $0 \le Y \le 1.0$ 的暗部、人物面部与中低光环境光 100% 直通，不作任何压缩，保持纯正对比度与黑位层次。
+- **高光区间连续有理压缩 (Smooth Rational Compression)**:
+  - 针对感知亮度 $Y > 1.0$ 的超高光像素，采用一阶导数连续的非线性平滑滚降曲线，将 $1.0 \sim 4,000+\text{ nits}$（EDR 1.0 ~ 19.7）平滑收拢至当前屏幕的物理极限 `headroom`：
+    $$\text{excess} = Y - \text{knee}$$
+    $$\text{max\_excess} = \max(\text{headroom} - \text{knee}, 0.1)$$
+    $$\text{compressed\_excess} = \text{max\_excess} \cdot \left(\frac{\text{excess}}{\text{excess} + \text{max\_excess}}\right)$$
+    $$Y_{\text{mapped}} = \text{knee} + \text{compressed\_excess}$$
+- **色度等比缩放保真**:
+  - 基于加权感知亮度 $Y$ 计算压缩系数 $\frac{Y_{\text{mapped}}}{Y}$，对 RGB 三通道等比缩放，杜绝单通道提前饱和造成的白云暖阳色相漂移。
+
+### 3. 验收标准
+1. 高动态范围蓝天白云片源中，白云轮廓层次丰富，向阳明暗过渡柔和自然，彻底消除高光死白；
+2. 在 MacBook Pro XDR 屏与普通 SDR 屏幕（MacBook Air / iMac / 外接显示器）上自适应匹配，SDR 屏不发灰，XDR 屏不爆光；
+3. Metal 片元着色器执行耗时增加少于 0.02ms，保障 120fps 满帧流畅度。
+
+---
+
+## 提案 014: 全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion & Local Contrast)
+
+### 1. 提案背景与研究方向
+- **场景痛点**:
+  - 当前画质增强管线（`QualityEnhanceUniforms` / `f3` 着色器）主要聚焦于基于拉普拉斯算子的微观边缘与微纹理锐度增强，在人物面部特写、发丝纤维与服饰纹理上有显著提升；
+  - 但对于大动态范围大场景（如广角风光、逆光黄昏、日光大对比度远景），现行算法仅对 $L > 0.68$ 的镜面高光做了简单的二次方权重点缀，对画面的宏观层次感、逆光通透度和空间纵深感提升较为有限。
+- **目标定位**:
+  - **纳入 v1.5.0 核心排期**；
+  - 推进“微观锐度 + 宏观大动态范围重构（SDR-to-EDR Remastering）”双重融合管线。
+
+### 2. 技术探索与实现路径
+#### 2.1 场景自适应逆色调映射 (Adaptive Inverse Tone Mapping, ITM)
+- 结合运行时采集的平均画面亮度（APL）与场景动态区间，构建非线性 S 型亮度扩展曲线；
+- 在不破坏中灰曝光的前提下，适度拉伸天空、阳光与灯火等高光区域的动态上限，使 SDR 内容在 XDR 屏幕上呈现更充沛的光感。
+
+#### 2.2 频带分离与局部对比度增强 (Bilateral/Guided Local Contrast)
+- 将视频画面分解为包含几何轮廓的照明基底（Base Illumination Layer）与包含高频细节的微纹理层（Detail Layer）；
+- 在照明层执行大尺度的局部对比度适度拉伸，强化远景山川层次、阴云褶皱与逆光人物立体感，重构大动态范围场景下的通透度。
+
+#### 2.3 高光色相与饱和度保护 (Gamut & Saturation Defense)
+- 在 BT.709 向 Display P3 色域扩展与 EDR 提亮过程中，引入动态饱和度补偿，防止高光在大动态拉伸后颜色泛白或夕阳红通道溢出产生塑料感。
+
+### 3. 验收标准
+1. 在大光比风光、逆光街景等片源中开启画质增强，画面明暗反差、空间纵深感与通透度有肉眼可见的质感提升；
+2. 不破坏原生黑电平（不泛灰白雾），不产生边缘光晕（Haloing）伪影；
+3. GPU 额外算力开销控制在 0.5ms 以内，满足 4K 60fps 实时流畅运行。
 
 
 
