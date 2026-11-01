@@ -27,6 +27,7 @@
 | 提案 012 | 智能片头片尾静默探测与无缝连播跳过 (Smart Opening/Ending Skip Pipeline) | 需求定稿 (技术方案就绪) | **v1.5.0 核心排期** |
 | 提案 013 | HDR10 与杜比视界动态 EDR 高光软滚降压制 (Dynamic EDR Tone-Mapping & Highlight Roll-off) | 需求立项 (方案设计完成) | **v1.5.0 核心排期** |
 | 提案 014 | 全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion) | 技术攻关立项 (算法探索) | **v1.5.0 核心排期** |
+| 提案 015 | 播控栏交互式音量微调与起播防爆音安全锁 (Interactive Volume Popover & Pre-play Audio Safety Lock) | 正式立项 (方案设计完成) | **v1.5.0 核心排期** |
 
 
 ---
@@ -476,6 +477,52 @@
 1. 在大光比风光、逆光街景等片源中开启画质增强，画面明暗反差、空间纵深感与通透度有肉眼可见的质感提升；
 2. 不破坏原生黑电平（不泛灰白雾），不产生边缘光晕（Haloing）伪影；
 3. GPU 额外算力开销控制在 0.5ms 以内，满足 4K 60fps 实时流畅运行。
+
+---
+
+## 提案 015: 播控栏交互式音量微调与起播防爆音安全锁 (Interactive Volume Popover & Pre-play Audio Safety Lock)
+
+### 1. 提案背景与痛点复盘
+- **场景痛点**:
+  - 当前音量调节仅依赖画面右侧滚动滚轮或触控板双指滑动触发的瞬态垂直音量条（`SilkVerticalVolumeBarView`）；
+  - 媒体未起播、暂停态或静止空置时，界面缺乏任何常态可视化元素（Missing Pre-play Affordance），用户完全无法感知当前播放器音量是 0%、50% 还是 150%；
+  - 在外放扬声器环境下打开私密敏感视频或大动态高电平片源时，由于无法在起播前确认或预调音量，极易因突发响度引发严重的尴尬与设备爆音风险；
+  - 拒绝在主进度条（`PlayerProgressSection`）旁强行焊接常驻横向滑轨，避免挤占毫秒级精密时间轴视口与破坏极简美学。
+- **目标定位**:
+  - **纳入 v1.5.0 核心排期**；
+  - 建立“极简常态 24pt 图标 + 起播前一键静音安全锁 + 悬停展开微型滑块”的 Apple 原生交互闭环。
+
+### 2. 交互与功能架构
+#### 2.1 极简常态指示 (Collapsed State)
+- 收拢在播控栏右翼工具区（`rightWingControls`，位于音轨与字幕图标旁），常态仅占据 24pt 标准图标位；
+- 采用动态扬声器 SF Symbols 图标：
+  - 静音态：`speaker.slash.fill`（醒目红色）；
+  - 低电平（< 40%）：`speaker.wave.1.fill`；
+  - 正常电平（40% ~ 100%）：`speaker.wave.2.fill`；
+  - 超载增强（> 100%）：橙色高亮标记。
+
+#### 2.2 起播前一键静音保险锁 (One-Click Mute Safety)
+- 视频加载前、暂停态或播放中，单击喇叭图标即可瞬间切换静音与解除静音（映射快捷键 `M`）；
+- 用户在载入敏感文件前，扫一眼图标即可掌握外放状态，单键锁死音频输出，保证零声音泄露。
+
+#### 2.3 悬停平滑展开微型滑块 (Hover-to-Expand)
+- 鼠标指针悬停于喇叭区域时，平滑展开长度约 72pt 的紧凑微型滑块（复用现有 `HUDVolumeSlider.swift`）；
+- 支持直接拖拽滑块与滚轮微调，移开光标后平滑收拢回 24pt 图标态；
+- 绝不侵占主进度条拖拽空间，在各窗口尺寸等级（`HUDLayoutTier`）下自适应收放。
+
+#### 2.4 手势双轨保留
+- 画面右侧区域的鼠标滚轮与触控板连续手势 100% 保留，与新图标滑块形成“宏观大范围手势 + 微观精准点按预设”的双轨互补。
+
+### 3. 技术实现路径
+- 复用与调优 [`HUDVolumeSlider.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/HUD/HUDVolumeSlider.swift)；
+- 在 [`PlayerHUDView.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift) 的 `rightWingControls` 与紧凑模式菜单中按需分发挂载；
+- 联动 `PlayerCore.volume`、`isMuted` 与 `AppSettings.shared.maxVolumeLimit`，确保多处状态完全同步。
+
+### 4. 验收标准
+1. 媒体未播放、暂停及播放各状态下，播控栏右侧均清晰呈现当前音量与静音状态；
+2. 视频未载入或暂停时，支持单键提前置为静音，起播时保证零声音泄露；
+3. 悬停展开与收拢过渡平滑自然，不挤占 `PlayerScrubberView` 进度条有效交互宽度；
+4. 画面右侧滚轮与新滑条双向联动，数据与 OSD 状态 100% 保持原子一致。
 
 
 
