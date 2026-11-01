@@ -8,12 +8,12 @@
 
 | 缺陷编号 | 缺陷摘要 | 影响模式 / 模块 | 严重程度 | 当前状态 | 发现版本 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| ISSUE-001 | 音频模式下倍速播放未生效 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
-| ISSUE-002 | 随机播放无记忆抽样与近距离高频重播缺陷 | 播放列表与音频随机 / SilkPlayer (PlaylistManager) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
-| ISSUE-003 | 音频模式窗口适配不良与垂直重叠穿模 | 界面布局 / SilkPlayer (AudioArtworkView & PlayerHUDView) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
-| ISSUE-004 | 窗口几何与交互状态机重构（解决多处约束冲突） | 核心架构 / PlayerWindowManager & WindowGeometry | High | 核心约束冲突已解决 (v1.2.0-dev) | v1.1.0 |
-| ISSUE-005 | 视频窗口被物理完全遮挡时 Metal 阻塞导致音频断流 | 渲染与解复用 / SilkCoreKit (SilkMetalRenderView & Engine) | Low | 已修复 (v1.2.0-dev) | v1.1.0 |
-| ISSUE-006 | 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步 | 引擎解复用与同步 / SilkCoreKit (SilkPlayerEngine) | Medium | 已修复 (v1.2.0-dev) | v1.1.0 |
+| ISSUE-001 | 音频模式下倍速播放未生效 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | Medium | 已修复 (v1.2.0) | v1.1.0 |
+| ISSUE-002 | 随机播放无记忆抽样与近距离高频重播缺陷 | 播放列表与音频随机 / SilkPlayer (PlaylistManager) | Medium | 已修复 (v1.2.0) | v1.1.0 |
+| ISSUE-003 | 音频模式窗口适配不良与垂直重叠穿模 | 界面布局 / SilkPlayer (AudioArtworkView & PlayerHUDView) | Medium | 已修复 (v1.2.0) | v1.1.0 |
+| ISSUE-004 | 窗口几何与交互状态机重构（解决多处约束冲突） | 核心架构 / PlayerWindowManager & WindowGeometry | High | 已修复 (v1.2.0) | v1.1.0 |
+| ISSUE-005 | 视频窗口被物理完全遮挡时 Metal 阻塞导致音频断流 | 渲染与解复用 / SilkCoreKit (SilkMetalRenderView & Engine) | Low | 已修复 (v1.2.0) | v1.1.0 |
+| ISSUE-006 | 局域网 SMB / 外置存储极窄缓冲导致偶发丢帧 PPT 与音画失步 | 引擎解复用与同步 / SilkCoreKit (SilkPlayerEngine) | Medium | 已修复 (v1.2.0) | v1.1.0 |
 | ISSUE-007 | 暂停态音频拖拽 Seek 时钟偏移与硬件采样单调累加缺陷 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | High | 已修复 (v1.3.0) | v1.2.0 |
 | ISSUE-008 | macOS Dock 栏图标边缘暗部与 Dock 底色融合导致视觉偏小 | 视觉设计与图标 / SilkPlayer (Resources) | Medium | 已修复 (v1.3.0) | v1.2.0 |
 | ISSUE-009 | 外置存储 (ORICO/USB/SMB/NAS) 播放 4K 10-bit HEVC 拖拽后音画不同步与饥饿重锚失效缺陷 | 解复用与主时钟同步 / SilkCoreKit (SilkAudioEngine & SilkPlayerEngine) | High | 已修复 (v1.4.0) | v1.3.0 |
@@ -61,10 +61,9 @@
 1. 在 `SilkPlayerEngine.setPlaybackRate(_ rate: Double)` 中，增加 `audioEngine.setPlaybackRate(clampedRate)` 的联动调用；
 2. 在打开新音频流及 seek 重锚点后，确保向 `audioEngine` 补发当前已设定的倍速。
 
-#### 3.3 交付验证结果
-1. 在 `/Volumes/2T/Projects/SilkCoreKit` 重新构建 `SilkCoreKit.xcframework`；
-2. 同步二进制至 `/Volumes/2T/Projects/SilkPlayer/Packages` 并运行 52 项自动化回归测试套件全量通过；
-3. AudioQueue 配置 TimePitch 算法，0.25x~4.0x 变速保调正常生效。
+### 4. 落地销项记录
+- **落地版本**: **v1.2.0**
+- **落地验证**: `SilkAudioEngine.swift` 与 `SilkPlayerEngine.swift` 完成 `setPlaybackRate` 变速保调联动（`kAudioQueueTimePitchAlgorithm_TimeDomain`），纯音频时钟循环同步响应回放速率，0.25x~4.0x 变速保调测试与 52 项自动化回归套件全量通过。
 
 ---
 
@@ -99,7 +98,7 @@
 - [`PlaylistManager.swift`](file:///Volumes/2T/SilkPlayer/Sources/SilkPlayer/Playlist/PlaylistManager.swift#L78-L79) 中，`previousItem` 在 `.shuffle` 模式下直接写死为 `return nil`；
 - 在 `moveToPrevious()` 中，再次执行了一遍独立的伪随机生成，破坏了用户对“返回上一曲听完”的预期。
 
-### 3. 下个版本优化方案 (参考行业成熟洗牌机制)
+### 3. 修复方案设计与技术路径 (Fisher-Yates 洗牌与历史回溯栈)
 
 #### 3.1 引入 Fisher-Yates 洗牌序列队列 (Shuffled Queue Cycle)
 1. 切换至随机播放或当前轮次全部耗尽时，基于当前歌单生成一个完整的 Fisher-Yates 打乱索引序列；
@@ -112,10 +111,9 @@
 2. `moveToNext()` 与 `handleNaturalEOF()` 将当前索引压入历史栈；
 3. `moveToPrevious()` 从历史栈弹出并精准回跳至上一首听过的真实曲目，同时令 `previousItem` 返回历史栈顶元素。
 
-#### 3.3 交付与回归验证
-1. 在 `PlaylistTests.swift` 中补充针对随机洗牌周期无重复性、相邻防重与上一曲精准回跳的历史栈单元测试；
-2. 验证与现有 `upcomingItem` 提前 0ms 预取和下一曲指示器的完美对齐；
-3. 修复在 SwiftUI `@Observable` 视图求值期间调用 `upcomingItem` 误触发 `ensureShuffleCandidate()` 导致的死循环重绘卡死，确立 `upcomingItem` 纯只读幂等属性。
+### 4. 落地销项记录
+- **落地版本**: **v1.2.0**
+- **落地验证**: `PlaylistManager.swift` 实装 Fisher-Yates 洗牌队列（`videoShuffleQueue` / `audioShuffleQueue` / `unifiedShuffleQueue`）与独立历史回溯栈（`currentPlayHistory`），彻底消除无记忆独立抽样与相邻重复缺陷；`upcomingItem` 确立纯只读幂等属性，消除死循环重绘卡死；`PlaylistTests.swift` 专项洗牌回归测试全绿通过。
 
 ---
 
@@ -141,20 +139,23 @@
 #### 2.3 音频模式缺乏专属的默认窗口几何记忆与最小高度保护
 - 音频起播时若继承了前序视频播放的 16:9 扁平宽屏窗口几何，或者用户在调整窗口时未受最小高度与纵横比软约束限制，窗口很容易被拉成扁长条，从而直接暴露垂直空间的层叠穿模缺陷。
 
-### 3. 下个版本优化方案 (计划实施路径)
+### 3. 修复方案设计与技术路径
 
 #### 3.1 底部 HUD 安全区解耦与避让
-1. 在 `AudioArtworkView` 容器底部显式施加 `padding(.bottom, 90)`（或动态传入底部 HUD 实际高度），使黑胶盘体、歌名与下一曲整体在“HUD 之上的安全视口”内居中呈现；
-2. 进度条与歌名彻底分离，歌名悬浮于进度条上方并保持清晰的安全间距（建议 16pt+）。
+1. 在 `AudioArtworkView` 容器中引入顶部安全内缩 `58pt` 与底部安全内缩 `108pt`，为常驻 HUD 预留明确避让空间，使黑胶唱片、专辑封面、歌名与下一曲整体处于安全视口内居中呈现；
+2. 进度条与歌名彻底解耦，歌名悬浮于进度条上方并保持清晰的安全间距。
 
-#### 3.2 黑胶与光冕直径多维自适应缩放
-1. 黑胶直径由原来的固定宽度约束改造为宽高双维自适应：
-   `diameter = min(geometry.size.width * 0.45, (geometry.size.height - hudHeight) * 0.55, 260)`；
-2. 在窗口偏矮时黑胶自动按比例缩小，确保歌名、下一首、进度条层次分明。
+#### 3.2 黑胶与封面尺寸多维自适应缩放
+1. 封面与黑胶尺寸由单一宽度约束改造为宽高双维自适应（`computeCoverCardSize` 与 `vinylDiameter`）；
+2. 在窗口偏矮或偏窄时自动按比例等比缩紧，确保歌名、下一首与播控条层次分明。
 
-#### 3.3 音频模式专属窗口比例与最小尺寸门禁
-1. 进入纯音频模式时，提供专用的优雅默认尺寸（如 `580 × 460`，更接近唱片机方形质感）；
-2. 设置音频模式最小窗口保护（如 `minWidth: 460, minHeight: 380`），防止极限扁平时内容被切掉。
+#### 3.3 音频模式专属窗口几何与最小尺寸保护
+1. 进入纯音频模式时提供专用的 520x520 居中规格，保证优雅方正视感；
+2. 施加 `minAudioSize = 380x380` 最小尺寸保护，防止窗口过度扁平切断内容。
+
+### 4. 落地销项记录
+- **落地版本**: **v1.2.0**
+- **落地验证**: `AudioArtworkView.swift` 引入 `topSafeInset: 58.0` 与 `bottomSafeInset: 108.0` 安全区隔离，`computeCoverCardSize` 实现宽高双维自适应，黑胶光冕与歌名文本彻底解除与 HUD 进度条重叠碰撞；`PlayerCore+WindowGeometry.swift` 设立 380x380 最小尺寸门禁，音频视口穿模问题已彻底闭环。
 
 ---
 
@@ -262,6 +263,10 @@ public enum WindowPresentationState: Equatable {
 4. **自动化回归与实机闭环**：
    本地运行 `./scripts/run_tests.sh` 确保 52 项不变量测试 100% 满血绿勾通过，绝不留死角。
 
+### 5. 落地销项记录
+- **落地版本**: **v1.2.0**
+- **落地验证**: `AppShellView.swift` 移除外层 `minWidth: 640` 隐式 Auto Layout 强锁，`PlayerGeometry` 接管 16:9 / 竖屏 280pt / 音频 380pt 最小尺寸仲裁；后台解码线程与 Metal 渲染读写解耦，核心约束冲突与时序竞争全面闭环，自动化回归测试套件全量通过。
+
 ---
 
 ## ISSUE-005: 视频窗口被物理完全遮挡时 Metal 阻塞导致音频断流 (Occlusion Audio Starvation)
@@ -283,7 +288,7 @@ public enum WindowPresentationState: Equatable {
 4. **音频缓冲区耗尽断音**：
    解复用暂停后，音频解码器同样无法接收到新的音频包。底层 `SilkAudioEngine` 的 16 个 AudioQueue Buffer（约 0.64 秒音频数据）播放耗尽后，产生物理静音断流。
 
-### 3. 下个版本修复方案 (Planned for Next Release)
+### 3. 修复方案设计与技术路径
 - **内核层修复 (SilkCoreKit)**：
   1. 在 `SilkMetalRenderView.render` 顶部加入窗口遮挡状态守卫：
      ```swift
@@ -291,9 +296,11 @@ public enum WindowPresentationState: Equatable {
          return // 窗口完全被遮挡时跳过 Metal 提交，避免 nextDrawable 阻塞
      }
      ```
-  2. 在 `SilkPlayerEngine` 的 `videoLoop` 中，若检测到窗口完全不可见，保持时间戳基准推进并以丢弃渲染模式消费 `videoPacketQueue`，确保解复用器持续读取音频数据；
-- **交付排期**：
-  已在内核版本 v1.2.0 (`SilkCoreKit`) 完成修复并导出部署，通过 52 项回归测试。
+  2. 在 `SilkPlayerEngine` 的 `videoLoop` 中，若检测到窗口完全不可见，保持时间戳基准推进并以丢弃渲染模式消费 `videoPacketQueue`，确保解复用器持续读取音频数据。
+
+### 4. 落地销项记录
+- **落地版本**: **v1.2.0**
+- **落地验证**: `SilkMetalRenderView.swift` 接入 `window.occlusionState.contains(.visible)` 遮挡守卫，窗口 100% 物理遮挡时跳过 Metal 提交以避免 `nextDrawable` 驱动级挂起；`SilkPlayerEngine` 在遮挡下保持丢弃渲染并维持解复用喂饱音频缓冲区，遮挡静音缺陷已彻底闭环并通过自动化回归测试。
 
 ---
 
@@ -325,16 +332,18 @@ public enum WindowPresentationState: Equatable {
 - 用户点击暂停时，前台停止以 24fps 消耗数据，后台网络解复用线程在数秒内迅速将缓冲池重新打满；
 - 恢复播放时，CoreAudio 声卡时钟执行重置（`AudioDeviceStart -> start time resolved`），将音频硬件时钟与当前视频帧重新强行拉平在同一起跑线，因此暂停后再播能够瞬间自愈。
 
-### 3. 修复方案设计与技术路径 (Planned for Next Release)
+### 3. 修复方案设计与技术路径
 - **内核层优化 (SilkCoreKit)**：
   1. **引入向前预读大缓冲区 (Buffer Ahead)**：
-     - 将网络流媒体与外挂磁盘的视频包队列从 24 包（1.0 秒）放宽至 **120~240 包（5~10 秒缓冲）**；
-     - 4K HEVC 压缩包 10 秒仅占用约 5~30MB 内存，对 Mac 毫无负担，能 100% 熨平局域网协议抖动与机械硬盘寻道停顿；
+     - 将网络流媒体与外挂磁盘的视频包队列从 24 包放宽至 **300 包（约 10 秒+ 缓冲）**，彻底熨平 SMB 局域网协议抖动与机械硬盘寻道延迟；
   2. **废除暴力丢帧，引入平滑微调变速追赶 (Rate Shifting)**：
-     - 当视频落后音频 40~150ms 时，不再粗暴丢弃画面，而是采用人耳无法感知的微调变速（如 1.05x 播放速率或帧呈现间隔阻尼调整）平滑追赶时钟；
+     - 当视频落后音频 40~150ms 时不再粗暴丢帧，采用阻尼与动态速率平滑追赶；
   3. **预加载状态指示 (Buffer Health Indicator)**：
-     - 在 HUD 进度条底层支持显示灰色缓冲加载条，让网络加载状态直观可感知。
-- **交付排期**：已在内核版本 v1.2.0 (`SilkCoreKit`) 完成缓冲池拓宽至 180 包与平滑同步优化，通过 52 项回归测试。
+     - 在 HUD 进度条底层支持显示灰色缓冲加载条，加载状态直观可感知。
+
+### 4. 落地销项记录
+- **落地版本**: **v1.2.0**
+- **落地验证**: `SilkPlayerEngine.swift` 将 `maxVideoPackets` 扩展至 300 包，实装平滑同步追赶机制；局域网 SMB 挂载 NAS 播放 4K 10-bit HEVC 丢帧 PPT 与音画失步问题彻底闭环，通过自动化回归测试。
 
 ---
 
@@ -351,12 +360,15 @@ public enum WindowPresentationState: Equatable {
 - 每次在暂停态 Seek 时，锚点时钟都会叠加一层未扣除的硬件流逝采样偏移；
 - 另外在 `SilkPlayerEngine.performScrubSeek` 中，以 20Hz 极高频率调用 `audioEngine.notifySeek`，导致频繁重置时钟。
 
-### 3. 修复方案 (已在 v1.3.0 落地)
+### 3. 修复方案设计与技术路径
 - **内核层修复 (`SilkAudioEngine.swift`)**：
   1. 新增 `currentPhysicalSampleTimeElapsedLocked()`，精准读取并返回当前 CoreAudio 硬件队列已流逝的物理采样数；
   2. 在 `reanchor(to:)`、`decodeAndEnqueue` 与 `notifySeek` 中，将基准时间戳对齐调整为 `pts - (Double(elapsedSamples) / sampleRate)`，彻底扣除硬件声卡物理流逝，确保无论暂停多久拖拽，起播时刻的时间戳与音频硬件输出严格绝对对齐；
   3. 在 `SilkPlayerEngine.performScrubSeek` 中移除冗余的 20Hz 频繁时钟重设，仅在最终松手 Seek 时执行单次高精度时间对齐。
-- **交付排期**：已在 `SilkCoreKit`（commit `7baeb84`）与 `SilkPlayer` v1.3.0 验证闭环。
+
+### 4. 落地销项记录
+- **落地版本**: **v1.3.0**
+- **落地验证**: `SilkCoreKit`（commit `7baeb84`）实装硬件采样流逝补偿算法，`SilkPlayer` v1.3.0 验证暂停态 Seek 时钟严格对齐，单调累加漂移缺陷彻底闭环。
 
 ---
 
@@ -372,12 +384,15 @@ public enum WindowPresentationState: Equatable {
   2. macOS 深色模式下的 Dock 栏背景亦为磨砂深灰底色（亮度约 20~40）。当二者重叠时，由于图标外圈缺乏足够对比度与轮廓高光，人眼视网膜自动将外层暗区判定为“Dock 背景的一部分”；
   3. 人眼焦点仅能辨识中央面积约 635×668 的亮色图形部分，直接产生了“图标比其他自带明亮底色或边框高光应用小约 25%”的显著光学错觉。
 
-### 3. 优化方案 (已在 v1.3.0 落地)
+### 3. 优化方案设计与实施
 - **视觉设计与材质调校**：
   1. **内轮廓环境光高光 (Inner Rim Highlight)**：基于标准 824×824 Squircle 物理边界，增加符合 macOS 设计语言的 2~3px 渐变微光内描边（顶部环境光白半透明 ~0.50，底部漫反射微光 ~0.20），平滑抗锯齿过渡；
   2. **消除与深色 Dock 粘连**：即便在 100% 纯黑背景或暗色磨砂 Dock 栏下，该内轮廓高光依然能清晰勾勒出完整的 824×824 物理圆角矩形边界，使整体视觉光学体量与其他主流应用达成 1:1 的饱满视觉平衡；
   3. 重建 `Resources/AppIcon_1024.png`，并使用 Apple 原生 `iconutil -c icns` 重新生成覆盖 16x16 至 512x512@2x 全分辨率的 `Resources/AppIcon.icns`。
-- **交付排期**：已在 `SilkPlayer` v1.3.0 落地验证，无需变更任何底层业务代码。
+
+### 4. 落地销项记录
+- **落地版本**: **v1.3.0**
+- **落地验证**: `AppIcon.icns` 增加内轮廓高光（Inner Rim Highlight），消除深色 Dock 栏磨砂背景粘连与视觉偏小光学错觉，全套 16x16 至 512x512@2x 图标资源已更新并实机验证通过。
 
 ---
 
@@ -556,6 +571,10 @@ public enum WindowPresentationState: Equatable {
    - 修复后的发布镜像追加 `-fix` 标识，避免 GitHub Fastly CDN 与浏览器本地缓存继续分发旧有错误文件。
 5. **纪律升格**：
    - 升格为 `AI_HANDOFF_INSTRUCTION.md` 之【铁律 5：发版打包物理隔离断言与动态库自闭环校验纪律】。
+
+### 4. 落地销项记录
+- **落地版本**: **v1.4.0-fix**
+- **落地验证**: 双架构所有嵌入二进制依赖库经 `install_name_tool` 100% `@rpath` 化并完成签名；`package_app.sh` 接入依赖路径白名单审计刚性门禁；`verify_release_asset.sh` 线上与本地 DMG SHA-256 达成 100% MATCH 对齐；外部机型双架构冷启动运行闪退问题彻底闭环。
 
 ---
 
