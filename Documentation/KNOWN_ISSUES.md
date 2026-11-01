@@ -17,6 +17,7 @@
 | ISSUE-007 | 暂停态音频拖拽 Seek 时钟偏移与硬件采样单调累加缺陷 | 纯音频播放 / SilkCoreKit (SilkAudioEngine) | High | 已修复 (v1.3.0) | v1.2.0 |
 | ISSUE-008 | macOS Dock 栏图标边缘暗部与 Dock 底色融合导致视觉偏小 | 视觉设计与图标 / SilkPlayer (Resources) | Medium | 已修复 (v1.3.0) | v1.2.0 |
 | ISSUE-009 | 外置存储 (ORICO/USB/SMB/NAS) 播放 4K 10-bit HEVC 拖拽后音画不同步与饥饿重锚失效缺陷 | 解复用与主时钟同步 / SilkCoreKit (SilkAudioEngine & SilkPlayerEngine) | High | 已修复 (v1.4.0) | v1.3.0 |
+| ISSUE-010 | 发布镜像动态链接库绝对路径泄露与 Intel 兼容加载头失配致外部机型闪退 | 构建与打包发布 / SilkPlayer (package_app.sh & Packages) | Critical | 已修复 (v1.4.0-fix) | v1.4.0 |
 
 ---
 
@@ -519,4 +520,34 @@ public enum WindowPresentationState: Equatable {
 - **PlayerCore**: `ProcessInfo.processInfo.beginActivity([.idleDisplaySleepDisabled, .userInitiated])` 播放防休眠断言已接入；
 - **SilkPlayerEngine**: 音轨切换强制微距 Seek 重定位已合入；
 - **测试结果**: 自动化回归套件全量通过，外置存储播放 4K HEVC 拖拽音画失步与断流饥饿重锚问题已彻底闭环解决。
+
+---
+
+## ISSUE-010: 发布镜像动态链接库绝对路径泄露与 Intel 兼容加载头失配致外部机型闪退
+
+### 1. 缺陷现象
+- 用户在非编译机的外部 Mac（包括 Apple Silicon M 系列芯片与 Intel 架构机型）上下载并安装 v1.4.0 初始发布镜像后，双击应用图标直接闪退，并弹出系统级错误弹窗：
+  > “SilkPlayer”因为出现问题而无法打开。请与开发者联系，以确保 SilkPlayer 可以配合此 macOS 版本使用。你可能需要重新安装该应用程序……【忽略】【报告……】
+- M 芯片用户反馈 arm64 安装包闪退，而转译运行 x86_64 安装包却能正常打开，造成“两个架构包搞反”的严重体验困扰；老款 Intel 机型（如 MBP 2018 macOS 15）同样无法打开。
+
+### 2. 根因分析
+1. **arm64 动态库硬编码绝对路径**：
+   - 早期打包的 `Libavcodec.framework` 等依赖库内，`LC_LOAD_DYLIB` 记录了编译宿主机的物理磁盘路径 `/Volumes/2T/SilkPlayer_LGPL_Build/install/lib/...`，未清洗为 `@rpath` 相对寻址；
+   - 外部机器因无此路径，`dyld` 动态加载失败直接触发 `dyld_fatal_error` 终止进程；而编译机物理存在该路径，本地测试时直接命中，造成“测试通过”的严重假象。
+2. **Intel (x86_64) 最低加载头失配**：
+   - 初始 Intel 构建未强制声明 `minos 12.0` 与向后兼容性链接，导致 macOS 12~14 的 Intel 机型无法正确解析加载。
+3. **打包脚本缺少物理断言门禁**：
+   - 打包脚本 `package_app.sh` 仅检查了签名与基本的 DMG 挂载，未对生成 `.app` 的所有 Mach-O 依赖路径进行绝对路径扫描，导致缺陷产物直接逃逸流向公开 Release。
+
+### 3. 修复措施与闭环规范
+1. **底层动态库彻底清洗与重定位**：
+   - 使用 `install_name_tool` 对所有 XCFramework 内部依赖库重构，全面绑定为 `@rpath` 相对寻址；
+   - Intel 架构构建底座强制锁定为 `minos 12.0`。
+2. **打包脚本合入硬门禁断言 (`package_app.sh`)**：
+   - 在构建 `.app` 后、生成 DMG 前，强制执行全量 `otool -L` 递归扫描；
+   - 凡检测到包含 `/Volumes/`、`/Users/` 等非系统路径，立即触发 `exit 1` 熔断中止打包。
+3. **发布版本缓存规避**：
+   - 修复后的发布镜像追加 `-fix` 标识，避免 GitHub Fastly CDN 与浏览器本地缓存继续分发旧有错误文件。
+4. **纪律升格**：
+   - 升格为 `AI_HANDOFF_INSTRUCTION.md` 之【铁律 5：发版打包物理隔离断言与动态库自闭环校验纪律】。
 

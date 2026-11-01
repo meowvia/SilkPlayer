@@ -103,8 +103,8 @@ brew install --cask meowvia/tap/silkplayer
 
 ### 方式二：下载 DMG 安装包（双架构原生支持）
 1. 从 [Releases](https://github.com/meowvia/SilkPlayer/releases) 页面根据您的 Mac 芯片架构下载对应安装包：
-   - **Apple Silicon (M1/M2/M3/M4)**：`SilkPlayer-1.4.0-arm64.dmg`
-   - **Intel Mac (x86_64)**：`SilkPlayer-1.4.0-x86_64.dmg`
+   - **Apple Silicon (M1/M2/M3/M4)**：`SilkPlayer-1.4.0-arm64-fix.dmg`
+   - **Intel Mac (x86_64)**：`SilkPlayer-1.4.0-x86_64-fix.dmg`
 2. 双击打开并将 **SilkPlayer.app** 拖入「应用程序」文件夹；
 3. **若打开时提示“已损坏”或“无法验证开发者”**（开源应用未向苹果购买商业证书的安全保护提示），在终端执行一行命令即可秒开：
    ```bash

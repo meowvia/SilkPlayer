@@ -1,10 +1,10 @@
 # SilkPlayer 工程移交接力规范与标准化模板 (Master AI Handoff Specification)
 
-本文档为 SilkPlayer 项目所有 AI 会话窗口交接、任务移交以及多 Agent 协同的**最高执行规范**。任何新会话或接手 Agent 必须 100% 严格执行本文档中的四项工程铁律与标准化移交模板，严禁擅自删减或变更格式。
+本文档为 SilkPlayer 项目所有 AI 会话窗口交接、任务移交以及多 Agent 协同的**最高执行规范**。任何新会话或接手 Agent 必须 100% 严格执行本文档中的五大工程铁律与标准化移交模板，严禁擅自删减或变更格式。
 
 ---
 
-## 一、 四大工程铁律 (The Four Cardinal Rules)
+## 一、 五大工程铁律 (The Five Cardinal Rules)
 
 ### 铁律 1：文档管理责任归口与防混乱纪律
 为防止各 Agent 格式不一、碎片化记录导致项目状态严重倒挂，全工程仅设立两大核心事实源文档：
@@ -51,6 +51,20 @@ SilkPlayer 实行双版本支持与双端协同架构：
      3. 运行 `./scripts/install_to_applications.sh` 将新 `.app` 安装至 `/Applications/SilkPlayer.app` 并刷新 Dock 缓存；
      4. 执行 `open /Applications/SilkPlayer.app` 拉起新版本交付用户体验测试；
    - 可直接使用一键集成脚本：`./scripts/deploy_dev_test.sh [arm64|x86_64]`。
+
+### 铁律 5：发版打包物理隔离断言与动态库自闭环校验纪律
+为彻底杜绝“开发机本地路径命中假象”与“跨系统版本加载头失配”导致的严重线上崩溃，执行以下强制规范：
+1. **严禁宿主机私有绝对路径逃逸**：
+   - 生产环境打包必须由 `package_app.sh` 强制执行静态全量扫描（`otool -L`）；
+   - 凡是在 `.app` 内（包含主二进制与 `Contents/Frameworks/` 下所有动态库）检测到包含 `/Volumes/`、`/Users/` 等非系统绝对路径，脚本必须立即熔断报错（`exit 1`），严禁生成 DMG；
+2. **动态库寻址必须 100% 自闭环**：
+   - 所有内嵌第三方库与自研动态库寻址必须严格对齐 `@rpath/`，且必须物理存在于 Bundle 的 `Contents/Frameworks/` 内；
+3. **双架构最低系统加载头（`minos`）严格对齐**：
+   - Intel (`x86_64`) 构建必须强制声明 `minos 12.0`（对齐 macOS 12 Monterey 至 macOS 15 Sequoia 全系底座），严禁在较新 macOS 编译时默认采用高版本导致老旧 Intel 机型启动崩溃；
+   - Apple Silicon (`arm64`) 构建基准保持 `minos 14.0`；
+4. **发布前脱离开发机沙箱核验**：
+   - 任何正式对外发布的 DMG，发布前必须在隔离沙箱或全新测试目录下挂载核验，严禁仅凭单台宿主机开发环境“未报错”即轻率发布；
+   - 线上资产若发生依赖修复重传，文件名必须追加 `-fix` 或子版本号以穿透 CDN 与浏览器本地缓存。
 
 ---
 

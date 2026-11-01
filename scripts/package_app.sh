@@ -107,6 +107,23 @@ done
 install_name_tool -add_rpath "@executable_path/../Frameworks" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
 install_name_tool -add_rpath "@loader_path/../Frameworks" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
 
+# Enforce zero absolute host paths assertion (Iron Rule 5)
+echo "  Verifying dynamic library self-containment and zero host path leaks..."
+LEAK_FOUND=false
+for bin in "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" "${APP_BUNDLE}/Contents/Frameworks"/*.framework/Versions/A/*; do
+    if [[ -f "${bin}" && ! -L "${bin}" ]]; then
+        if otool -L "${bin}" 2>/dev/null | grep -E "(/Volumes/|/Users/)"; then
+            echo "ERROR: Packaging iron rule violation! Host path leaked in ${bin}:" >&2
+            otool -L "${bin}" | grep -E "(/Volumes/|/Users/)" >&2
+            LEAK_FOUND=true
+        fi
+    fi
+done
+if [[ "${LEAK_FOUND}" == "true" ]]; then
+    echo "Fatal: Absolute host path leakage detected! Build aborted to prevent deploying broken binaries." >&2
+    exit 1
+fi
+
 cp "${PROJECT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
 if [[ -f "${PROJECT_DIR}/Resources/AppIcon.icns" ]]; then
     cp "${PROJECT_DIR}/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"

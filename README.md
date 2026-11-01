@@ -103,8 +103,8 @@ brew install --cask meowvia/tap/silkplayer
 
 ### Option 2: Download DMG Installer
 1. Download the installer matching your Mac's architecture from the [Releases](https://github.com/meowvia/SilkPlayer/releases) page:
-   - **Apple Silicon (M1/M2/M3/M4)**: `SilkPlayer-1.4.0-arm64.dmg`
-   - **Intel Mac (x86_64)**: `SilkPlayer-1.4.0-x86_64.dmg`
+   - **Apple Silicon (M1/M2/M3/M4)**: `SilkPlayer-1.4.0-arm64-fix.dmg`
+   - **Intel Mac (x86_64)**: `SilkPlayer-1.4.0-x86_64-fix.dmg`
 2. Open the disk image and drag **SilkPlayer.app** to your **Applications** folder;
 3. **If macOS warns "App is damaged" or "Unidentified Developer"** (standard Gatekeeper behavior for non-notarized open-source software), run this single command in Terminal:
    ```bash
