@@ -534,20 +534,25 @@ public enum WindowPresentationState: Equatable {
 1. **arm64 动态库硬编码绝对路径**：
    - 早期打包的 `Libavcodec.framework` 等依赖库内，`LC_LOAD_DYLIB` 记录了编译宿主机的物理磁盘路径 `/Volumes/2T/SilkPlayer_LGPL_Build/install/lib/...`，未清洗为 `@rpath` 相对寻址；
    - 外部机器因无此路径，`dyld` 动态加载失败直接触发 `dyld_fatal_error` 终止进程；而编译机物理存在该路径，本地测试时直接命中，造成“测试通过”的严重假象。
-2. **Intel (x86_64) 最低加载头失配**：
-   - 初始 Intel 构建未强制声明 `minos 12.0` 与向后兼容性链接，导致 macOS 12~14 的 Intel 机型无法正确解析加载。
-3. **打包脚本缺少物理断言门禁**：
-   - 打包脚本 `package_app.sh` 仅检查了签名与基本的 DMG 挂载，未对生成 `.app` 的所有 Mach-O 依赖路径进行绝对路径扫描，导致缺陷产物直接逃逸流向公开 Release。
+2. **双架构最低系统基线（macOS 14.0+）对齐与文档口径失配**：
+   - SilkPlayer 强依赖 Swift 6 原生 Observation 响应式框架（macOS 14.0+），双架构编译参数统一对齐 `--triple "${ARCH}-apple-macosx14.0"`；此前移交文档曾误写“minos 12.0”，导致对老旧系统兼容范围产生虚假预期。
+3. **打包脚本缺少深度物理断言与双重校验门禁**：
+   - 打包脚本此前仅简单通过 grep 拦截特定目录，未强制白名单判定非系统库 100% `@rpath` 化；
+   - 挂载 DMG 仅验证了 `.app` 目录存在，未再次复核挂载介质内部二进制依赖；
+   - 缺少对 GitHub Releases 线上已发布资产与本地 DMG 的自动 SHA-256 校验链。
 
 ### 3. 修复措施与闭环规范
 1. **底层动态库彻底清洗与重定位**：
    - 使用 `install_name_tool` 对所有 XCFramework 内部依赖库重构，全面绑定为 `@rpath` 相对寻址；
-   - Intel 架构构建底座强制锁定为 `minos 12.0`。
-2. **打包脚本合入硬门禁断言 (`package_app.sh`)**：
-   - 在构建 `.app` 后、生成 DMG 前，强制执行全量 `otool -L` 递归扫描；
-   - 凡检测到包含 `/Volumes/`、`/Users/` 等非系统路径，立即触发 `exit 1` 熔断中止打包。
-3. **发布版本缓存规避**：
+   - 统一明确双架构物理最低系统基准为 macOS 14.0。
+2. **打包脚本合入刚性门禁断言 (`package_app.sh`)**：
+   - 引入动态依赖白名单审计函数 `audit_bundle_dependencies`：凡非系统框架（非 `/System/Library/`、`/usr/lib/`）且未以 `@rpath/` 开头，直接 `exit 1` 熔断中止；
+   - DMG 制作完成后，自动挂载并对其内部的 `.app` 再次执行全量依赖审计与深度代码签名复核；
+   - 打包末尾自动输出本地 DMG 的 SHA-256 校验码。
+3. **新增发布资产自动化校验脚本 (`scripts/verify_release_asset.sh`)**：
+   - 自动拉取 GitHub Releases 资产元数据（`digest`），与本地构建产物及桌面产物逐项比对 SHA-256，确保 100% 对齐。
+4. **发布版本缓存规避**：
    - 修复后的发布镜像追加 `-fix` 标识，避免 GitHub Fastly CDN 与浏览器本地缓存继续分发旧有错误文件。
-4. **纪律升格**：
+5. **纪律升格**：
    - 升格为 `AI_HANDOFF_INSTRUCTION.md` 之【铁律 5：发版打包物理隔离断言与动态库自闭环校验纪律】。
 

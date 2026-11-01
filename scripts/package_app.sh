@@ -29,6 +29,38 @@ DMG_NAME="${APP_NAME}-${VERSION}-${ARCH}.dmg"
 DMG_PATH="${BUILD_DIR}/${DMG_NAME}"
 STAGING_DIR="${BUILD_DIR}/dmg_staging"
 
+# Strict dynamic dependency allowlist auditor (Iron Rule 5)
+# Every dynamic dependency must be @rpath-isolated or a standard Apple system framework
+audit_bundle_dependencies() {
+    local target_app="$1"
+    local stage_name="$2"
+    echo "  [Audit] Inspecting dynamic library linkages in ${stage_name}..."
+    local violation_count=0
+
+    while IFS= read -r bin; do
+        if [[ -f "${bin}" && ! -L "${bin}" ]]; then
+            local deps
+            deps=$(otool -L "${bin}" 2>/dev/null | tail -n +2 | awk '{print $1}')
+            for dep in ${deps}; do
+                # Allowed prefixes: @rpath/, /System/Library/, /usr/lib/
+                if [[ "${dep}" == "@rpath/"* || "${dep}" == "/System/Library/"* || "${dep}" == "/usr/lib/"* ]]; then
+                    continue
+                fi
+                echo "  [VIOLATION] Disallowed dynamic library path: '${dep}' in $(basename "${bin}")" >&2
+                ((violation_count++))
+            done
+        fi
+    done < <(find "${target_app}" -type f \( -perm +111 -o -name "*.dylib" \))
+
+    if [[ ${violation_count} -gt 0 ]]; then
+        echo "Fatal: Detected ${violation_count} non-rpath/host-leaked dynamic library dependencies in ${stage_name}!" >&2
+        echo "Every non-system dynamic library MUST use @rpath/ and be embedded within the bundle." >&2
+        return 1
+    fi
+    echo "  [Audit Passed] All dependencies strictly adhere to @rpath or system frameworks."
+    return 0
+}
+
 if [[ "${BUILD_APP_ONLY}" == "true" ]]; then
     echo "=================================================="
     echo " Assembling ${APP_NAME}.app (${VERSION} - ${ARCH}) [DMG Skipped]"
@@ -107,22 +139,8 @@ done
 install_name_tool -add_rpath "@executable_path/../Frameworks" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
 install_name_tool -add_rpath "@loader_path/../Frameworks" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
 
-# Enforce zero absolute host paths assertion (Iron Rule 5)
-echo "  Verifying dynamic library self-containment and zero host path leaks..."
-LEAK_FOUND=false
-for bin in "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" "${APP_BUNDLE}/Contents/Frameworks"/*.framework/Versions/A/*; do
-    if [[ -f "${bin}" && ! -L "${bin}" ]]; then
-        if otool -L "${bin}" 2>/dev/null | grep -E "(/Volumes/|/Users/)"; then
-            echo "ERROR: Packaging iron rule violation! Host path leaked in ${bin}:" >&2
-            otool -L "${bin}" | grep -E "(/Volumes/|/Users/)" >&2
-            LEAK_FOUND=true
-        fi
-    fi
-done
-if [[ "${LEAK_FOUND}" == "true" ]]; then
-    echo "Fatal: Absolute host path leakage detected! Build aborted to prevent deploying broken binaries." >&2
-    exit 1
-fi
+# Enforce zero absolute host paths assertion & strict @rpath isolation (Iron Rule 5)
+audit_bundle_dependencies "${APP_BUNDLE}" "Staging .app Bundle"
 
 cp "${PROJECT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
 if [[ -f "${PROJECT_DIR}/Resources/AppIcon.icns" ]]; then
@@ -189,14 +207,23 @@ echo "[6/6] Verifying DMG image..."
 MOUNT_DIR=$(mktemp -d /tmp/silkplayer_mount_XXXXXX)
 hdiutil attach "${DMG_PATH}" -mountpoint "${MOUNT_DIR}" -nobrowse -quiet
 if [[ -d "${MOUNT_DIR}/${APP_NAME}.app" ]]; then
-    echo "  DMG mounted successfully and contains ${APP_NAME}.app"
+    echo "  DMG mounted successfully."
+    echo "  Re-auditing dynamic dependencies inside mounted DMG..."
+    audit_bundle_dependencies "${MOUNT_DIR}/${APP_NAME}.app" "Mounted DMG .app Bundle"
+    echo "  Verifying inside-out codesign of mounted DMG .app..."
+    codesign --verify --deep --strict "${MOUNT_DIR}/${APP_NAME}.app"
 fi
 hdiutil detach "${MOUNT_DIR}" -quiet
 rm -rf "${MOUNT_DIR}"
+
+DMG_SHA256=$(shasum -a 256 "${DMG_PATH}" | awk '{print $1}')
 
 echo "=================================================="
 echo " Packaged successfully!"
 echo " App: ${APP_BUNDLE}"
 echo " DMG: ${DMG_PATH}"
+echo " DMG SHA-256: ${DMG_SHA256}"
+echo " To verify against GitHub Releases:"
+echo "   ./scripts/verify_release_asset.sh ${VERSION}"
 echo "=================================================="
 
