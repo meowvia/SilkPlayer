@@ -18,6 +18,7 @@
 | ISSUE-008 | macOS Dock 栏图标边缘暗部与 Dock 底色融合导致视觉偏小 | 视觉设计与图标 / SilkPlayer (Resources) | Medium | 已修复 (v1.3.0) | v1.2.0 |
 | ISSUE-009 | 外置存储 (ORICO/USB/SMB/NAS) 播放 4K 10-bit HEVC 拖拽后音画不同步与饥饿重锚失效缺陷 | 解复用与主时钟同步 / SilkCoreKit (SilkAudioEngine & SilkPlayerEngine) | High | 已修复 (v1.4.0) | v1.3.0 |
 | ISSUE-010 | 发布镜像动态链接库绝对路径泄露与 Intel 兼容加载头失配致外部机型闪退 | 构建与打包发布 / SilkPlayer (package_app.sh & Packages) | Critical | 已修复 (v1.4.0-fix) | v1.4.0 |
+| ISSUE-011 | 音频模式下手动调整播放窗口尺寸引起边框弹跳与高频振荡抖动 | 窗口交互与几何约束 / SilkPlayer (PlayerWindowManager) | Medium | 待修复 (排期 v1.5.0) | v1.4.0 |
 
 ---
 
@@ -555,4 +556,35 @@ public enum WindowPresentationState: Equatable {
    - 修复后的发布镜像追加 `-fix` 标识，避免 GitHub Fastly CDN 与浏览器本地缓存继续分发旧有错误文件。
 5. **纪律升格**：
    - 升格为 `AI_HANDOFF_INSTRUCTION.md` 之【铁律 5：发版打包物理隔离断言与动态库自闭环校验纪律】。
+
+---
+
+## ISSUE-011: 音频模式下手动调整播放窗口尺寸引起边框弹跳与高频振荡抖动
+
+### 1. 缺陷现象
+- 在纯音频播放模式下（播放 MP3、FLAC、APE、WAV 等无视频轨媒体），用户尝试通过鼠标手动拖拽调整播放窗口尺寸时，发生剧烈的边框弹跳与高频抽搐抖动：
+  1. **单向边框拖拽**：纯水平拉拽左/右边框，或纯垂直拉拽上/下边框时，窗口在用户提议的目标尺寸与基准尺寸之间以 60Hz/120Hz 极高频率反复横跳（交替振荡）；
+  2. **四角边框拖拽**：在对角线方向拖拽时，只要位移在水平与垂直轴产生微小速率不均，窗口尺寸会在宽度驱动与高度驱动之间突变跳跃；
+  3. 用户主观感知窗口边缘“卡死、抗拒拉伸、剧烈抽搐”。
+
+### 2. 根因分析
+1. **未对 `window.inLiveResize` 实时交互态解耦**：
+   - 在 [`PlayerWindowManager.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerWindowManager.swift#L830-L848) 的 `PlayerWindowDelegate.windowWillResize(_:to:)` 中，纯音频分支（第 831 行）置于通用 `if window.inLiveResize` 之前；
+   - 视频播放模式在实时拖拽中放行双轴尺寸提议，仅作安全范围钳制；而音频模式在每一帧拖拽回调中均强行介入 `1:1` 等比正方形重算（`NSSize(width: round(targetSide), height: round(targetSide))`）。
+2. **单向拖拽时的 Delta 竞争死循环 (交替振荡)**：
+   - 当用户单向拉拽（如水平右边框）时，AppKit 传入的 `frameSize` 提议仅宽度递增，高度保持初始值 $H_0$；
+   - **奇数帧**：当前窗口尺寸为 $(W_0, H_0)$，鼠标拉到 $W_1$。计算得 `deltaW = |W_1 - W_0|`，`deltaH = 0`。因 `deltaW > deltaH`，判定宽度占优，窗口被拉大至 $(W_1, W_1)$；
+   - **偶数帧**：当前窗口变为 $(W_1, W_1)$，鼠标微动至 $W_2$。AppKit 提议仍为 $(W_2, H_0)$。此时 `deltaW = |W_2 - W_1|`（微小），而 `deltaH = |H_0 - W_1|`（显著更大）。条件 `deltaH > deltaW && deltaH > 1.0` 命中，算法误判为高度占优，强制选用 $H_0$ 作为目标边长，窗口瞬时坍塌回 $(H_0, H_0)$；
+   - 导致窗口在拉大与坍塌之间死循环交替震荡，形成肉眼可见的高频高振幅抖动。
+3. **渲染层具备自适应能力，无强加正方形约束的物理必要性**：
+   - [`AudioArtworkView.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/AudioArtworkView.swift#L24-L40) 基于 `GeometryReader` 动态计算安全边距，封面与唱片均采用 `.aspectRatio(contentMode: .fit)` 居中渲染；
+   - 无论窗口处于正方形或长方形，画面均能自适应居中，无画面拉伸或溢出风险。
+
+### 3. 规划修复方案 (排期 v1.5.0)
+1. **实时交互与静态规整解耦**：
+   - 在 `PlayerWindowDelegate.windowWillResize` 中，若 `window.inLiveResize == true`，顺应用户鼠标指针轨迹放行双轴尺寸提议；
+   - 仅保留 `minAudioSize = 380`（最小边长）与屏幕最大可用工作区钳制，杜绝几何死锁与高频振荡；
+2. **平滑对齐与最大化保持**：
+   - 维持双击顶栏铺满/还原时的 520x520 居中规格，保证纯音频播放器标准视图质感；
+   - 评估在 `windowDidEndLiveResize` 中是否需以平滑动画对齐 1:1，或完全放开矩形视口。
 
