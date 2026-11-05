@@ -609,37 +609,35 @@ public enum WindowPresentationState: Equatable {
 
 ---
 
-## ISSUE-012: 置顶与微距拖拽抖动下全屏转场状态机单向死锁导致全屏入口永久假死
+## ISSUE-012: 前置图钉浮动层级导致全屏请求被系统静默抛弃与状态机永久死锁
 
 ### 1. 缺陷现象
-- 用户在特定时序操作下（如将播放窗口手动拉小、开启右上角图钉置顶、随后尝试双击播放画面进入全屏），播放器未能成功进入全屏；
+- 用户在特定时序操作下（如开启右上角图钉置顶 `keepWindowOnTop`，或在置顶状态下拉小窗口后），双击播放画面尝试进入全屏无响应；
 - 此后全屏子系统陷入完全瘫痪状态：
   1. 双击播放界面：无任何响应；
   2. 点击右下角全屏按钮：无任何响应；
-  3. 取消图钉置顶后再试：仍然无响应；
-  4. 键盘快捷键 F / 回车 / Esc：均无响应；
-  5. 与此同时，窗口左上角绿色红绿灯按钮铺满最大化功能保持正常；
-  6. 退出播放器并重新启动后，双击全屏及右下角全屏按钮功能完全恢复。
+  3. 在界面上取消图钉置顶后再试：仍然无响应；
+  4. 键盘快捷键 F / 回车：均无响应；
+  5. 左上角绿色红绿灯按钮铺满最大化保持正常；
+  6. 若图钉保持开启状态退出并重启播放器，双击画面依然失效无法全屏；只有在取消图钉置顶并退出后重新启动，双击全屏功能方能完全恢复。
 
 ### 2. 根因分析
-1. **抢先置位与单向依赖**：
-   - 在 [`PlayerCore.swift:1197-1206`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerCore.swift#L1197-L1206) 的 `toggleFullscreen()` 中，在调用 AppKit 原生 `window.toggleFullScreen(nil)` 之前，同步将 `isFullscreenTransitioning` 置为 `true`；
-   - 该标志位的复位（恢复 `false`）100% 依赖 AppKit 代理事件的回调（`windowDidEnterFullScreen` / `windowDidExitFullScreen` / `windowDidFailToEnterFullScreen`）。
-2. **系统底层静默丢弃转场请求**：
-   - 当窗口处于置顶状态（`window.level = .floating`）叠加边框拖拽缩小，或双击时鼠标产生微小位移（> 3pt 触发 `window.performDrag` 抢占，产生系统警告 `Window move completed without beginning`）时，macOS WindowServer 在跨 Space 分配过程中静默忽略或丢弃了转场调用；
-   - AppKit 未能启动动画，导致任何后续代理通知均未被系统触发。
-3. **缺乏超时自愈机制 (Watchdog Missing)**：
-   - 代码中无任何异步超时防御机制，`PlayerCore.isFullscreenTransitioning` 永久停留在 `true`；
-   - 后续所有全屏调用均被入口首行 `guard !isFullscreenTransitioning else { return }` 静默拦截并丢弃；
-   - 红绿灯走的是 `NSWindow.setFrame` 与 Delegate 独立变量，因而未受波及；重启应用则重新初始化了内存变量，死锁被物理重置。
+1. **macOS Dock 全屏调度中心与浮动层级的底层架构冲突**：
+   - 开启前置图钉后，播放器窗口底层被设为 `window.level = .floating`（`kCGFloatingWindowLevel = 3`）；
+   - 在 macOS WindowServer 与 Dock 全屏调度服务（`com.apple.dock.fullscreen`）规范中，只有普通标准层级窗口（`kCGNormalWindowLevel = 0`）才拥有开辟独立 Space 全屏的权限；浮动层级窗口被系统定义为悬浮于 Space 之上的工具浮层（HUD/Palette），Dock 严禁其分配独立 Space；
+   - 处于 `.floating` 时调用 `window.toggleFullScreen(nil)`，Dock 直接在系统底层静默丢弃该请求，既不启动动画，也绝不回传任何 Delegate 通知。
+2. **抢先置位与缺少看门狗自愈机制 (Watchdog Missing)**：
+   - 在 [`PlayerCore.swift:1197-1206`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerCore.swift#L1197-L1206) 的 `toggleFullscreen()` 中，发起系统调用前同步抢先将 `isFullscreenTransitioning` 置为 `true`；
+   - 因 Dock 静默抛弃转场，`windowDidEnterFullScreen` 等回调永远无法触发，`isFullscreenTransitioning` 永久死锁在 `true`；
+   - 后续所有全屏入口被首行 `guard !isFullscreenTransitioning else { return }` 静默拦截；
+   - 若图钉开启，冷启动挂载窗口时直接继承 `.floating`，导致重启后依然被系统拦截；只有取消图钉后重启，窗口以 `.normal` 初始化且内存重置，全屏才得以恢复。
 
 ### 3. 规划修复方案 (排期 v1.5.0)
-1. **引入防御性看门狗超时机制**：
-   - 在 `toggleFullscreen()` 抢先置位后启动 0.8s 异步超时安全任务，若系统未在阈值内回传转场完成/失败通知，强制重置 `isFullscreenTransitioning = false`，杜绝永久死锁；
-2. **双击手势与微距拖拽防冲突**：
-   - 在 `VideoView.mouseDragged` 中增加 `event.clickCount >= 2` 检测，在双击时屏蔽 `window.performDrag` 抢占；
-3. **置顶浮动层级转场协同**：
-   - 进入全屏前暂退为 `.normal` 层级，退出全屏后再自动恢复 `.floating`，消除 WindowServer 跨 Space 调度异常。
+1. **全屏转场前层级借调与恢复机制 (Level Stash & Restore)**：
+   - 在 `PlayerCore.toggleFullscreen()` 请求全屏前，若检测到窗口处于置顶状态（`window.level == .floating`），先将其临时平降为 `.normal`，确保系统 Dock 顺畅开辟 Space；
+   - 退出全屏后（在 `windowDidExitFullScreen` 回调中），若 `AppSettings.shared.keepWindowOnTop == true`，自动无缝恢复 `window.level = .floating`；
+2. **引入防御性看门狗超时自愈机制**：
+   - 在 `PlayerCore.toggleFullscreen()` 增加 0.8s 异步超时安全任务，若系统因任何异常在阈值内未回传通知，强制解锁 `isFullscreenTransitioning = false` 并对齐真实全屏状态，彻底终结假死。
 
 ---
 
