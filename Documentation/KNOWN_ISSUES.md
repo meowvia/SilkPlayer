@@ -632,12 +632,12 @@ public enum WindowPresentationState: Equatable {
    - 后续所有全屏入口被首行 `guard !isFullscreenTransitioning else { return }` 静默拦截；
    - 若图钉开启，冷启动挂载窗口时直接继承 `.floating`，导致重启后依然被系统拦截；只有取消图钉后重启，窗口以 `.normal` 初始化且内存重置，全屏才得以恢复。
 
-### 3. 规划修复方案 (排期 v1.5.0)
-1. **全屏转场前层级借调与恢复机制 (Level Stash & Restore)**：
-   - 在 `PlayerCore.toggleFullscreen()` 请求全屏前，若检测到窗口处于置顶状态（`window.level == .floating`），先将其临时平降为 `.normal`，确保系统 Dock 顺畅开辟 Space；
-   - 退出全屏后（在 `windowDidExitFullScreen` 回调中），若 `AppSettings.shared.keepWindowOnTop == true`，自动无缝恢复 `window.level = .floating`；
-2. **引入防御性看门狗超时自愈机制**：
-   - 在 `PlayerCore.toggleFullscreen()` 增加 0.8s 异步超时安全任务，若系统因任何异常在阈值内未回传通知，强制解锁 `isFullscreenTransitioning = false` 并对齐真实全屏状态，彻底终结假死。
+### 3. 落地修复方案 (v1.5.0 已实现)
+1. **置顶状态拦截与显式 OSD 提示 (Pinned Interception with OSD Prompt)**：
+   - 在 `PlayerCore.toggleFullscreen()` 请求全屏前，检测置顶状态（`AppSettings.shared.keepWindowOnTop || window.level == .floating`）；
+   - 若处于置顶且当前非全屏，直接拦截请求，弹出居中 OSD 提示：`解除窗口置顶启用全屏`，不向 AppKit / Dock 发起转场，不置位 `isFullscreenTransitioning`，杜绝系统静默抛弃与死锁隐患；
+2. **引入防御性看门狗超时自愈机制 (Transition Watchdog)**：
+   - 在 `PlayerCore.toggleFullscreen()` 增加 0.8s 异步超时安全任务，若系统因任何极端异常在阈值内未回传通知，强制重置 `isFullscreenTransitioning = false`，彻底消除假死隐患。
 
 ---
 
@@ -672,13 +672,13 @@ public enum WindowPresentationState: Equatable {
    - 导致按键直接穿透进入 `else` 分支触发 `onEscapePressed?()`；
    - 而在 [`AppShellView.swift:325-327`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/AppShellView.swift#L325-L327) 中，`player.onEscapePressed` 直接绑定了 `stopPlayback()`，导致整场播放被直接销毁并退回主页。
 
-### 3. 规划修复方案 (排期 v1.5.0)
+### 3. 落地修复方案 (v1.5.0 已实现)
 1. **建立四级按键响应责任链**：
    - **层级 1 (抽屉/面板闭合优先)**: `isPlaylistDrawerVisible || isInspectorVisible` -> 关闭抽屉与面板，保持当前窗口与播放；
    - **层级 2 (原生 Space 全屏退出优先)**: `isFullscreen == true` -> 调用 `toggleFullscreen()` 退出独立全屏 Space；
    - **层级 3 (铺满最大化尺寸还原优先 · 核心补齐)**:
-     - 判定窗口处于最大化状态（`delegate.currentInteractiveMode == .maximized` 或匹配屏幕可用尺寸）；
-     - 调用 `PlayerWindowManager.shared.toggleMaximize(window: window)`，平滑缩回最大化前记录的 `savedPreZoomFrame`（原本普通尺寸），播放不中断；
+     - 判定窗口处于最大化状态（`windowDelegate.isMaximized(for: window) == true`）；
+     - 调用 `windowDelegate.toggleMaximize(window: window)`，平滑缩回最大化前记录的 `savedPreZoomFrame`（原本普通尺寸），播放不中断；
    - **层级 4 (普通窗口退出播放基态)**: 处于常规普通窗口状态时 -> 触发 `onEscapePressed?()` 执行退出播放返回主页。
 
 

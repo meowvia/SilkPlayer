@@ -1197,11 +1197,25 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     public func toggleFullscreen() {
         guard let window = hostWindow ?? NSApp.keyWindow else { return }
         guard !isFullscreenTransitioning else { return }
+
+        // 置顶状态下禁止切入全屏，弹出 OSD 明确提醒用户
+        let isPinned = AppSettings.shared.keepWindowOnTop || window.level == .floating
+        if isPinned && !isFullscreen {
+            showOSD(.pictureAdjustment(
+                name: L10n.tr("Always on Top", "窗口置顶"),
+                value: L10n.disablePinToEnableFullscreen
+            ))
+            return
+        }
+
         if !isFullscreen && !window.styleMask.contains(.fullScreen) {
             isPlaylistDrawerVisible = false
             (window.delegate as? PlayerWindowDelegate)?.capturePreFullScreenFrameIfNeeded(window: window)
         }
         isFullscreenTransitioning = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.isFullscreenTransitioning = false
+        }
         window.toggleFullScreen(nil)
     }
 
@@ -1553,6 +1567,10 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 isInspectorVisible = false
             } else if isFullscreen {
                 toggleFullscreen()
+            } else if let window = hostWindow ?? NSApp.keyWindow,
+                      let windowDelegate = window.delegate as? PlayerWindowDelegate,
+                      windowDelegate.isMaximized(for: window) {
+                windowDelegate.toggleMaximize(window: window)
             } else {
                 onEscapePressed?()
             }

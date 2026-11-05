@@ -100,6 +100,7 @@ public enum L10n {
     public static var enterFullscreen: String { tr("Enter Fullscreen", "进入全屏") }
     public static var exitFullscreen: String { tr("Exit Fullscreen", "退出全屏") }
     public static var toggleFullscreenHelp: String { tr("Toggle Fullscreen (F / Double-Click)", "切换全屏 (按 F 或双击)") }
+    public static var disablePinToEnableFullscreen: String { tr("Disable pin to enable fullscreen", "解除窗口置顶启用全屏") }
 
     public static var pictureAdjustments: String { tr("Picture Adjustments", "画质增强") }
     public static var toggleDeband: String { tr("Toggle Deband (D)", "切换去色带 (D)") }

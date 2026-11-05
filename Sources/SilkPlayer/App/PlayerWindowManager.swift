@@ -1117,6 +1117,15 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         }
     }
 
+    @MainActor
+    public func isMaximized(for window: NSWindow) -> Bool {
+        if currentInteractiveMode == .maximized {
+            return true
+        }
+        guard let sf = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame else { return false }
+        return abs(window.frame.width - sf.width) <= 16.0 && abs(window.frame.height - sf.height) <= 16.0
+    }
+
     public func toggleMaximize(window: NSWindow) {
         guard !window.styleMask.contains(.fullScreen), !isFullscreenTransitioning else { return }
         let now = ProcessInfo.processInfo.systemUptime
