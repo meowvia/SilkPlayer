@@ -28,6 +28,7 @@
 | 提案 013 | HDR10 与杜比视界动态 EDR 高光软滚降压制 (Dynamic EDR Tone-Mapping & Highlight Roll-off) | 需求立项 (方案设计完成) | **v1.5.0 核心排期** |
 | 提案 014 | 全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion) | 技术攻关立项 (算法探索) | **v1.5.0 核心排期** |
 | 提案 015 | 播控栏交互式音量微调与起播防爆音安全锁 (Interactive Volume Popover & Pre-play Audio Safety Lock) | 正式立项 (方案设计完成) | **v1.5.0 核心排期** |
+| 提案 016 | 多文件夹与批量剧集导入全局智能自然排序 (Multi-Folder & Batch Episode Intelligent Natural Sorting) | 正式立项 (方案设计完成) | **v1.5.0 核心排期** |
 
 
 ---
@@ -523,6 +524,52 @@
 2. 视频未载入或暂停时，支持单键提前置为静音，起播时保证零声音泄露；
 3. 悬停展开与收拢过渡平滑自然，不挤占 `PlayerScrubberView` 进度条有效交互宽度；
 4. 画面右侧滚轮与新滑条双向联动，数据与 OSD 状态 100% 保持原子一致。
+
+---
+
+## 提案 016: 多文件夹与批量剧集导入全局智能自然排序 (Multi-Folder & Batch Episode Intelligent Natural Sorting)
+
+### 1. 提案背景与实机数据排查
+- **实机运行与数据复现**:
+  - 用户从外置盘 `/Volumes/HDD2T/影音娱乐/电视剧/` 批量拖拽导入《璀璨之城》4 个分段文件夹至播放列表：
+    - 文件夹列表：`璀璨之城04-05`、`璀璨之城01-03`、`璀璨之城06-10`、`璀璨之城11-15`；
+  - 检查播放器持久化偏好数据（`com.silkplayer.playlist.items`），实际排布呈现显著倒挂错乱：
+    - 索引 `[0-1]`: 04集、05集（来自 `璀璨之城04-05`）
+    - 索引 `[2-4]`: 01集、02集、03集（来自 `璀璨之城01-03`）
+    - 索引 `[5-9]`: 06集 ~ 10集（来自 `璀璨之城06-10`）
+    - 索引 `[10-14]`: 11集 ~ 15集（来自 `璀璨之城11-15`）
+  - 导致第 04、05 集直接插队排在第 01 集前面，破坏剧集正常收看体验。
+- **物理根因定位**:
+  - 核心入口定位：[`PlayerWindowManager.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerWindowManager.swift#L491-L504) 之 `expandFilesAndDirectories(_ paths: [String])`；
+  - macOS 访达（Finder）在多选拖拽或多选打开时，`NSPasteboard` 传递的文件夹路径数组并未强制按名称排序，而是依赖系统内部遍历或鼠标选区次序；
+  - 底层 `MediaFileClassifier.findVideos(in:)` 仅在**单个文件夹作用域内**做了局部自然排序（`localizedStandardCompare`）；外层 `expandFilesAndDirectories` 则通过 `for path in paths { results.append(...) }` 简单顺序拼接；
+  - 展开后的整批路径数组在注入 `PlaylistManager.appendItems` 之前，**缺失批次全局自然语义排序（Global Batch Natural Sort）**。
+- **目标定位**:
+  - **纳入 v1.5.0 核心排期**；
+  - 建立“多文件夹层级扁平化 + 批次全量自然语言对比 + 剧集编号语义权重”的高健壮性导入排序管线。
+
+### 2. 架构设计与技术路径
+#### 2.1 全局批次自然排序统一入口 (Global Batch Natural Sort)
+- 在 `PlayerWindowManager.expandFilesAndDirectories` 扁平化展开所有子目录媒体后，对最终产出的 `results` 执行全局自然排序：
+  ```swift
+  results.sort { path1, path2 in
+      let file1 = URL(fileURLWithPath: path1).lastPathComponent
+      let file2 = URL(fileURLWithPath: path2).lastPathComponent
+      return file1.localizedStandardCompare(file2) == .orderedAscending
+  }
+  ```
+- 统一收归所有入口（拖拽导入 `handleDroppedURLs`、访达外部打开 `openExternalFiles`、侧边抽屉文件选择 `addMediaViaPicker`）。
+
+#### 2.2 剧集语义编号智能增强排序 (Semantic Episode Priority)
+- 针对分季分集视频（如 `01.mkv`, `EP02.mp4`, `S01E03.mkv`, `第04集.mp4`），结合现有的 [`MediaFilenameSanitizer.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Playlist/MediaFilenameSanitizer.swift)：
+  1. 优先提取清洗后的剧集序号（`episodeBadge` / `episodeNumber`）；
+  2. 若两文件均解析出同季剧集编号，优先按集数数值升序对齐；
+  3. 若无显式剧集编号，平滑回退至 Apple 原生 `localizedStandardCompare`，完美规避字符编码与多位数错位。
+
+### 3. 验收标准
+1. 同时拖入多个分卷目录（如 `04-05`、`01-03`、`06-10`、`11-15`）时，播放列表中剧集严格按照 `01 -> 02 -> ... -> 15` 递增排列；
+2. 即使单个目录下包含跨级子目录或多个散落剧集文件，导入后依然按剧集自然顺序排列；
+3. 单批次导入上百集剧集时，排序计算耗时低于 5ms，主线程保持 120fps 丝滑响应。
 
 
 
