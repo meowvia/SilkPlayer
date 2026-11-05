@@ -607,3 +607,80 @@ public enum WindowPresentationState: Equatable {
    - 维持双击顶栏铺满/还原时的 520x520 居中规格，保证纯音频播放器标准视图质感；
    - 评估在 `windowDidEndLiveResize` 中是否需以平滑动画对齐 1:1，或完全放开矩形视口。
 
+---
+
+## ISSUE-012: 置顶与微距拖拽抖动下全屏转场状态机单向死锁导致全屏入口永久假死
+
+### 1. 缺陷现象
+- 用户在特定时序操作下（如将播放窗口手动拉小、开启右上角图钉置顶、随后尝试双击播放画面进入全屏），播放器未能成功进入全屏；
+- 此后全屏子系统陷入完全瘫痪状态：
+  1. 双击播放界面：无任何响应；
+  2. 点击右下角全屏按钮：无任何响应；
+  3. 取消图钉置顶后再试：仍然无响应；
+  4. 键盘快捷键 F / 回车 / Esc：均无响应；
+  5. 与此同时，窗口左上角绿色红绿灯按钮铺满最大化功能保持正常；
+  6. 退出播放器并重新启动后，双击全屏及右下角全屏按钮功能完全恢复。
+
+### 2. 根因分析
+1. **抢先置位与单向依赖**：
+   - 在 [`PlayerCore.swift:1197-1206`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerCore.swift#L1197-L1206) 的 `toggleFullscreen()` 中，在调用 AppKit 原生 `window.toggleFullScreen(nil)` 之前，同步将 `isFullscreenTransitioning` 置为 `true`；
+   - 该标志位的复位（恢复 `false`）100% 依赖 AppKit 代理事件的回调（`windowDidEnterFullScreen` / `windowDidExitFullScreen` / `windowDidFailToEnterFullScreen`）。
+2. **系统底层静默丢弃转场请求**：
+   - 当窗口处于置顶状态（`window.level = .floating`）叠加边框拖拽缩小，或双击时鼠标产生微小位移（> 3pt 触发 `window.performDrag` 抢占，产生系统警告 `Window move completed without beginning`）时，macOS WindowServer 在跨 Space 分配过程中静默忽略或丢弃了转场调用；
+   - AppKit 未能启动动画，导致任何后续代理通知均未被系统触发。
+3. **缺乏超时自愈机制 (Watchdog Missing)**：
+   - 代码中无任何异步超时防御机制，`PlayerCore.isFullscreenTransitioning` 永久停留在 `true`；
+   - 后续所有全屏调用均被入口首行 `guard !isFullscreenTransitioning else { return }` 静默拦截并丢弃；
+   - 红绿灯走的是 `NSWindow.setFrame` 与 Delegate 独立变量，因而未受波及；重启应用则重新初始化了内存变量，死锁被物理重置。
+
+### 3. 规划修复方案 (排期 v1.5.0)
+1. **引入防御性看门狗超时机制**：
+   - 在 `toggleFullscreen()` 抢先置位后启动 0.8s 异步超时安全任务，若系统未在阈值内回传转场完成/失败通知，强制重置 `isFullscreenTransitioning = false`，杜绝永久死锁；
+2. **双击手势与微距拖拽防冲突**：
+   - 在 `VideoView.mouseDragged` 中增加 `event.clickCount >= 2` 检测，在双击时屏蔽 `window.performDrag` 抢占；
+3. **置顶浮动层级转场协同**：
+   - 进入全屏前暂退为 `.normal` 层级，退出全屏后再自动恢复 `.floating`，消除 WindowServer 跨 Space 调度异常。
+
+---
+
+## ISSUE-013: 铺满最大化模式下按 Esc 键误触发退出播放而非缩回原窗口尺寸
+
+### 1. 缺陷现象
+- 当播放窗口处于**铺满最大化模式**（通过双击顶栏或点击绿色红绿灯按钮铺满屏幕可用工作区）时，按下键盘 `Esc` 键；
+- **预期行为**：与双击红绿灯按钮或双击顶栏行为 100% 等价一致，平滑退出最大化，缩回原本的普通窗口尺寸，播放无缝继续；
+- **实际行为**：当前按下 `Esc` 键直接触发了退出播放（等同于点击右上角 X 号关闭按钮），当前播放的视频被关闭并回到空白主页，严重破坏了用户的观影流。
+
+### 2. 根因分析
+1. **按键分级响应链条缺失中间层判定**：
+   - 在 [`PlayerCore.swift:1550-1558`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerCore.swift#L1550-L1558) 的键盘事件处理中：
+     ```swift
+     case 53: // Escape
+         if isPlaylistDrawerVisible || isInspectorVisible {
+             isPlaylistDrawerVisible = false
+             isInspectorVisible = false
+         } else if isFullscreen {
+             toggleFullscreen()
+         } else {
+             onEscapePressed?()
+         }
+         return nil
+     ```
+   - 该响应链条中只有两层保护：
+     1. 第一层：关闭抽屉与属性面板；
+     2. 第二层：退出原生 Space 全屏（`isFullscreen` 为 `true` 时）；
+   - **完全缺失了“铺满最大化状态（Maximized）”的拦截分支**；
+2. **底层降级直通终止播放回调**：
+   - 在铺满最大化模式下，窗口虽占据了整个屏幕可用工作区，但因其属于窗口化平铺而非 macOS 独立 Space 全屏，`isFullscreen` 严格为 `false`；
+   - 导致按键直接穿透进入 `else` 分支触发 `onEscapePressed?()`；
+   - 而在 [`AppShellView.swift:325-327`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/AppShellView.swift#L325-L327) 中，`player.onEscapePressed` 直接绑定了 `stopPlayback()`，导致整场播放被直接销毁并退回主页。
+
+### 3. 规划修复方案 (排期 v1.5.0)
+1. **建立四级按键响应责任链**：
+   - **层级 1 (抽屉/面板闭合优先)**: `isPlaylistDrawerVisible || isInspectorVisible` -> 关闭抽屉与面板，保持当前窗口与播放；
+   - **层级 2 (原生 Space 全屏退出优先)**: `isFullscreen == true` -> 调用 `toggleFullscreen()` 退出独立全屏 Space；
+   - **层级 3 (铺满最大化尺寸还原优先 · 核心补齐)**:
+     - 判定窗口处于最大化状态（`delegate.currentInteractiveMode == .maximized` 或匹配屏幕可用尺寸）；
+     - 调用 `PlayerWindowManager.shared.toggleMaximize(window: window)`，平滑缩回最大化前记录的 `savedPreZoomFrame`（原本普通尺寸），播放不中断；
+   - **层级 4 (普通窗口退出播放基态)**: 处于常规普通窗口状态时 -> 触发 `onEscapePressed?()` 执行退出播放返回主页。
+
+
