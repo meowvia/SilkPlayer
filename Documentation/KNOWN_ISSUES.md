@@ -19,6 +19,8 @@
 | ISSUE-009 | 外置存储 (ORICO/USB/SMB/NAS) 播放 4K 10-bit HEVC 拖拽后音画不同步与饥饿重锚失效缺陷 | 解复用与主时钟同步 / SilkCoreKit (SilkAudioEngine & SilkPlayerEngine) | High | 已修复 (v1.4.0) | v1.3.0 |
 | ISSUE-010 | 发布镜像动态链接库绝对路径泄露与 Intel 兼容加载头失配致外部机型闪退 | 构建与打包发布 / SilkPlayer (package_app.sh & Packages) | Critical | 已修复 (v1.4.0-fix) | v1.4.0 |
 | ISSUE-011 | 音频模式下手动调整播放窗口尺寸引起边框弹跳与高频振荡抖动 | 窗口交互与几何约束 / SilkPlayer (PlayerWindowManager) | Medium | 待修复 (排期 v1.5.0) | v1.4.0 |
+| ISSUE-012 | 前置图钉浮动层级导致全屏请求被系统静默抛弃与状态机永久死锁 | 窗口交互与状态机 / SilkPlayer (PlayerCore) | High | 已修复待发版 (v1.5.0) | v1.4.0 |
+| ISSUE-013 | 铺满最大化模式下按 Esc 键误触发退出播放而非缩回原窗口尺寸 | 键盘响应链与窗口管理 / SilkPlayer (PlayerCore & Delegate) | Medium | 已修复待发版 (v1.5.0) | v1.4.0 |
 
 ---
 
@@ -639,6 +641,10 @@ public enum WindowPresentationState: Equatable {
 2. **引入防御性看门狗超时自愈机制 (Transition Watchdog)**：
    - 在 `PlayerCore.toggleFullscreen()` 增加 0.8s 异步超时安全任务，若系统因任何极端异常在阈值内未回传通知，强制重置 `isFullscreenTransitioning = false`，彻底消除假死隐患。
 
+### 4. 发版说明与时序备注
+- **更新说明统一归口**：下个版本（v1.5.0）对外更新说明中统一定稿记录为：“修复播放窗口交互bug”；
+- **时序纪律**：本修复归入 v1.5.0 整体迭代，禁止单独提前打包或打乱版本发布时序。
+
 ---
 
 ## ISSUE-013: 铺满最大化模式下按 Esc 键误触发退出播放而非缩回原窗口尺寸
@@ -680,5 +686,9 @@ public enum WindowPresentationState: Equatable {
      - 判定窗口处于最大化状态（`windowDelegate.isMaximized(for: window) == true`）；
      - 调用 `windowDelegate.toggleMaximize(window: window)`，平滑缩回最大化前记录的 `savedPreZoomFrame`（原本普通尺寸），播放不中断；
    - **层级 4 (普通窗口退出播放基态)**: 处于常规普通窗口状态时 -> 触发 `onEscapePressed?()` 执行退出播放返回主页。
+
+### 4. 发版说明与时序备注
+- **更新说明统一归口**：下个版本（v1.5.0）对外更新说明中统一定稿记录为：“修复播放窗口交互bug”；
+- **时序纪律**：随 v1.5.0 整体版本发布统一验收与发布，不得单点扰乱发布节奏。
 
 
