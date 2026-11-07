@@ -5,6 +5,69 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-11-07
+
+### Added
+- **Universal Binary Distribution**: Native dual-slice images containing arm64 and x86_64 architectures, executing natively on both Apple Silicon (M1-M4) and Intel Macs without Rosetta 2 translation.
+- **Interactive Volume Slider & Pre-play Audio Ramp**:
+  - Upgraded HUD volume icon to dynamic state button; hovering smoothly reveals high-precision slider for fine-grained adjustments (Proposal 015).
+  - Implemented pre-play smooth audio ramp transition algorithm to eliminate transient pop noises during initial playback and seek jumps.
+- **Global Natural Semantic Sorting for Episodes**:
+  - Recursive multi-folder scanning with flat media extraction (Proposal 016).
+  - Built-in natural semantic sorting recognizing episode tags (S01E01, EP02) to preserve natural sequence across batch imports.
+
+### Optimized
+- **4K Video Memory & Demuxer Overhead Reduction**:
+  - Bound frame caching to 3 frames during continuous playback, slashing resident memory footprint for 4K 10-bit media (Proposal 017).
+  - Replaced busy-waiting with `NSCondition` synchronization in demuxing pipeline, eliminating idle CPU waste.
+  - Automatic pause of bloom rendering during idle/pause states to prevent wasteful redraws.
+- **Pure Audio Rendering Efficiency**:
+  - Removed real-time Gaussian blur from vinyl artwork and ambient glow pipeline.
+  - Throttled audio spectrum sampler and beat timer to 20Hz with dynamic threshold deadzone filtering.
+
+### Fixed
+- Fixed window state deadlock where double-clicking failed to enter fullscreen after toggling always-on-top or manual resizing (ISSUE-012).
+- Fixed issue where pressing Esc in fill-maximized mode exited playback, accurately restoring normal window dimensions (ISSUE-013).
+- Fixed window border jitter during manual window resizing in pure audio mode (ISSUE-011).
+
+---
+
+## [1.4.0] - 2026-10-31
+
+### Added
+- **Dual-Track Media Playlist**: Split queue into dedicated Video and Audio categories with automatic routing, isolated position tracking, and distinct playback state machines (Proposal 006).
+- **Fallback Document Icons & Branding**: Added custom document icons and fallback branding artwork for non-native media preview formats (Proposal 011).
+
+### Fixed
+- **4K External Storage Seek Synchronization**: Fixed out-of-sync playback and hunger re-anchor failure on 4K 10-bit HEVC files stored on external USB/SMB drives (ISSUE-009).
+- **Packaging Dynamic Library Path Leak**: Enforced zero-leak `@rpath` assertions in `package_app.sh`, resolving launch crashes on Intel Macs (ISSUE-010).
+- **Window Interaction Audit Resolutions**: Resolved scroll wheel event interception in `PlayerHUDView`, unified always-on-top state source, corrected top-bar double-click bounding box, and prevented canvas drag in bottom control regions.
+
+---
+
+## [1.3.0] - 2026-10-24
+
+### Added
+- **Default Player & Format Associations**: Built-in format association manager in Settings, allowing one-click registration as default handler for common video/audio extensions via LaunchServices (Proposal 002).
+
+### Fixed
+- **Audio Scrubber Seek Clock Offset**: Fixed hardware sample accumulation clock offset during paused-state scrub operations in `SilkAudioEngine` (ISSUE-007).
+- **macOS Dock Icon Contrast**: Enhanced edge contrast and ambient highlight curve for application Dock icon (ISSUE-008).
+
+---
+
+## [1.2.0] - 2026-10-20
+
+### Fixed
+- **Audio Playback Speed**: Fixed playback rate parameter application in `SilkAudioEngine` with pitch-preserved time-domain stretching (ISSUE-001).
+- **Shuffle Playback History Memory**: Implemented memory-based sampling queue preventing rapid repeat of recently played tracks (ISSUE-002).
+- **Pure Audio Layout Collisions**: Resolved window layout clipping and visual artifact collisions in pure audio mode (ISSUE-003).
+- **Window Geometry & Interaction Topology**: Comprehensive overhaul of window constraint state machine, aspect-ratio preservation, and live-resize event flow (ISSUE-004).
+- **Metal Occlusion Audio Streaming**: Guarded audio output clock from render stalling when video window is fully occluded (ISSUE-005).
+- **SMB Streaming Buffer Starvation**: Optimized streaming buffer watermark and packet pre-fetch for network-attached shares (ISSUE-006).
+
+---
+
 ## [1.1.0] - 2026-10-15
 
 ### Added
