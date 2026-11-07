@@ -300,4 +300,108 @@ public enum MediaFilenameSanitizer: Sendable {
 
         return str
     }
+
+    // MARK: - Level 5: Semantic Natural Batch Sorting
+    public struct EpisodeInfo: Equatable, Sendable {
+        public let season: Int?
+        public let episode: Int?
+
+        public init(season: Int?, episode: Int?) {
+            self.season = season
+            self.episode = episode
+        }
+    }
+
+    /// Extracts integer season and episode indices for semantic numerical comparison.
+    public static func extractSeasonAndEpisode(from text: String) -> EpisodeInfo {
+        let nsRange = NSRange(location: 0, length: (text as NSString).length)
+
+        // SxxExx pattern
+        if let match = seasonEpisodeRegex.firstMatch(in: text, range: nsRange) {
+            let seasonStr = (text as NSString).substring(with: match.range(at: 1))
+            let epStr = (text as NSString).substring(with: match.range(at: 2))
+            if let season = Int(seasonStr), let ep = Int(epStr) {
+                return EpisodeInfo(season: season, episode: ep)
+            }
+        }
+
+        // Chinese 第xx集 pattern
+        if let match = chineseEpisodeRegex.firstMatch(in: text, range: nsRange) {
+            let epStr = (text as NSString).substring(with: match.range(at: 1))
+            if let ep = Int(epStr) {
+                return EpisodeInfo(season: 1, episode: ep)
+            }
+        }
+
+        // EPxx or Exx pattern
+        if let match = episodeOnlyRegex.firstMatch(in: text, range: nsRange) {
+            let epStr = (text as NSString).substring(with: match.range(at: 1))
+            if let ep = Int(epStr) {
+                return EpisodeInfo(season: 1, episode: ep)
+            }
+        }
+
+        // Chinese bracket 【01】 pattern
+        if let match = bracketEpisodeRegex.firstMatch(in: text, range: nsRange) {
+            let epStr = (text as NSString).substring(with: match.range(at: 1))
+            if let ep = Int(epStr) {
+                return EpisodeInfo(season: 1, episode: ep)
+            }
+        }
+
+        // Hyphen separated episode number: " - 01 -"
+        if let match = hyphenEpisodeRegex.firstMatch(in: text, range: nsRange) {
+            let epStr = (text as NSString).substring(with: match.range(at: 1))
+            if let ep = Int(epStr) {
+                return EpisodeInfo(season: 1, episode: ep)
+            }
+        }
+
+        return EpisodeInfo(season: nil, episode: nil)
+    }
+
+    /// Extracts series prefix excluding episode identifiers to prevent cross-series interleaving.
+    public static func extractSeriesPrefix(from text: String) -> String {
+        let ns = text as NSString
+        let ext = ns.pathExtension
+        let baseName = ext.isEmpty ? text : ns.deletingPathExtension
+        let epRange = NSRange(location: 0, length: (baseName as NSString).length)
+        let stripped = episodeTokenStripRegex.stringByReplacingMatches(in: baseName, range: epRange, withTemplate: " ")
+        return stripped.trimmingCharacters(in: CharacterSet(charactersIn: " ._-_:;,./|"))
+    }
+
+    /// Compares two media paths with intelligent semantic episode priority and Apple localized standard ordering.
+    public static func compareNaturalOrder(path1: String, path2: String) -> Bool {
+        let file1 = URL(fileURLWithPath: path1).lastPathComponent
+        let file2 = URL(fileURLWithPath: path2).lastPathComponent
+
+        let prefix1 = extractSeriesPrefix(from: file1)
+        let prefix2 = extractSeriesPrefix(from: file2)
+
+        // If both files have distinct non-empty series titles, group by series title first
+        if !prefix1.isEmpty && !prefix2.isEmpty && prefix1 != prefix2 {
+            let prefixComp = prefix1.localizedStandardCompare(prefix2)
+            if prefixComp != .orderedSame {
+                return prefixComp == .orderedAscending
+            }
+        }
+
+        // Within the same series (or generic episode names), compare by season and episode number
+        let epInfo1 = extractSeasonAndEpisode(from: file1)
+        let epInfo2 = extractSeasonAndEpisode(from: file2)
+
+        if let ep1 = epInfo1.episode, let ep2 = epInfo2.episode {
+            let s1 = epInfo1.season ?? 1
+            let s2 = epInfo2.season ?? 1
+            if s1 != s2 {
+                return s1 < s2
+            }
+            if ep1 != ep2 {
+                return ep1 < ep2
+            }
+        }
+
+        // Fallback to Apple native Finder localizedStandardCompare
+        return file1.localizedStandardCompare(file2) == .orderedAscending
+    }
 }

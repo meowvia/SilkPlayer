@@ -114,6 +114,7 @@ public struct PlayerHUDView: View {
                     topBar(tier: tier, isHUDActive: isHUDActive)
                         .padding(.horizontal, 16)
                         .padding(.top, player.isFullscreen ? 16 : 30)
+                        .allowsHitTesting(isHUDActive)
                     Spacer()
                         .allowsHitTesting(false)
                     bottomControls(tier: tier, width: availableWidth)
@@ -121,14 +122,11 @@ public struct PlayerHUDView: View {
                         .allowsHitTesting(isHUDActive)
                 }
                 .padding(player.isFullscreen ? 0 : 8)
-                .allowsHitTesting(isHUDActive)
                 .animation(.easeInOut(duration: 0.22), value: isHUDActive)
                 .animation(.spring(response: 0.25, dampingFraction: 0.8), value: tier)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(isHUDActive)
         }
-        .allowsHitTesting(isControlsVisible && player.isHUDVisible)
         .onAppear {
             setupMouseMonitor()
             registerUserActivity()
@@ -420,8 +418,8 @@ public struct PlayerHUDView: View {
                 icon: "backward.end.fill",
                 size: (tier == .minimal || tier == .compact) ? 12 : 13,
                 weight: .medium,
-                disabled: !playlist.hasPrevious && player.currentTime <= 3.0,
-                helpText: playlist.hasPrevious ? (playlist.previousItem.map { "\($0.title) (Cmd+Left)" } ?? L10n.previousTrack) : (player.currentTime > 3.0 ? "\(L10n.previousTrack) (0:00)" : L10n.noPreviousTrack)
+                disabled: !playlist.hasPrevious && !player.canRewindToStart,
+                helpText: playlist.hasPrevious ? (playlist.previousItem.map { "\($0.title) (Cmd+Left)" } ?? L10n.previousTrack) : (player.canRewindToStart ? "\(L10n.previousTrack) (0:00)" : L10n.noPreviousTrack)
             ) {
                 onPlayPrevious?()
             }
@@ -576,6 +574,9 @@ public struct PlayerHUDView: View {
     @ViewBuilder
     private func rightWingControls(tier: HUDLayoutTier) -> some View {
         HStack(spacing: tier == .minimal ? 10 : 12) {
+            // 常态交互式音量微调与起播防爆音安全锁 (24pt 动态图标，悬停平滑展开微型滑块)
+            HUDVolumeSlider(player: player)
+
             // 1. 音轨选择原生菜单 (expanded 和 standard 模式直显，compact/minimal 收纳进更多)
             if tier == .expanded || tier == .standard {
                 HUDMenuButton(

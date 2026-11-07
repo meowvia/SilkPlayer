@@ -5,7 +5,7 @@ set -euo pipefail
 # Verifies local DMG SHA-256 hashes against GitHub Releases published digests.
 
 REPO="meowvia/SilkPlayer"
-TAG="${1:-1.4.0}"
+TAG="${1:-1.5.0}"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${PROJECT_DIR}/build"
 

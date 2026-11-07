@@ -30,8 +30,15 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     // MARK: - Published Playback State
     public var currentTime: Double {
         get { clock.currentTime }
-        set { clock.currentTime = newValue }
+        set {
+            clock.currentTime = newValue
+            let canRewind = newValue > 3.0
+            if self.canRewindToStart != canRewind {
+                self.canRewindToStart = canRewind
+            }
+        }
     }
+    @Published public private(set) var canRewindToStart: Bool = false
     @Published public var duration: Double = 0.0 {
         didSet { clock.duration = duration }
     }
@@ -1199,8 +1206,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         guard !isFullscreenTransitioning else { return }
 
         // 置顶状态下禁止切入全屏，弹出 OSD 明确提醒用户
-        let isPinned = AppSettings.shared.keepWindowOnTop || window.level == .floating
-        if isPinned && !isFullscreen {
+        if AppSettings.shared.keepWindowOnTop && !isFullscreen {
             showOSD(.pictureAdjustment(
                 name: L10n.tr("Always on Top", "窗口置顶"),
                 value: L10n.disablePinToEnableFullscreen
@@ -1208,14 +1214,42 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             return
         }
 
+        // 取消置顶防御性恢复：确保窗口底层层级与全屏行为标记 100% 对齐正常层级
+        if window.level != .normal {
+            window.level = .normal
+        }
+        if !window.styleMask.contains(.fullScreen) {
+            window.collectionBehavior.remove([.fullScreenAuxiliary, .fullScreenNone])
+            window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+            let refreshSel = NSSelectorFromString("_doUpdateTilingConstraintsImmediately")
+            if window.responds(to: refreshSel) {
+                _ = window.perform(refreshSel)
+            }
+        }
+        if !window.isKeyWindow {
+            window.makeKeyAndOrderFront(nil)
+        }
+
         if !isFullscreen && !window.styleMask.contains(.fullScreen) {
             isPlaylistDrawerVisible = false
             (window.delegate as? PlayerWindowDelegate)?.capturePreFullScreenFrameIfNeeded(window: window)
         }
+
         isFullscreenTransitioning = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-            self?.isFullscreenTransitioning = false
+        // 若 WindowServer 因瞬时状态未启动全屏转场（未进入 windowWillEnterFullScreen），0.18s 后立即释放门栓，绝不阻塞后续双击
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self, weak window] in
+            guard let self = self else { return }
+            let delegateTransitioning = (window?.delegate as? PlayerWindowDelegate)?.isFullscreenTransitioning == true
+            if !delegateTransitioning {
+                self.isFullscreenTransitioning = false
+            }
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            if self?.isFullscreenTransitioning == true {
+                self?.isFullscreenTransitioning = false
+            }
+        }
+
         window.toggleFullScreen(nil)
     }
 
@@ -1342,7 +1376,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     public func startAudioRhythmMonitoring() {
         guard isAudioOnly && isPlaying else { return }
         guard audioRhythmTimer == nil else { return }
-        audioRhythmTimer = Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
+        audioRhythmTimer = Timer.scheduledTimer(withTimeInterval: 0.050, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, self.isPlaying, self.isAudioOnly else {
                     self?.stopAudioRhythmMonitoring()
@@ -1352,7 +1386,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                     let mapped = bands.map { CGFloat($0) }
                     var changed = false
                     for (i, val) in mapped.enumerated() {
-                        if abs(val - self.audioRhythmLevels[i]) > 0.02 {
+                        if abs(val - self.audioRhythmLevels[i]) > 0.03 {
                             changed = true
                             break
                         }

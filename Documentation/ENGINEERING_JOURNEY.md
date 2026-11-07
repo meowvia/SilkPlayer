@@ -1,6 +1,6 @@
 # SilkPlayer Engineering Journey & Technical Development Log
 
-This document records the architectural evolution, technical challenges, and iterative problem-solving milestones of the SilkPlayer project from its inception to the v1.0.0 milestone.
+This document records the architectural evolution, technical challenges, and iterative problem-solving milestones of the SilkPlayer project from its inception to the 1.0.0 milestone.
 
 ---
 

@@ -58,7 +58,7 @@ public struct AudioArtworkView: View {
                         .opacity(0.28 + Double(b0) * 0.12)
                         .scaleEffect(1.15)
                         .clipped()
-                        .animation(.easeOut(duration: 0.08), value: b0)
+                        .animation(.easeOut(duration: 0.12), value: b0)
                 }
 
                 // 4. Subtle outer window glass border highlight
@@ -83,26 +83,24 @@ public struct AudioArtworkView: View {
                         let bassEnergy = b0 * 0.65 + b1 * 0.35
 
                         ZStack {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
                                 .fill(
                                     RadialGradient(
-                                        colors: [
-                                            Color(red: 0.98, green: 0.84, blue: 0.52).opacity(player.isPlaying ? (0.22 + Double(bassEnergy) * 0.26) : 0.04),
-                                            Color(red: 0.90, green: 0.70, blue: 0.38).opacity(player.isPlaying ? (0.10 + Double(bassEnergy) * 0.15) : 0.02),
-                                            Color.clear
+                                        stops: [
+                                            .init(color: Color(red: 0.98, green: 0.84, blue: 0.52).opacity(player.isPlaying ? (0.24 + Double(bassEnergy) * 0.26) : 0.04), location: 0.25),
+                                            .init(color: Color(red: 0.90, green: 0.70, blue: 0.38).opacity(player.isPlaying ? (0.12 + Double(bassEnergy) * 0.15) : 0.02), location: 0.65),
+                                            .init(color: Color.clear, location: 1.0)
                                         ],
                                         center: .center,
-                                        startRadius: coverCardSize * 0.25,
+                                        startRadius: coverCardSize * 0.20,
                                         endRadius: coverCardSize * 0.75 * (1.0 + CGFloat(bassEnergy) * 0.20)
                                     )
                                 )
                                 .frame(width: coverCardSize * (1.08 + CGFloat(bassEnergy) * 0.16), height: coverCardSize * (1.08 + CGFloat(bassEnergy) * 0.16))
-                                .blur(radius: 28)
-                                .animation(.easeOut(duration: 0.08), value: bassEnergy)
+                                .animation(.easeOut(duration: 0.10), value: bassEnergy)
 
                             Image(nsImage: artwork)
                                 .resizable()
-                                .interpolation(.high)
                                 .aspectRatio(contentMode: .fit)
                                 .frame(maxWidth: coverCardSize, maxHeight: coverCardSize)
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -112,7 +110,7 @@ public struct AudioArtworkView: View {
                                  )
                                 .shadow(color: .black.opacity(0.55), radius: 26, x: 0, y: 14)
                                 .scaleEffect(player.isPlaying ? (1.0 + CGFloat(bassEnergy) * 0.015) : 1.0)
-                                .animation(.easeOut(duration: 0.08), value: bassEnergy)
+                                .animation(.easeOut(duration: 0.10), value: bassEnergy)
                         }
                         .frame(width: coverCardSize, height: coverCardSize)
                     } else {
@@ -184,30 +182,30 @@ struct AudioVisualizerHaloView: View {
         let highEnergy = b2 * 0.25 + b3 * 0.75
 
         ZStack {
-            // Layer 1: Bass glow bloom layer (低频环境光晕)
+            // Layer 1: Bass glow bloom layer (低频环境柔和光晕，采用平滑边缘渐变消除重度高斯模糊)
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [
-                            Color(red: 0.98, green: 0.84, blue: 0.52).opacity(isPlaying ? (0.18 + Double(bassEnergy) * 0.25) : 0.04),
-                            Color(red: 0.90, green: 0.70, blue: 0.38).opacity(isPlaying ? (0.09 + Double(midEnergy) * 0.12) : 0.02),
-                            Color.clear
+                        stops: [
+                            .init(color: Color(red: 0.98, green: 0.84, blue: 0.52).opacity(isPlaying ? (0.22 + Double(bassEnergy) * 0.26) : 0.04), location: 0.32),
+                            .init(color: Color(red: 0.90, green: 0.70, blue: 0.38).opacity(isPlaying ? (0.12 + Double(midEnergy) * 0.14) : 0.02), location: 0.68),
+                            .init(color: Color(red: 0.90, green: 0.70, blue: 0.38).opacity(isPlaying ? (0.04 + Double(midEnergy) * 0.06) : 0.01), location: 0.86),
+                            .init(color: Color.clear, location: 1.0)
                         ],
                         center: .center,
-                        startRadius: diameter * 0.35,
-                        endRadius: diameter * 0.65 * (1.0 + CGFloat(bassEnergy) * 0.20)
+                        startRadius: diameter * 0.28,
+                        endRadius: diameter * 0.66 * (1.0 + CGFloat(bassEnergy) * 0.20)
                     )
                 )
-                .frame(width: diameter * (1.10 + CGFloat(bassEnergy) * 0.28), height: diameter * (1.10 + CGFloat(bassEnergy) * 0.28))
-                .blur(radius: 32)
+                .frame(width: diameter * (1.12 + CGFloat(bassEnergy) * 0.28), height: diameter * (1.12 + CGFloat(bassEnergy) * 0.28))
 
             // Layer 2: Inner visualizer ring (内圈光环)
             Circle()
                 .stroke(
                     LinearGradient(
                         colors: [
-                            Color(red: 1.00, green: 0.88, blue: 0.60).opacity(isPlaying ? (0.28 + Double(bassEnergy) * 0.32) : 0.06),
-                            Color(red: 0.95, green: 0.75, blue: 0.45).opacity(isPlaying ? (0.15 + Double(midEnergy) * 0.25) : 0.03)
+                            Color(red: 1.00, green: 0.88, blue: 0.60).opacity(isPlaying ? (0.32 + Double(bassEnergy) * 0.32) : 0.06),
+                            Color(red: 0.95, green: 0.75, blue: 0.45).opacity(isPlaying ? (0.18 + Double(midEnergy) * 0.25) : 0.03)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -218,15 +216,14 @@ struct AudioVisualizerHaloView: View {
                     width: diameter * (1.025 + CGFloat(bassEnergy) * 0.10 + CGFloat(midEnergy) * 0.06),
                     height: diameter * (1.025 + CGFloat(bassEnergy) * 0.10 + CGFloat(midEnergy) * 0.06)
                 )
-                .shadow(color: Color(red: 1.00, green: 0.85, blue: 0.50).opacity(isPlaying ? (Double(bassEnergy) * 0.35) : 0.0), radius: 6)
 
             // Layer 3: Mid-frequency visualizer ring (中频光环)
             Circle()
                 .stroke(
                     LinearGradient(
                         colors: [
-                            Color(white: 0.96).opacity(isPlaying ? (0.24 + Double(midEnergy) * 0.28) : 0.05),
-                            Color(red: 0.96, green: 0.82, blue: 0.55).opacity(isPlaying ? (0.14 + Double(highEnergy) * 0.20) : 0.03)
+                            Color(white: 0.96).opacity(isPlaying ? (0.26 + Double(midEnergy) * 0.28) : 0.05),
+                            Color(red: 0.96, green: 0.82, blue: 0.55).opacity(isPlaying ? (0.16 + Double(highEnergy) * 0.20) : 0.03)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -237,24 +234,22 @@ struct AudioVisualizerHaloView: View {
                     width: diameter * (1.085 + CGFloat(midEnergy) * 0.14 + CGFloat(highEnergy) * 0.06),
                     height: diameter * (1.085 + CGFloat(midEnergy) * 0.14 + CGFloat(highEnergy) * 0.06)
                 )
-                .shadow(color: Color.white.opacity(isPlaying ? (Double(midEnergy) * 0.25) : 0.0), radius: 4)
 
             // Layer 4: High-frequency accent ring (外圈高频描边微光)
             Circle()
                 .stroke(
-                    Color(white: 1.00).opacity(isPlaying ? (0.12 + Double(highEnergy) * 0.24) : 0.02),
+                    Color(white: 1.00).opacity(isPlaying ? (0.15 + Double(highEnergy) * 0.24) : 0.02),
                     lineWidth: 0.75
                 )
                 .frame(
                     width: diameter * (1.155 + CGFloat(highEnergy) * 0.18),
                     height: diameter * (1.155 + CGFloat(highEnergy) * 0.18)
                 )
-                .shadow(color: Color(red: 0.98, green: 0.88, blue: 0.65).opacity(isPlaying ? (Double(highEnergy) * 0.30) : 0.0), radius: 5)
 
             // Layer 5: Ambient Outer Halo (微弱外沿余晕)
             Circle()
                 .stroke(
-                    Color(red: 0.95, green: 0.82, blue: 0.52).opacity(isPlaying ? (0.06 + Double(bassEnergy) * 0.10) : 0.01),
+                    Color(red: 0.95, green: 0.82, blue: 0.52).opacity(isPlaying ? (0.08 + Double(bassEnergy) * 0.10) : 0.01),
                     lineWidth: 0.5
                 )
                 .frame(
@@ -262,7 +257,7 @@ struct AudioVisualizerHaloView: View {
                     height: diameter * (1.23 + CGFloat(bassEnergy) * 0.12 + CGFloat(highEnergy) * 0.14)
                 )
         }
-        .animation(.easeOut(duration: 0.08), value: bassEnergy + midEnergy + highEnergy)
+        .animation(.easeOut(duration: 0.10), value: bassEnergy + midEnergy + highEnergy)
     }
 }
 
@@ -305,29 +300,38 @@ struct FloatingVinylDiscView: View {
     let levels: [CGFloat]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying)) { timeline in
-            let angle = (timeline.date.timeIntervalSinceReferenceDate * 18.0).truncatingRemainder(dividingBy: 360.0)
-            ZStack {
-                // 1. Audio Visualizer Halo (Multi-layer ring visualizer)
-                AudioVisualizerHaloView(
-                    diameter: diameter,
-                    levels: levels,
-                    isPlaying: isPlaying
+        ZStack {
+            // 1. Audio Visualizer Halo (解耦出 TimelineView，仅在律动电平变化时局部刷新)
+            AudioVisualizerHaloView(
+                diameter: diameter,
+                levels: levels,
+                isPlaying: isPlaying
+            )
+
+            // 2. Natural deep contact soft shadow (平滑羽化径向渐变，零高斯模糊运算)
+            Circle()
+                .fill(
+                    RadialGradient(
+                        stops: [
+                            .init(color: Color.black.opacity(0.60), location: 0.35),
+                            .init(color: Color.black.opacity(0.20), location: 0.70),
+                            .init(color: Color.clear, location: 1.0)
+                        ],
+                        center: .center,
+                        startRadius: diameter * 0.30,
+                        endRadius: diameter * 0.52
+                    )
                 )
+                .frame(width: diameter * 1.06, height: diameter * 1.06)
+                .offset(y: 8)
 
-                // 2. Natural deep contact soft shadow
-                Circle()
-                    .fill(Color.black.opacity(0.60))
-                    .frame(width: diameter * 0.96, height: diameter * 0.96)
-                    .blur(radius: 26)
-                    .offset(y: 12)
-
-                // 3. Circular Vinyl Disc Asset with Center Label
+            // 3. Circular Vinyl Disc Asset (TimelineView 仅包裹黑胶资产本身进行匀速旋转)
+            TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: !isPlaying)) { timeline in
+                let angle = (timeline.date.timeIntervalSinceReferenceDate * 18.0).truncatingRemainder(dividingBy: 360.0)
                 Group {
                     if let vinylImg = TurntableAssets.shared.vinylImage {
                         Image(nsImage: vinylImg)
                             .resizable()
-                            .interpolation(.high)
                             .aspectRatio(contentMode: .fit)
                             .frame(width: diameter, height: diameter)
                             .rotationEffect(.degrees(angle))
@@ -339,7 +343,7 @@ struct FloatingVinylDiscView: View {
                     }
                 }
             }
-            .frame(width: diameter * 1.24, height: diameter * 1.24)
         }
+        .frame(width: diameter * 1.24, height: diameter * 1.24)
     }
 }

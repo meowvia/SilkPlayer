@@ -99,6 +99,7 @@ struct HUDTransportButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .frame(width: 28, height: 28)
         .disabled(disabled)
         .opacity(disabled ? 0.35 : (isHovered ? 1.0 : 0.88))
         .scaleEffect(isHovered && !disabled ? 1.08 : 1.0)

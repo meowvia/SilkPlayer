@@ -203,8 +203,8 @@ public struct AppShellView: View {
                 }
             }
         }
-        .onChange(of: navigationModel.isAlwaysOnTop) { _, newValue in
-            player.hostWindow?.level = newValue ? .floating : .normal
+        .onChange(of: settings.keepWindowOnTop) { _, newValue in
+            PlayerWindowManager.shared.applyAlwaysOnTop(newValue)
         }
         .onAppear {
             registerSession()

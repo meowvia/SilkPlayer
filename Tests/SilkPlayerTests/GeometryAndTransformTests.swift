@@ -229,4 +229,46 @@ final class GeometryAndTransformTests: XCTestCase {
         XCTAssertEqual(fullCinemascope.width, 1920, "2.39:1 on 16:9 screen must fill 100% width")
         XCTAssertEqual(fullCinemascope.height, 803, "2.39:1 on 16:9 screen must be 803 height")
     }
+
+    // MARK: - 5. Pin -> Resize -> Unpin -> Fullscreen Flow Invariant
+    @MainActor
+    func testPinResizeUnpinFullscreenFlow() {
+        let player = PlayerCore()
+        let session = PlayerWindowSession(id: UUID(), player: player)
+        let window = NSWindow(
+            contentRect: NSRect(x: 200, y: 150, width: 960, height: 540),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        let delegate = PlayerWindowDelegate(session: session, player: player)
+        session.window = window
+        session.windowDelegate = delegate
+        window.delegate = delegate
+        player.hostWindow = window
+        PlayerWindowManager.shared.registerSession(session)
+        defer { PlayerWindowManager.shared.unregisterSession(id: session.id) }
+
+        window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+
+        // 1. 开启置顶：仅提升窗口层级为 .floating，严禁剥离全屏主能力集
+        PlayerWindowManager.shared.isAlwaysOnTop = true
+        XCTAssertEqual(window.level, .floating)
+        XCTAssertTrue(window.collectionBehavior.contains(.fullScreenPrimary))
+
+        // 2. 模拟置顶下拉伸窗口
+        let newSize = delegate.windowWillResize(window, to: NSSize(width: 1200, height: 675))
+        window.setFrame(NSRect(origin: window.frame.origin, size: newSize), display: true)
+        NotificationCenter.default.post(name: NSWindow.didEndLiveResizeNotification, object: window)
+        XCTAssertTrue(window.collectionBehavior.contains(.fullScreenPrimary))
+
+        // 3. 取消置顶：恢复 .normal 层级，严禁调用非法 order 或丢失能力集
+        PlayerWindowManager.shared.isAlwaysOnTop = false
+        XCTAssertEqual(window.level, .normal)
+        XCTAssertTrue(window.collectionBehavior.contains(.fullScreenPrimary))
+
+        // 4. 发起全屏请求
+        player.toggleFullscreen()
+        XCTAssertTrue(player.isFullscreenTransitioning)
+    }
 }

@@ -487,7 +487,8 @@ extension Notification.Name {
         NSApp?.activate(ignoringOtherApps: true)
     }
 
-    /// Recursively expands folders and external disk volumes into contained video/audio paths
+    /// Recursively expands folders and external disk volumes into contained video/audio paths,
+    /// sorting all discovered media globally in intelligent natural semantic order.
     nonisolated public static func expandFilesAndDirectories(_ paths: [String]) -> [String] {
         var results: [String] = []
         for path in paths {
@@ -499,6 +500,9 @@ extension Notification.Name {
             } else {
                 results.append(path)
             }
+        }
+        results.sort { path1, path2 in
+            MediaFilenameSanitizer.compareNaturalOrder(path1: path1, path2: path2)
         }
         return results
     }
@@ -563,8 +567,50 @@ extension Notification.Name {
     }
 
     public func applyAlwaysOnTop(_ onTop: Bool) {
+        let targetLevel: NSWindow.Level = onTop ? .floating : .normal
+        var updatedWindows = Set<ObjectIdentifier>()
+
+        func configureWindow(_ win: NSWindow) {
+            let winId = ObjectIdentifier(win)
+            guard !updatedWindows.contains(winId) else { return }
+            updatedWindows.insert(winId)
+            guard win !== self.settingsWindow else { return }
+
+            win.level = targetLevel
+
+            if !onTop && !win.styleMask.contains(.fullScreen) {
+                // 1. 恢复普通层级后，强制刷新 AppKit 与 WindowServer 的全屏/分屏能力标记，
+                // 清除在 .floating 置顶期间手动拉伸窗口留下的脏约束状态 (_CGXPackagesSetWindowConstraints)
+                win.collectionBehavior.remove([.fullScreenAuxiliary, .fullScreenNone])
+                win.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+                win.styleMask.insert([.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView])
+
+                // 2. 触发 AppKit 立即向 WindowServer 重新提交合法的窗口尺寸约束
+                let currentMin = win.minSize
+                win.contentAspectRatio = .zero
+                win.aspectRatio = .zero
+                win.resizeIncrements = NSSize(width: 1, height: 1)
+                win.contentResizeIncrements = NSSize(width: 1, height: 1)
+                let safeMin = NSSize(width: max(320, currentMin.width), height: max(240, currentMin.height))
+                win.minSize = safeMin
+                win.contentMinSize = safeMin
+
+                let refreshSel = NSSelectorFromString("_doUpdateTilingConstraintsImmediately")
+                if win.responds(to: refreshSel) {
+                    _ = win.perform(refreshSel)
+                }
+
+                win.standardWindowButton(.zoomButton)?.isEnabled = true
+                (win.delegate as? PlayerWindowDelegate)?.capturePreFullScreenFrameIfNeeded(window: win)
+            }
+        }
+
         for s in sessions {
-            s.window?.level = onTop ? .floating : .normal
+            guard let win = s.window ?? (s.player as? PlayerCore)?.hostWindow else { continue }
+            configureWindow(win)
+        }
+        if let keyWindow = NSApp?.keyWindow {
+            configureWindow(keyWindow)
         }
     }
 
@@ -682,7 +728,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public private(set) var currentInteractiveMode: WindowInteractiveMode = .normal
     public private(set) var isMaximizingOrRestoring: Bool = false
     private var isAdjustingWindowFrame: Bool = false
-    private var isFullscreenTransitioning: Bool = false
+    public private(set) var isFullscreenTransitioning: Bool = false
     private var savedPreZoomFrame: NSRect? = nil
     private var preFullScreenState: PreFullScreenState? = nil
     private var lastToggleMaximizeTime: TimeInterval = 0
@@ -827,24 +873,22 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             )
         }
 
-        // Dedicated pure-audio window resize branch: strictly maintain 1:1 proportional (等比) square resizing
+        // Dedicated pure-audio window resize branch: decouple interactive live dragging from programmatic 1:1 square sizing
         if player?.isAudioOnly == true {
             let minAudioSize: CGFloat = 380.0
             let maxAudioDimension = min(maxSize.width, maxSize.height)
 
-            let curSize = window.frame.size
-            let deltaW = abs(frameSize.width - curSize.width)
-            let deltaH = abs(frameSize.height - curSize.height)
-
-            var targetSide: CGFloat
-            if deltaH > deltaW && deltaH > 1.0 {
-                targetSide = frameSize.height
+            if window.inLiveResize {
+                // Live interactive drag: decouple axes to track mouse pointer smoothly without feedback oscillation
+                return NSSize(
+                    width: max(minAudioSize, min(maxSize.width, frameSize.width)),
+                    height: max(minAudioSize, min(maxSize.height, frameSize.height))
+                )
             } else {
-                targetSide = frameSize.width
+                // Non-live programmatic resize (or snap/init): maintain 1:1 proportional square
+                let side = max(minAudioSize, min(maxAudioDimension, frameSize.width))
+                return NSSize(width: round(side), height: round(side))
             }
-
-            targetSide = max(minAudioSize, min(maxAudioDimension, targetSide))
-            return NSSize(width: round(targetSide), height: round(targetSide))
         }
 
         guard let player = self.player, (player.videoWidth > 0 || player.videoHeight > 0) else {

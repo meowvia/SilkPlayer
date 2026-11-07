@@ -13,6 +13,16 @@ public final class MetalPlayerContainerView: NSView {
     private var canDragWindowFromCurrentMouseDown: Bool = false
     private var pendingSingleClickWorkItem: DispatchWorkItem?
     private var lastMouseActivityTime: TimeInterval = 0
+    private var localMouseDownMonitor: Any?
+    private var lastCanvasMouseDownTime: TimeInterval = 0
+    private var lastCanvasMouseDownLocation: NSPoint = .zero
+    private var lastHandledDoubleClickTime: TimeInterval = 0
+
+    isolated deinit {
+        if let monitor = localMouseDownMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+    }
 
     override public var acceptsFirstResponder: Bool { true }
 
@@ -46,7 +56,104 @@ public final class MetalPlayerContainerView: NSView {
 
     override public func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if window != nil {
+            setupWindowDoubleClickMonitorIfNeeded()
+        } else if let monitor = localMouseDownMonitor {
+            NSEvent.removeMonitor(monitor)
+            localMouseDownMonitor = nil
+        }
         applyRenderViewLayout()
+    }
+
+    private func setupWindowDoubleClickMonitorIfNeeded() {
+        guard localMouseDownMonitor == nil else { return }
+        localMouseDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+            guard let self = self,
+                  let window = self.window,
+                  event.window === window,
+                  let player = self.playerCore,
+                  player.isLoaded else {
+                return event
+            }
+
+            let loc = self.convert(event.locationInWindow, from: nil)
+            let b = self.bounds
+            guard b.width > 0, b.height > 0, b.contains(loc) else { return event }
+
+            let isFullscreen = window.styleMask.contains(.fullScreen)
+
+            // 1. 四周 8pt 原生缩放边框绝对放行
+            if !isFullscreen {
+                let margin: CGFloat = 8.0
+                if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
+                    return event
+                }
+            }
+
+            // 2. 若点击落在实际原生控件（如 NSPopUpButton）或右侧展开的抽屉内，原样放行
+            if let hitView = window.contentView?.hitTest(event.locationInWindow), hitView is NSControl {
+                return event
+            }
+            let activeDrawerWidth: CGFloat = player.isInspectorVisible ? 348.0 :
+                (player.isPlaylistDrawerVisible ? (PlaylistDrawerDimensions.drawerWidth(for: b.width, isFullscreen: isFullscreen) + 8.0) : 0.0)
+            if activeDrawerWidth > 0 && loc.x >= b.width - activeDrawerWidth && loc.y >= 64 && loc.y <= b.height - 60 {
+                return event
+            }
+
+            // 3. HUD 激活时，排除右上角快捷按钮热区、左上角红绿灯热区、右侧抽屉拉手热区、以及底部实际控制按钮与进度条热区
+            if player.isHUDVisible {
+                let topButtonsMinY = b.height - (isFullscreen ? 56.0 : 68.0)
+                if loc.y >= topButtonsMinY && (loc.x >= b.width - 148.0 || (!isFullscreen && loc.x <= 78.0)) {
+                    return event
+                }
+                if !player.isPlaylistDrawerVisible && loc.x >= b.width - 32.0 && abs(loc.y - b.height * 0.5) <= 36.0 {
+                    return event
+                }
+                if loc.y <= 86.0 {
+                    return event
+                }
+            }
+
+            // 4. 判定画布双击（兼容系统 clickCount >= 2 以及被 NSHostingView 拆散的快速连击）
+            let now = event.timestamp
+            let dt = now - self.lastCanvasMouseDownTime
+            let dist = hypot(loc.x - self.lastCanvasMouseDownLocation.x, loc.y - self.lastCanvasMouseDownLocation.y)
+            let isDoubleClick = (event.clickCount >= 2) || (dt > 0.01 && dt <= min(0.35, NSEvent.doubleClickInterval) && dist <= 12.0)
+
+            self.lastCanvasMouseDownTime = now
+            self.lastCanvasMouseDownLocation = loc
+
+            guard isDoubleClick else { return event }
+            guard now - self.lastHandledDoubleClickTime > 0.20 else { return nil }
+            self.lastHandledDoubleClickTime = now
+
+            self.pendingSingleClickWorkItem?.cancel()
+            self.pendingSingleClickWorkItem = nil
+            self.canDragWindowFromCurrentMouseDown = false
+
+            let isMaximized: Bool
+            if let delegate = window.delegate as? PlayerWindowDelegate {
+                isMaximized = (delegate.currentInteractiveMode == .maximized)
+            } else {
+                isMaximized = false
+            }
+
+            let topBarHeight: CGFloat = isFullscreen ? 56.0 : (isMaximized ? 88.0 : 32.0)
+            if loc.y >= b.height - topBarHeight {
+                if isFullscreen {
+                    player.toggleFullscreen()
+                } else {
+                    PlayerWindowManager.shared.toggleMaximize(window: window)
+                }
+            } else {
+                if isFullscreen {
+                    player.toggleFullscreen()
+                } else {
+                    self.handleDoubleClickAction()
+                }
+            }
+            return nil
+        }
     }
 
     public var metalRenderView: SilkMetalRenderView? {
@@ -417,6 +524,9 @@ public final class MetalPlayerContainerView: NSView {
             super.mouseDown(with: event)
             return
         }
+        if playerCore?.hostWindow !== window {
+            playerCore?.hostWindow = window
+        }
         let isFullscreen = window.styleMask.contains(.fullScreen)
         canDragWindowFromCurrentMouseDown = false
 
@@ -463,8 +573,8 @@ public final class MetalPlayerContainerView: NSView {
             isMaximized = false
         }
 
-        // 顶栏高度：铺满最大化时为 88pt（确保大屏幕上极其容易双击顶栏还原），普通窗口为 78pt，全屏模式为 56pt
-        let topBarHeight: CGFloat = isFullscreen ? 56.0 : (isMaximized ? 88.0 : 78.0)
+        // 顶栏高度：铺满最大化时为 88pt（确保大屏幕上极其容易双击顶栏还原），普通窗口为 32pt（匹配标准原生标题栏），全屏模式为 56pt
+        let topBarHeight: CGFloat = isFullscreen ? 56.0 : (isMaximized ? 88.0 : 32.0)
         let isTopBarArea = (loc.y >= b.height - topBarHeight)
         let isBottomControlArea = (loc.y <= 112.0)
 
@@ -474,6 +584,8 @@ public final class MetalPlayerContainerView: NSView {
             if event.clickCount >= 2 {
                 pendingSingleClickWorkItem?.cancel()
                 pendingSingleClickWorkItem = nil
+                guard event.timestamp - lastHandledDoubleClickTime > 0.20 else { return }
+                lastHandledDoubleClickTime = event.timestamp
                 if isFullscreen {
                     player.toggleFullscreen()
                 } else {
@@ -498,13 +610,7 @@ public final class MetalPlayerContainerView: NSView {
             return
         }
 
-        // 3. 底部控制栏区域：禁止任何画布暂停与窗口拖拽
-        if isBottomControlArea && player.isHUDVisible {
-            canDragWindowFromCurrentMouseDown = false
-            return
-        }
-
-        // 4. 中间视频画面核心视口区域
+        // 3. 画面视口区域双击事件优先路由：双击动作始终具有最高响应特权，绝不在底栏盲区被静默丢弃
         if window.firstResponder !== self {
             window.makeFirstResponder(self)
         }
@@ -512,6 +618,8 @@ public final class MetalPlayerContainerView: NSView {
         if event.clickCount >= 2 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
+            guard event.timestamp - lastHandledDoubleClickTime > 0.20 else { return }
+            lastHandledDoubleClickTime = event.timestamp
             if isFullscreen {
                 player.toggleFullscreen()
             } else {
@@ -520,7 +628,13 @@ public final class MetalPlayerContainerView: NSView {
             return
         }
 
-        // 画面区域（已排除四周 8pt 边框）单击：允许拖拽移动窗口（超过 3pt 调用 window.performDrag）或松开触发播放/暂停
+        // 4. 底部控制栏区域：HUD 激活时保护控制面板，禁止单次点击穿透暂停或发起窗口拖拽
+        if isBottomControlArea && player.isHUDVisible {
+            canDragWindowFromCurrentMouseDown = false
+            return
+        }
+
+        // 5. 画面区域（已排除四周 8pt 边框）单次点击按下：允许拖拽移动窗口（超过 8pt 调用 window.performDrag）或松开触发播放/暂停
         canDragWindowFromCurrentMouseDown = !isFullscreen && !isMaximized
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
         dragInitialWindowOrigin = window.frame.origin
@@ -535,11 +649,17 @@ public final class MetalPlayerContainerView: NSView {
             return
         }
 
+        // 防双击手势与微距拖拽冲突：若检测到连击手势，严禁启动窗口拖拽截获事件流
+        guard event.clickCount < 2 else {
+            return
+        }
+
         let current = NSEvent.mouseLocation
         let dx = current.x - dragInitialMouseScreenLocation.x
         let dy = current.y - dragInitialMouseScreenLocation.y
         let distance = hypot(dx, dy)
-        if distance > 3.0 {
+        // 防抖微位移阈值放宽至 8.0pt（避免快速连击双击时的手指微位移误触 window.performDrag）
+        if distance > 8.0 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
             canDragWindowFromCurrentMouseDown = false
@@ -554,7 +674,7 @@ public final class MetalPlayerContainerView: NSView {
 
         let current = NSEvent.mouseLocation
         let distance = hypot(current.x - dragInitialMouseScreenLocation.x, current.y - dragInitialMouseScreenLocation.y)
-        if distance > 3.0 {
+        if distance > 8.0 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
             return
@@ -570,7 +690,7 @@ public final class MetalPlayerContainerView: NSView {
             }
         }
 
-        // 画面空白处防抖单击（0.16s）
+        // 画面空白处防抖单击（对齐系统级双击间隔，给予用户充足连击窗口）
         if AppSettings.shared.doubleClickAction == .none {
             self.playerCore?.togglePlayPause()
         } else {
@@ -581,7 +701,8 @@ public final class MetalPlayerContainerView: NSView {
                 self.playerCore?.togglePlayPause()
             }
             self.pendingSingleClickWorkItem = task
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: task)
+            let delay = min(0.22, NSEvent.doubleClickInterval)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task)
         }
     }
 

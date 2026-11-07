@@ -8,7 +8,7 @@ SilkPlayer relies on open-source libraries and native platform frameworks. This 
 
 | Component | License | Origin / Repository | Linkage | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| **FFmpeg** (v6.1.2) | **LGPL-3.0** (构建参数 `--disable-gpl --enable-version3`，不含 GPL 组件) | [FFmpeg Official](https://ffmpeg.org) | Dynamic Frameworks (`Libavformat`, `Libavcodec`, `Libswscale`, `Libavutil`, `Libswresample`) | Media container demuxing (MKV, MP4, WebM, etc.), audio decoding, and software video fallbacks. |
+| **FFmpeg** (6.1.2) | **LGPL-3.0** (构建参数 `--disable-gpl --enable-version3`，不含 GPL 组件) | [FFmpeg Official](https://ffmpeg.org) | Dynamic Frameworks (`Libavformat`, `Libavcodec`, `Libswscale`, `Libavutil`, `Libswresample`) | Media container demuxing (MKV, MP4, WebM, etc.), audio decoding, and software video fallbacks. |
 | **libplacebo / mpv** | **LGPL-2.1+ / GPL-2.0+** | [libplacebo](https://code.videolan.org/videolan/libplacebo) / [mpv](https://github.com/mpv-player/mpv) | Reference Only (No compiled code linked) | Reference color science and international standard (ITU-R BT.2124 / SMPTE ST 2084) specification verification. |
 
 ---
@@ -241,7 +241,7 @@ The following system frameworks are provided by Apple Inc. as part of the macOS 
 
 ## 4. License Compliance & Architectural Boundaries
 
-- **SilkPlayer Repository Licensing**: This public repository of SilkPlayer is licensed under the **GNU Lesser General Public License v3.0 (LGPL-3.0)**.
+- **SilkPlayer Repository Licensing**: This public repository of SilkPlayer is licensed under the **GNU Lesser General Public License 3.0 (LGPL-3.0)**.
 - **Proprietary Architecture & Physical Isolation**: Proprietary intellectual property, including the SilkPlayback Engine (hardware decode & audio master clock), SilkRender Pipeline (Metal 3 & Dolby Vision Profile 5 IPTPQc2 GPU reshaping pipeline), and SilkThumb Engine (fast-seek & LRU thumbnail caching architectures), are physically decoupled and isolated in `SilkCoreKit`.
 - **Public Open-Source Notice**: All public frontend source code of SilkPlayer is accessible under LGPL-3.0 terms.
 - **Third-Party Open-Source Notice**: Third-party components bundled or linked retain their respective upstream copyrights and licensing terms. See individual upstream repositories for corresponding upstream source code.

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # SilkPlayer Release Packaging Script
-# Target: macOS 14.0+, Apple Silicon (arm64) / Intel (x86_64)
+# Target: macOS 14.0+, Apple Silicon (arm64) / Intel (x86_64) / Universal (universal)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -18,8 +18,8 @@ if [[ "${3:-}" == "--app-only" || "${3:-}" == "--no-dmg" ]]; then
     BUILD_APP_ONLY=true
 fi
 
-if [[ "${ARCH}" != "arm64" && "${ARCH}" != "x86_64" ]]; then
-    echo "Error: Unsupported architecture '${ARCH}'. Supported: arm64, x86_64." >&2
+if [[ "${ARCH}" != "arm64" && "${ARCH}" != "x86_64" && "${ARCH}" != "universal" ]]; then
+    echo "Error: Unsupported architecture '${ARCH}'. Supported: arm64, x86_64, universal." >&2
     exit 1
 fi
 
@@ -40,7 +40,7 @@ audit_bundle_dependencies() {
     while IFS= read -r bin; do
         if [[ -f "${bin}" && ! -L "${bin}" ]]; then
             local deps
-            deps=$(otool -L "${bin}" 2>/dev/null | tail -n +2 | awk '{print $1}')
+            deps=$(otool -L "${bin}" 2>/dev/null | grep $'^\t' | awk '{print $1}')
             for dep in ${deps}; do
                 # Allowed prefixes: @rpath/, /System/Library/, /usr/lib/
                 if [[ "${dep}" == "@rpath/"* || "${dep}" == "/System/Library/"* || "${dep}" == "/usr/lib/"* ]]; then
@@ -83,20 +83,44 @@ rm -rf "${APP_BUNDLE}" "${STAGING_DIR}" "${DMG_PATH}" "${HOME}/Desktop/SilkPlaye
 mkdir -p "${BUILD_DIR}"
 
 # 2. Release compilation
-echo "[2/6] Compiling release binary for ${ARCH}..."
+if [[ "${ARCH}" == "universal" ]]; then
+    echo "[2/6] Compiling release binaries for universal (arm64 + x86_64)..."
+    echo "  Compiling arm64 slice..."
+    swift build -c release --triple "arm64-apple-macosx14.0"
+    TEMP_DIR=$(mktemp -d /tmp/silkplayer_build_XXXXXX)
+    cp "${PROJECT_DIR}/.build/release/${APP_NAME}" "${TEMP_DIR}/${APP_NAME}_arm64"
 
-swift build -c release --triple "${ARCH}-apple-macosx14.0"
+    echo "  Compiling x86_64 slice..."
+    swift build -c release --triple "x86_64-apple-macosx14.0"
+    cp "${PROJECT_DIR}/.build/release/${APP_NAME}" "${TEMP_DIR}/${APP_NAME}_x86_64"
 
-RELEASE_BIN="${PROJECT_DIR}/.build/release/${APP_NAME}"
+    RELEASE_BIN="${BUILD_DIR}/${APP_NAME}_universal_bin"
+    echo "  Merging slices into universal binary..."
+    lipo -create "${TEMP_DIR}/${APP_NAME}_arm64" "${TEMP_DIR}/${APP_NAME}_x86_64" -output "${RELEASE_BIN}"
+    rm -rf "${TEMP_DIR}"
+else
+    echo "[2/6] Compiling release binary for ${ARCH}..."
+    swift build -c release --triple "${ARCH}-apple-macosx14.0"
+    RELEASE_BIN="${PROJECT_DIR}/.build/release/${APP_NAME}"
+fi
+
 if [[ ! -f "${RELEASE_BIN}" ]]; then
     echo "Error: Release binary not found at ${RELEASE_BIN}" >&2
     exit 1
 fi
 
 BIN_ARCH=$(lipo -archs "${RELEASE_BIN}")
-if [[ "${BIN_ARCH}" != *"${ARCH}"* ]]; then
-    echo "Error: Binary architecture mismatch! Expected ${ARCH}, got ${BIN_ARCH}" >&2
-    exit 1
+if [[ "${ARCH}" == "universal" ]]; then
+    if [[ "${BIN_ARCH}" != *"arm64"* || "${BIN_ARCH}" != *"x86_64"* ]]; then
+        echo "Error: Universal binary missing required architectures! Got: ${BIN_ARCH}" >&2
+        exit 1
+    fi
+    echo "  Universal binary verified: ${BIN_ARCH}"
+else
+    if [[ "${BIN_ARCH}" != *"${ARCH}"* ]]; then
+        echo "Error: Binary architecture mismatch! Expected ${ARCH}, got ${BIN_ARCH}" >&2
+        exit 1
+    fi
 fi
 
 # 3. Construct .app bundle layout
@@ -107,6 +131,9 @@ mkdir -p "${APP_BUNDLE}/Contents/Frameworks"
 
 cp "${RELEASE_BIN}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+if [[ "${ARCH}" == "universal" && -f "${RELEASE_BIN}" ]]; then
+    rm -f "${RELEASE_BIN}"
+fi
 
 # Embed dynamic XCFrameworks into Contents/Frameworks
 # Note: SilkCoreKit is statically linked into the main binary, so skip embedding it to avoid bloat
@@ -119,15 +146,20 @@ for xc in "${PROJECT_DIR}/Packages"/*.xcframework; do
                     echo "  Skipping static archive ${fw_name} (already statically linked into executable)..."
                     continue
                 fi
-                echo "  Embedding ${fw_name} (thinning to ${ARCH})..."
-                cp -R "${fw}" "${APP_BUNDLE}/Contents/Frameworks/"
-                
-                fw_bin="${APP_BUNDLE}/Contents/Frameworks/${fw_name}/Versions/A/${fw_name%.framework}"
-                if [[ -f "${fw_bin}" ]]; then
-                    if lipo -info "${fw_bin}" | grep -q "Architectures in the fat file"; then
-                        lipo -thin "${ARCH}" "${fw_bin}" -output "${fw_bin}.thin"
-                        mv "${fw_bin}.thin" "${fw_bin}"
-                        chmod +x "${fw_bin}"
+                if [[ "${ARCH}" == "universal" ]]; then
+                    echo "  Embedding ${fw_name} (universal fat binary)..."
+                    cp -R "${fw}" "${APP_BUNDLE}/Contents/Frameworks/"
+                else
+                    echo "  Embedding ${fw_name} (thinning to ${ARCH})..."
+                    cp -R "${fw}" "${APP_BUNDLE}/Contents/Frameworks/"
+                    
+                    fw_bin="${APP_BUNDLE}/Contents/Frameworks/${fw_name}/Versions/A/${fw_name%.framework}"
+                    if [[ -f "${fw_bin}" ]]; then
+                        if lipo -info "${fw_bin}" | grep -q "Architectures in the fat file"; then
+                            lipo -thin "${ARCH}" "${fw_bin}" -output "${fw_bin}.thin"
+                            mv "${fw_bin}.thin" "${fw_bin}"
+                            chmod +x "${fw_bin}"
+                        fi
                     fi
                 fi
             fi

@@ -98,6 +98,10 @@ public class SilkMetalRenderView: NSView {
     public func updateMetalGeometryAndRedraw() {}
     public func updateColorPipeline() {}
     public func clear() {}
+
+    override public func hitTest(_ point: NSPoint) -> NSView? {
+        return nil
+    }
 }
 
 @MainActor

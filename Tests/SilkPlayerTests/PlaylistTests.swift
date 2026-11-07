@@ -584,8 +584,8 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(mock.isNightModeEnabled == true, "applyNightMode propagates to registered session players")
     windowMgr.resetForTesting()
 
-    // 29. v0.5.1 Regression Suite: Speed 0.25x, Minimal Tier Navigation & Floating Settings
-    print("\n--- Test 29: v0.5.1 Regression Suite: Speed 0.25x & Floating Settings ---")
+    // 29. 0.5.1 Regression Suite: Speed 0.25x, Minimal Tier Navigation & Floating Settings
+    print("\n--- Test 29: 0.5.1 Regression Suite: Speed 0.25x & Floating Settings ---")
     mock.setSpeed(0.25)
     XCTAssert(mock.speed == 0.25, "PlayerControllable supports 0.25x playback speed")
     mock.setSpeed(1.0)
@@ -599,8 +599,8 @@ final class PlaylistRegressionTests: XCTestCase {
     windowMgr.closeSettings()
     XCTAssert(windowMgr.settingsWindow == nil, "Settings window closed cleanly")
 
-    // 30. v0.5.2 Regression Suite: Global Language Switching & Aspect Ratio Invariants
-    print("\n--- Test 30: v0.5.2 Regression Suite: Global Language & Aspect Ratio Invariants ---")
+    // 30. 0.5.2 Regression Suite: Global Language Switching & Aspect Ratio Invariants
+    print("\n--- Test 30: 0.5.2 Regression Suite: Global Language & Aspect Ratio Invariants ---")
     AppSettings.shared.appLanguage = .en
     XCTAssert(L10n.isChinese == false, "L10n detects English when appLanguage is .en")
     XCTAssert(L10n.play == "Play", "L10n.play is 'Play' in English")
@@ -1746,5 +1746,35 @@ final class PlaylistRegressionTests: XCTestCase {
     let overExpandResult = maxDelegate.windowWillResize(maxWindow, to: overExpandProposal)
     XCTAssertEqual(overExpandResult.width, maxScreenFrame.width, accuracy: 2.0, "Outward drag expands up to max width")
     XCTAssertEqual(overExpandResult.height, maxScreenFrame.height, accuracy: 2.0, "Outward drag caps at screen height")
+
+    // 60. Multi-Folder & Batch Episode Global Natural Semantic Sort Invariants (Proposal 016)
+    print("\n--- Test 60: Multi-Folder & Batch Episode Global Natural Semantic Sort Invariants ---")
+    let outOfOrderEpisodes = [
+        "/Volumes/HDD2T/璀璨之城04-05/璀璨之城04.mp4",
+        "/Volumes/HDD2T/璀璨之城04-05/璀璨之城05.mp4",
+        "/Volumes/HDD2T/璀璨之城01-03/璀璨之城01.mp4",
+        "/Volumes/HDD2T/璀璨之城01-03/璀璨之城02.mp4",
+        "/Volumes/HDD2T/璀璨之城01-03/璀璨之城03.mp4",
+        "/Volumes/HDD2T/璀璨之城11-15/璀璨之城11.mp4",
+        "/Volumes/HDD2T/璀璨之城06-10/璀璨之城06.mp4",
+        "/Volumes/HDD2T/璀璨之城11-15/璀璨之城15.mp4"
+    ]
+    let sortedBatch = outOfOrderEpisodes.sorted(by: MediaFilenameSanitizer.compareNaturalOrder)
+    let expectedNames = [
+        "璀璨之城01.mp4", "璀璨之城02.mp4", "璀璨之城03.mp4", "璀璨之城04.mp4",
+        "璀璨之城05.mp4", "璀璨之城06.mp4", "璀璨之城11.mp4", "璀璨之城15.mp4"
+    ]
+    let actualNames = sortedBatch.map { URL(fileURLWithPath: $0).lastPathComponent }
+    XCTAssertEqual(actualNames, expectedNames, "Batch episodes from fragmented directories are strictly sorted in natural ascending sequence")
+
+    let mixedSeasonEpisodes = [
+        "/media/Show.S02E01.mkv",
+        "/media/Show.S01E10.mkv",
+        "/media/Show.S01E02.mkv",
+        "/media/Show.S01E01.mkv"
+    ]
+    let sortedSeasons = mixedSeasonEpisodes.sorted(by: MediaFilenameSanitizer.compareNaturalOrder)
+    let expectedSeasonNames = ["Show.S01E01.mkv", "Show.S01E02.mkv", "Show.S01E10.mkv", "Show.S02E01.mkv"]
+    XCTAssertEqual(sortedSeasons.map { URL(fileURLWithPath: $0).lastPathComponent }, expectedSeasonNames, "Multi-season episodes strictly prioritize season then episode number")
     }
 }

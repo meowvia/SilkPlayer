@@ -8,7 +8,6 @@ public struct SilkBrandLogoView: View {
     public var isInteractive: Bool = true
     
     @State private var isHovered: Bool = false
-    @State private var subtleGlow: Bool = false
     
     public init(size: CGFloat = 84, isInteractive: Bool = true) {
         self.size = size
@@ -22,8 +21,8 @@ public struct SilkBrandLogoView: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.cyan.opacity(isHovered ? 0.35 : (subtleGlow ? 0.25 : 0.15)),
-                            Color.blue.opacity(isHovered ? 0.20 : 0.10),
+                            Color.cyan.opacity(isHovered ? 0.35 : 0.15),
+                            Color.blue.opacity(isHovered ? 0.20 : 0.08),
                             Color.clear
                         ],
                         center: .center,
@@ -33,6 +32,7 @@ public struct SilkBrandLogoView: View {
                 )
                 .frame(width: size * 1.3, height: size * 1.3)
                 .blur(radius: size * 0.18)
+                .animation(.easeOut(duration: 0.25), value: isHovered)
 
             // Outer Apple Squircle Substrate (Midnight Obsidian)
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
@@ -104,11 +104,6 @@ public struct SilkBrandLogoView: View {
         }
         .scaleEffect(isInteractive && isHovered ? 1.05 : 1.0)
         .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isHovered)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                subtleGlow = true
-            }
-        }
         .onHover { hovering in
             if isInteractive {
                 isHovered = hovering
