@@ -18,9 +18,10 @@
 | ISSUE-008 | macOS Dock 栏图标边缘暗部与 Dock 底色融合导致视觉偏小 | 视觉设计与图标 / SilkPlayer (Resources) | Medium | 已修复 (1.3.0) | 1.2.0 |
 | ISSUE-009 | 外置存储 (ORICO/USB/SMB/NAS) 播放 4K 10-bit HEVC 拖拽后音画不同步与饥饿重锚失效缺陷 | 解复用与主时钟同步 / SilkCoreKit (SilkAudioEngine & SilkPlayerEngine) | High | 已修复 (1.4.0) | 1.3.0 |
 | ISSUE-010 | 发布镜像动态链接库绝对路径泄露与 Intel 兼容加载头失配致外部机型闪退 | 构建与打包发布 / SilkPlayer (package_app.sh & Packages) | Critical | 已修复 (1.4.0-fix) | 1.4.0 |
-| ISSUE-011 | 音频模式下手动调整播放窗口尺寸引起边框弹跳与高频振荡抖动 | 窗口交互与几何约束 / SilkPlayer (PlayerWindowManager) | Medium | 已修复待发版 (1.5.0) | 1.4.0 |
-| ISSUE-012 | 前置图钉浮动层级导致全屏请求被系统静默抛弃与状态机永久死锁 | 窗口交互与状态机 / SilkPlayer (PlayerCore) | High | 已修复待发版 (1.5.0) | 1.4.0 |
-| ISSUE-013 | 铺满最大化模式下按 Esc 键误触发退出播放而非缩回原窗口尺寸 | 键盘响应链与窗口管理 / SilkPlayer (PlayerCore & Delegate) | Medium | 已修复待发版 (1.5.0) | 1.4.0 |
+| ISSUE-011 | 音频模式下手动调整播放窗口尺寸引起边框弹跳与高频振荡抖动 | 窗口交互与几何约束 / SilkPlayer (PlayerWindowManager) | Medium | 已修复 (1.5.0) | 1.4.0 |
+| ISSUE-012 | 前置图钉浮动层级导致全屏请求被系统静默抛弃与状态机永久死锁 | 窗口交互与状态机 / SilkPlayer (PlayerCore) | High | 已修复 (1.5.0) | 1.4.0 |
+| ISSUE-013 | 铺满最大化模式下按 Esc 键误触发退出播放而非缩回原窗口尺寸 | 键盘响应链与窗口管理 / SilkPlayer (PlayerCore & Delegate) | Medium | 已修复 (1.5.0) | 1.4.0 |
+| ISSUE-014 | 自动化测试进程抢占全局焦点导致前台播放视窗失焦闪烁 | 窗口调度与测试工程 / SilkPlayer (PlayerWindowManager & PlayerCore) | Medium | 待修复 (1.6.0) | 1.5.0 |
 
 ---
 
@@ -722,6 +723,23 @@ public enum WindowPresentationState: Equatable {
 ### 3. 查实验收结论
 - **明确结论**：**此表现并非 Bug，而是 100% 符合 macOS 系统原生设计规范（Apple HIG Window Tiling Specification）与专业视频播放器行业标准的正常交互惯例。**
 - **当前状态**：**非缺陷 / 规范确认**（无需变更任何底层播放与窗口代码）。
+
+---
+
+## ISSUE-014: 自动化测试进程强行抢占系统焦点导致前台播放视窗失焦闪烁
+
+### 1. 缺陷现象
+- 当用户在本机使用 SilkPlayer 正常观影或播放音视频时，若后台触发自动化测试（如接手状态检查或运行 `./scripts/run_tests.sh`），前台正在播放的视窗会出现瞬间的失焦（按钮变灰、边框阴影减弱、HUD 闪烁）随后重新激活，产生明显的“视窗刷新/闪烁”干扰；本地跑测连续执行两轮测试时会连续闪烁两次。
+
+### 2. 根因剖析
+- **Test 15 单窗口文件调度测试无条件抢焦**：`PlayerWindowManager.openExternalFiles` 末尾无条件调用了 `NSApp?.activate(ignoringOtherApps: true)`，强制向 WindowServer 申请抢占全局焦点，剥夺了前台播放进程的 Key Window 状态；
+- **用例 5 全屏流转测试强行置前虚拟窗口**：`GeometryAndTransformTests.testPinResizeUnpinFullscreenFlow` 中调用了 `player.toggleFullscreen()`，其内部触发了 `window.makeKeyAndOrderFront(nil)`，将测试生成的虚拟临时窗口推至 WindowServer 窗口栈顶层。
+
+### 3. 修复方案设计
+1. **测试态静默判定**：在 `openExternalFiles` 与 `toggleFullscreen` 的窗口激活和置前逻辑前，增加 `isTesting` 检查（检查 `XCTestCase` 或测试环境变量）；
+2. **测试环境下跳过抢焦**：当处于测试态时，跳过 `NSApp.activate` 与 `makeKeyAndOrderFront`，仅保留数据状态与管线逻辑验证，杜绝向 WindowServer 发送全局抢焦指令；
+3. **验收标准**：后台执行 `run_tests.sh` 时，前台运行中的 SilkPlayer 窗口零失焦、零闪烁、零视觉感知。
+
 
 
 

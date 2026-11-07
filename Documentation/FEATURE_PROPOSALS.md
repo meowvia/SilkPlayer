@@ -24,15 +24,16 @@
 | 提案 009 | 杜比视界 Profile 5 动态色调映射与 macOS EDR 管线优化 (Dolby Vision Profile 5 EDR & DTM) | 待落地评估 (未开始) | 1.5.0 候选 |
 | 提案 010 | 私有自用增强分支与端侧离线听译/网络流沙盒 (Personal Edition & On-Device ASR/Radio Pipeline) | 需求立项 (自用验证中) | 自用专用分支 / 待成熟毕业 |
 | ~~提案 011~~ | ~~非原生预览格式文稿图标与品牌 Logo 占位替换 (Document Types Iconography & Fallback Branding)~~ | ~~正式立项 (下个版本解决)~~ **已落地销项** | **1.4.0** |
-| 提案 012 | 智能片头片尾静默探测与无缝连播跳过 (Smart Opening/Ending Skip Pipeline) | 需求定稿 (技术方案就绪) | **1.5.0 核心排期** |
-| 提案 013 | HDR10 与杜比视界动态 EDR 高光软滚降压制 (Dynamic EDR Tone-Mapping & Highlight Roll-off) | 需求立项 (方案设计完成) | **1.5.0 核心排期** |
-| 提案 014 | 全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion) | 技术攻关立项 (算法探索) | **1.5.0 核心排期** |
-| ~~提案 015~~ | ~~播控栏交互式音量微调与起播防爆音安全锁 (Interactive Volume Popover & Pre-play Audio Safety Lock)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0 核心排期** |
-| ~~提案 016~~ | ~~多文件夹与批量剧集导入全局智能自然排序 (Multi-Folder & Batch Episode Intelligent Natural Sorting)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0 核心排期** |
-| ~~提案 017~~ | ~~全链路系统级资源占用优化与高频空转治理 (System-wide Performance & Resource Footprint Optimization)~~ | ~~正式立项 (方案就绪)~~ **已落地销项** | **1.5.0 核心排期** |
+| 提案 012 | 智能片头片尾静默探测与无缝连播跳过 (Smart Opening/Ending Skip Pipeline) | 需求定稿 (技术方案就绪) | 技术储备 (1.5.0 顺延) |
+| 提案 013 | HDR10 与杜比视界动态 EDR 高光软滚降压制 (Dynamic EDR Tone-Mapping & Highlight Roll-off) | 需求立项 (方案设计完成) | 技术储备 (1.5.0 顺延) |
+| 提案 014 | 全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion) | 技术攻关立项 (算法探索) | 技术储备 (1.5.0 顺延) |
+| ~~提案 015~~ | ~~播控栏交互式音量微调与起播防爆音安全锁 (Interactive Volume Popover & Pre-play Audio Safety Lock)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0** |
+| ~~提案 016~~ | ~~多文件夹与批量剧集导入全局智能自然排序 (Multi-Folder & Batch Episode Intelligent Natural Sorting)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0** |
+| ~~提案 017~~ | ~~全链路系统级资源占用优化与高频空转治理 (System-wide Performance & Resource Footprint Optimization)~~ | ~~正式立项 (方案就绪)~~ **已落地销项** | **1.5.0** |
 | 提案 018 | 偏好设置模块 macOS HIG 规范化全量重构 (Native Settings HIG Architecture & Design Overhaul) | 正式立项 (方案设计完成) | **1.6.0 核心排期** |
 | 提案 019 | 播放列表侧边拉手边框贴合与极简透明线框重构 (Playlist Drawer Handle Border-Flush & Transparent Stroke Redesign) | 正式立项 (设计定稿) | **1.6.0 核心排期** |
 | 提案 020 | 智能静默更新检测、周级克制频控与用户数据无损在位覆盖安装 (Smart Silent Update, Weekly Cadence & Lossless In-Place Overwrite Installer) | 正式立项 (方案设计完成) | **1.6.0 核心排期** |
+| 提案 021 | 播控栏与进度条无底框全景纯悬浮化重构 (Cinema-Embedded Canvas HUD) | 正式立项 (设计定稿) | **1.6.0 核心排期** |
 
 
 ---
