@@ -98,3 +98,19 @@
   - Test 1-60：几何约束、播放列表、双轨分流、自然排序、Metal 容错等全部绿灯；
   - Test 61：UpdateService 语义版本对比与 7 天静默频控测试绿灯；
   - SwiftTestingSanityTests：基准测试绿灯。
+
+---
+
+## 3. 正式发布安装镜像与 SHA-256 校验和
+- **工程 Git 基准**:
+  - 开源前端: `SilkPlayer`（Commit `a6e16ec`）
+  - 闭源内核: `SilkCoreKit`（Commit `a491ae1`）
+- **发布安装镜像**:
+  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构): `3e1a488300d672ab02d4e6a55d4bbc8fd65a72976442e120b7f54ee22a599438`
+  - `SilkPlayer-1.6.0-arm64.dmg` (Apple Silicon 专用): `e991673a0ffae4a63cde8911dd3dd58d54fcfc2ecc5f545a3fa7a5968dea7e2f`
+  - `SilkPlayer-1.6.0-x86_64.dmg` (Intel 64 位专用): `7a90dbfa94820bd2fd08f29986a623fa75c12970f2fec051b8a9ba2f11b257b8`
+- **动态库依赖审计 (@rpath)**:
+  - 零宿主绝对路径泄漏，所有动态库严格限定在 `@rpath/` 与系统库路径，通过 `package_app.sh` 自动化签名与 Hardened Runtime 校验，挂载校验 100% 通过。
+- **本地应用状态**:
+  - `/Applications/SilkPlayer.app` 已就位更新为 `1.6.0` Universal 双架构正式版。
+
