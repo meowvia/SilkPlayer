@@ -16,3 +16,22 @@ SilkPlayer 1.5.1 为维护性更新版本，解决了部分视频文件在播放
 ### 安装方式
 1. 下载 DMG 镜像（推荐 Universal 通用版 SilkPlayer-1.5.1-universal.dmg）。
 2. 打开 DMG，将 SilkPlayer.app 拖入 Applications（应用程序）文件夹即可完成安装。
+
+---
+
+## English
+
+SilkPlayer 1.5.1 is a maintenance release that addresses an issue where certain video files played audio with a blank video display.
+
+### Bug Fixes
+
+- Fix AV1 video playback issue resulting in a blank screen: Integrated the libdav1d decoding library into the multimedia engine with multi-threaded slice software decoding, fully enabling video decoding and smooth frame rendering for MKV, MP4, and WebM containers featuring AV1 video streams.
+
+### System Requirements
+- Operating System: macOS 14.0 (Sonoma) or later
+- Architecture: Universal (Recommended), Apple Silicon (M1-M4), Intel 64-bit
+- Graphics: Metal hardware acceleration and HDR / EDR display supported
+
+### Installation
+1. Download the DMG image (Universal build SilkPlayer-1.5.1-universal.dmg recommended).
+2. Open the DMG and drag SilkPlayer.app into the Applications folder.
