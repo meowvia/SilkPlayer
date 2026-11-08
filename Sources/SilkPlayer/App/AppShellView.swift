@@ -446,8 +446,10 @@ public struct AppShellView: View {
                 // Duplicate window detected in single window mode: close immediately!
                 DispatchQueue.main.async {
                     window.close()
-                    existing.window?.makeKeyAndOrderFront(nil)
-                    NSApp?.activate(ignoringOtherApps: true)
+                    if !PlayerWindowManager.isRunningTests {
+                        existing.window?.makeKeyAndOrderFront(nil)
+                        NSApp?.activate(ignoringOtherApps: true)
+                    }
                 }
                 return
             }

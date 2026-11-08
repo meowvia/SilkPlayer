@@ -81,6 +81,13 @@ extension Notification.Name {
 @Observable public final class PlayerWindowManager {
     public static let shared = PlayerWindowManager()
 
+    nonisolated public static var isRunningTests: Bool {
+        NSClassFromString("XCTestCase") != nil ||
+        NSClassFromString("XCTest") != nil ||
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+        ProcessInfo.processInfo.arguments.contains(where: { $0.contains("xctest") })
+    }
+
     public private(set) var sessions: [PlayerWindowSession] = []
 
     /// Queue for pending files to be consumed by newly spawned windows
@@ -442,8 +449,10 @@ extension Notification.Name {
             }
             existing.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
             existing.level = .floating
-            existing.makeKeyAndOrderFront(nil)
-            NSApp?.activate(ignoringOtherApps: true)
+            if !Self.isRunningTests {
+                existing.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            }
             return
         }
 
@@ -483,8 +492,10 @@ extension Notification.Name {
         window.contentView = hostingView
 
         self.settingsWindow = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp?.activate(ignoringOtherApps: true)
+        if !Self.isRunningTests {
+            window.makeKeyAndOrderFront(nil)
+            NSApp?.activate(ignoringOtherApps: true)
+        }
     }
 
     /// Recursively expands folders and external disk volumes into contained video/audio paths,
@@ -534,8 +545,10 @@ extension Notification.Name {
             if expanded.count > 1 {
                 session.appendPlaylistPaths(Array(expanded.dropFirst()))
             }
-            session.window?.makeKeyAndOrderFront(nil)
-            NSApp?.activate(ignoringOtherApps: true)
+            if !Self.isRunningTests {
+                session.window?.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            }
         } else if !singleWindow && !sessions.isEmpty {
             enqueuePendingFiles(expanded)
             openWindowAction?()
@@ -544,8 +557,10 @@ extension Notification.Name {
             if expanded.count > 1 {
                 session.appendPlaylistPaths(Array(expanded.dropFirst()))
             }
-            session.window?.makeKeyAndOrderFront(nil)
-            NSApp?.activate(ignoringOtherApps: true)
+            if !Self.isRunningTests {
+                session.window?.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            }
         } else {
             enqueuePendingFiles(expanded)
             openWindowAction?()
@@ -556,8 +571,10 @@ extension Notification.Name {
     public func requestNewWindow() {
         if AppSettings.shared.singleWindowMode {
             if let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
-                session.window?.makeKeyAndOrderFront(nil)
-                NSApp?.activate(ignoringOtherApps: true)
+                if !Self.isRunningTests {
+                    session.window?.makeKeyAndOrderFront(nil)
+                    NSApp?.activate(ignoringOtherApps: true)
+                }
             } else {
                 openNewWindow()
             }
@@ -1179,10 +1196,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         let screen = window.screen ?? NSScreen.main
         guard let screenFrame = screen?.visibleFrame else { return }
 
-        let isTesting = NSClassFromString("XCTestCase") != nil ||
-                        NSClassFromString("XCTest") != nil ||
-                        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
-                        ProcessInfo.processInfo.arguments.contains(where: { $0.contains("xctest") })
+        let isTesting = PlayerWindowManager.isRunningTests
 
         isMaximizingOrRestoring = true
         isAdjustingWindowFrame = true

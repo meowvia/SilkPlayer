@@ -1226,7 +1226,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 _ = window.perform(refreshSel)
             }
         }
-        if !window.isKeyWindow {
+        if !PlayerWindowManager.isRunningTests && !window.isKeyWindow {
             window.makeKeyAndOrderFront(nil)
         }
 
