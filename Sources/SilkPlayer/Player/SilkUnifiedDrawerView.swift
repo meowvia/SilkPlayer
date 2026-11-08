@@ -902,6 +902,60 @@ private struct PlaylistItemRowView: View {
 
 /// Floating Side Triangle Pull Tab Handle for toggling the playlist drawer
 @MainActor
+/// Three-sided border shape for drawer pull tab: top edge, left rounded edge, bottom edge.
+/// Right edge is completely open (0 radius, flush against the window border).
+struct DrawerHandleBorderShape: Shape {
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + cornerRadius, y: rect.minY))
+        path.addArc(
+            center: CGPoint(x: rect.minX + cornerRadius, y: rect.minY + cornerRadius),
+            radius: cornerRadius,
+            startAngle: .degrees(-90),
+            endAngle: .degrees(180),
+            clockwise: true
+        )
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cornerRadius))
+        path.addArc(
+            center: CGPoint(x: rect.minX + cornerRadius, y: rect.maxY - cornerRadius),
+            radius: cornerRadius,
+            startAngle: .degrees(180),
+            endAngle: .degrees(90),
+            clockwise: true
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        return path
+    }
+}
+
+/// Ultra-slender flattened indicator triangle: exactly 9.5pt height, 2.0pt depth
+struct FlattenedIndicatorTriangle: Shape {
+    let pointingLeft: Bool
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let h: CGFloat = 9.5
+        let w: CGFloat = 2.0
+        let cy = rect.midY
+        let cx = rect.midX
+
+        if pointingLeft {
+            path.move(to: CGPoint(x: cx - w / 2, y: cy))
+            path.addLine(to: CGPoint(x: cx + w / 2, y: cy - h / 2))
+            path.addLine(to: CGPoint(x: cx + w / 2, y: cy + h / 2))
+        } else {
+            path.move(to: CGPoint(x: cx + w / 2, y: cy))
+            path.addLine(to: CGPoint(x: cx - w / 2, y: cy - h / 2))
+            path.addLine(to: CGPoint(x: cx - w / 2, y: cy + h / 2))
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
 public struct PlaylistDrawerHandleTab: View {
     public let isDrawerVisible: Bool
     public let drawerWidth: CGFloat
@@ -918,41 +972,27 @@ public struct PlaylistDrawerHandleTab: View {
             Spacer()
                 .allowsHitTesting(false)
             Button(action: action) {
-                ZStack {
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 6,
-                        bottomLeadingRadius: 6,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: 0
-                    )
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: 6,
-                            bottomLeadingRadius: 6,
-                            bottomTrailingRadius: 0,
-                            topTrailingRadius: 0
-                        )
-                        .fill(Color.black.opacity(0.32))
-                    )
-                    .overlay(
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: 6,
-                            bottomLeadingRadius: 6,
-                            bottomTrailingRadius: 0,
-                            topTrailingRadius: 0
-                        )
-                        .strokeBorder(Color.white.opacity(0.24), lineWidth: 0.6)
-                    )
-                    .frame(width: 11, height: 58)
+                ZStack(alignment: .trailing) {
+                    // Transparent hit-testing area (20pt wide x 112pt high)
+                    Color.clear
+                        .frame(width: 20, height: 112)
 
-                    Image(systemName: "triangle.fill")
-                        .font(.system(size: 5, weight: .semibold))
-                        .scaleEffect(x: 0.82, y: 1.0)
-                        .foregroundColor(.white.opacity(0.92))
-                        .rotationEffect(.degrees(isDrawerVisible ? 90 : -90))
-                        .offset(x: -0.5)
+                    // 100% transparent cutout with 1.0pt 3-sided border and 9.5pt flattened triangle
+                    ZStack(alignment: .trailing) {
+                        DrawerHandleBorderShape(cornerRadius: 3)
+                            .stroke(Color.white.opacity(0.75), lineWidth: 1.0)
+                            .shadow(color: Color.black.opacity(0.25), radius: 0.5, x: -0.5, y: 0)
+                            .frame(width: 5.0, height: 112.0)
+
+                        FlattenedIndicatorTriangle(pointingLeft: !isDrawerVisible)
+                            .fill(Color.white.opacity(0.85))
+                            .shadow(color: Color.black.opacity(0.25), radius: 0.5, x: -0.5, y: 0)
+                            .frame(width: 2.0, height: 9.5)
+                            .offset(x: -1.5)
+                    }
+                    .frame(width: 5.0, height: 112.0, alignment: .trailing)
                 }
+                .frame(width: 20, height: 112, alignment: .trailing)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

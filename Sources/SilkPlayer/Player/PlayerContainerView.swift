@@ -127,7 +127,7 @@ public struct PlayerContainerView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.trailing, player.isFullscreen ? 0 : 8)
+                .padding(.trailing, 0)
                 .opacity(isHandleVisible ? 1.0 : 0.0)
                 .allowsHitTesting(isHandleVisible)
                 .animation(.easeInOut(duration: 0.2), value: isHandleVisible)
