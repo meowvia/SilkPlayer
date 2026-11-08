@@ -548,8 +548,8 @@ final class PlaylistRegressionTests: XCTestCase {
     let windowMgr = PlayerWindowManager.shared
     windowMgr.openSettings()
     XCTAssert(windowMgr.settingsWindow != nil, "Settings window is instantiated")
-    XCTAssert(windowMgr.settingsWindow?.frame.width == 540, "Settings window width is 540")
-    XCTAssert(windowMgr.settingsWindow?.frame.height == 680, "Settings window height is 680")
+    XCTAssert(windowMgr.settingsWindow?.frame.width == 520, "Settings window width is 520")
+    XCTAssert(windowMgr.settingsWindow?.frame.height == 400, "Settings window height is 400")
     XCTAssert(windowMgr.settingsWindow?.collectionBehavior.contains(.fullScreenAuxiliary) == true, "Settings window has .fullScreenAuxiliary behavior")
     XCTAssert(windowMgr.settingsWindow?.collectionBehavior.contains(.canJoinAllSpaces) == true, "Settings window has .canJoinAllSpaces behavior")
     windowMgr.closeSettings()
@@ -594,8 +594,8 @@ final class PlaylistRegressionTests: XCTestCase {
     windowMgr.openSettings()
     XCTAssert(windowMgr.settingsWindow != nil, "Settings window opened successfully")
     XCTAssert(windowMgr.settingsWindow?.level == .floating, "Settings window is permanently floating above player canvas")
-    XCTAssert(windowMgr.settingsWindow?.frame.width == 540, "Settings window width is 540")
-    XCTAssert(windowMgr.settingsWindow?.frame.height == 680, "Settings window height is 680 for full General tab visibility")
+    XCTAssert(windowMgr.settingsWindow?.frame.width == 520, "Settings window width is 520")
+    XCTAssert(windowMgr.settingsWindow?.frame.height == 400, "Settings window height is 400 for macOS HIG zero-scroll standard")
     windowMgr.closeSettings()
     XCTAssert(windowMgr.settingsWindow == nil, "Settings window closed cleanly")
 
@@ -1776,5 +1776,20 @@ final class PlaylistRegressionTests: XCTestCase {
     let sortedSeasons = mixedSeasonEpisodes.sorted(by: MediaFilenameSanitizer.compareNaturalOrder)
     let expectedSeasonNames = ["Show.S01E01.mkv", "Show.S01E02.mkv", "Show.S01E10.mkv", "Show.S02E01.mkv"]
     XCTAssertEqual(sortedSeasons.map { URL(fileURLWithPath: $0).lastPathComponent }, expectedSeasonNames, "Multi-season episodes strictly prioritize season then episode number")
+
+    // 61. UpdateService Semantic Comparison & Cadence Invariants (Proposal 020)
+    print("\n--- Test 61: UpdateService Semantic Comparison & Cadence Invariants ---")
+    XCTAssert(UpdateService.compareVersions("1.6.0", "1.5.1") == .orderedDescending, "1.6.0 is newer than 1.5.1")
+    XCTAssert(UpdateService.compareVersions("v1.6.0", "1.6.0") == .orderedSame, "v prefix is cleanly stripped")
+    XCTAssert(UpdateService.compareVersions("1.6.1", "1.6.0") == .orderedDescending, "1.6.1 is newer than 1.6.0")
+    XCTAssert(UpdateService.compareVersions("1.5.0", "1.6.0") == .orderedAscending, "1.5.0 is older than 1.6.0")
+    XCTAssert(UpdateService.compareVersions("1.6.0", "1.6.0") == .orderedSame, "Identical versions compare as equal")
+
+    let updateService = UpdateService.shared
+    updateService.latestVersion = "1.6.1"
+    updateService.userDeclinedUpdate()
+    let lastDate = UserDefaults.standard.double(forKey: "SilkPlayer.Update.LastColdStartReminderDate")
+    XCTAssert(lastDate > 0, "Decline update persists last cold start reminder timestamp")
+    XCTAssert(updateService.isShowingUpdateAlert == false, "Declining update cleanly dismisses prompt")
     }
 }
