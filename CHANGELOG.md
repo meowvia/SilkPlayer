@@ -5,6 +5,15 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-11-08
+
+### Fixed
+- **AV1 Video Decoding Support via libdav1d**:
+  - Integrated high-performance `libdav1d` library into FFmpeg multimedia decoding pipeline across both Apple Silicon (`arm64`) and Intel (`x86_64`) architectures.
+  - Resolved issue where playing MKV, MP4, or WebM media containing AV1 video streams resulted in audio playback with a black video display due to lack of hardware accelerated AV1 decoding on macOS.
+
+---
+
 ## [1.5.0] - 2026-11-07
 
 ### Added
