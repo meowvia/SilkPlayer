@@ -5,6 +5,39 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-11-08
+
+### Added
+- **Dynamic EDR Tone-Mapping & Rational Highlight Roll-off (Proposal 013)**:
+  - Injected dynamic display physical headroom (`cachedEDRHeadroom`) into Metal fragment shaders for HDR10 and Dolby Vision pipelines.
+  - Standardized on ITU-R BT.2408 diffuse white reference level ($Y \le 1.0$) for 1:1 uncompressed absolute fidelity.
+  - Implemented $C^1$-continuous rational shoulder roll-off for extreme highlights, scaling RGB channels proportionately to prevent solarization, cloud blowout, and chromaticity shift on both Apple XDR and SDR screens.
+- **Smart Silent Update & Lossless In-Place Overwrite Installer (Proposal 020)**:
+  - Built-in `UpdateService` providing asynchronous background release checking against GitHub API.
+  - Cold-start prompt displays target latest version number with minimal binary choice ("Yes" / "No") and 7-day quiet cadence gatekeeper upon dismissal.
+  - Persistent 6pt red dot indicator on the Settings "About" tab when an update is pending.
+  - End-to-end in-place lossless updater replacing `/Applications/SilkPlayer.app` cleanly while 100% preserving all user history, playlists, and preferences.
+- **Playlist Drawer Handle Border-Flush Redesign (Proposal 019)**:
+  - Replaced solid pill handle with a 100% transparent cutout, eliminating visual blockage.
+  - 1.0pt delicate three-sided border with open right edge and 0pt margin flush against the window border.
+  - Replaced standard triangle with an ultra-slender 9.5pt flattened indicator triangle.
+
+### Changed
+- **Settings Architecture macOS HIG Overhaul (Proposal 018)**:
+  - Consolidated settings into 3 standard top-level tabs: General, Playback, and About.
+  - Standardized on 520 × 400 pt fixed dimensions with zero vertical scrollbars and native macOS form controls.
+  - Embedded official high-resolution vector brand emblem and full Apple Silicon / Intel architecture information.
+  - Replaced all non-standard configuration switches with fully automated system defaults.
+- **Policy & Architecture Narrative Alignment**:
+  - Removed obsolete absolute claims across codebase and documentation, standardizing on: "Native, lightweight, and minimal design with zero built-in ads and no redundant background processes."
+
+### Fixed
+- **Automated Testing Focus-Steal Isolation (ISSUE-014)**:
+  - Guarded `NSApp.activate` and `makeKeyAndOrderFront` with `isRunningTests` environment checks in `PlayerWindowManager` and `PlayerCore`.
+  - Completely eliminated window flashing and focus disruption when running tests while watching media in the foreground.
+
+---
+
 ## [1.5.1] - 2026-11-08
 
 ### Fixed

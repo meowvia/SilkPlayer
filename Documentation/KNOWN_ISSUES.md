@@ -21,7 +21,7 @@
 | ISSUE-011 | 音频模式下手动调整播放窗口尺寸引起边框弹跳与高频振荡抖动 | 窗口交互与几何约束 / SilkPlayer (PlayerWindowManager) | Medium | 已修复 (1.5.0) | 1.4.0 |
 | ISSUE-012 | 前置图钉浮动层级导致全屏请求被系统静默抛弃与状态机永久死锁 | 窗口交互与状态机 / SilkPlayer (PlayerCore) | High | 已修复 (1.5.0) | 1.4.0 |
 | ISSUE-013 | 铺满最大化模式下按 Esc 键误触发退出播放而非缩回原窗口尺寸 | 键盘响应链与窗口管理 / SilkPlayer (PlayerCore & Delegate) | Medium | 已修复 (1.5.0) | 1.4.0 |
-| ISSUE-014 | 自动化测试进程抢占全局焦点导致前台播放视窗失焦闪烁 | 窗口调度与测试工程 / SilkPlayer (PlayerWindowManager & PlayerCore) | Medium | 待修复 (1.6.0) | 1.5.0 |
+| ISSUE-014 | 自动化测试进程抢占全局焦点导致前台播放视窗失焦闪烁 | 窗口调度与测试工程 / SilkPlayer (PlayerWindowManager & PlayerCore) | Medium | 已修复 (1.6.0) | 1.5.0 |
 
 ---
 
@@ -739,6 +739,11 @@ public enum WindowPresentationState: Equatable {
 1. **测试态静默判定**：在 `openExternalFiles` 与 `toggleFullscreen` 的窗口激活和置前逻辑前，增加 `isTesting` 检查（检查 `XCTestCase` 或测试环境变量）；
 2. **测试环境下跳过抢焦**：当处于测试态时，跳过 `NSApp.activate` 与 `makeKeyAndOrderFront`，仅保留数据状态与管线逻辑验证，杜绝向 WindowServer 发送全局抢焦指令；
 3. **验收标准**：后台执行 `run_tests.sh` 时，前台运行中的 SilkPlayer 窗口零失焦、零闪烁、零视觉感知。
+
+### 4. 修复与销项验证 (已在 1.6.0 落地销项)
+- **落地文件**：`PlayerWindowManager.swift`、`PlayerCore.swift`、`AppShellView.swift`
+- **实施效果**：在 `openExternalFiles`、`requestNewWindow`、`openSettings` 与 `toggleFullscreen` 中增加 `PlayerWindowManager.isRunningTests` 判定。测试环境下跳过 `NSApp.activate` 与 `window.makeKeyAndOrderFront`。经实机自动化跑测验证，后台连续两轮运行测试期间，前台播放器视窗保持持续置顶播放，零焦点剥夺、零闪烁失焦。
+
 
 
 

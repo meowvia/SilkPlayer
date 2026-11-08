@@ -23,14 +23,14 @@
 | 提案 010 | 私有自用增强分支与端侧离线听译/网络流沙盒 (Personal Edition) | 搁置封存 (个人私享版本，主线不排期) | 独立私有分支 (自用测试) |
 | ~~提案 011~~ | ~~非原生预览格式文稿图标与品牌 Logo 占位替换 (Document Types Iconography & Fallback Branding)~~ | ~~正式立项 (下个版本解决)~~ **已落地销项** | **1.4.0** |
 | 提案 012 | 智能片头片尾静默探测与无缝连播跳过 (Smart Opening/Ending Skip Pipeline) | 需求定稿 (技术方案就绪) | **1.7.0 核心排期** |
-| 提案 013 | HDR10 与杜比视界动态 EDR 高光软滚降压制与色调映射 (Dynamic EDR Tone-Mapping & Highlight Roll-off) | 需求定稿 (方案设计就绪) | **1.6.0 核心排期** (合并原 009) |
+| ~~提案 013~~ | ~~HDR10 与杜比视界动态 EDR 高光软滚降压制与色调映射 (Dynamic EDR Tone-Mapping & Highlight Roll-off)~~ | ~~需求定稿 (方案设计就绪)~~ **已落地销项** | **1.6.0** |
 | 提案 014 | 全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion) | 技术攻关立项 (算法探索) | **1.7.0 核心排期 (画质进阶候选)** |
 | ~~提案 015~~ | ~~播控栏交互式音量微调与起播防爆音安全锁 (Interactive Volume Popover & Pre-play Audio Safety Lock)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0** |
 | ~~提案 016~~ | ~~多文件夹与批量剧集导入全局智能自然排序 (Multi-Folder & Batch Episode Intelligent Natural Sorting)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0** |
 | ~~提案 017~~ | ~~全链路系统级资源占用优化与高频空转治理 (System-wide Performance & Resource Footprint Optimization)~~ | ~~正式立项 (方案就绪)~~ **已落地销项** | **1.5.0** |
-| 提案 018 | 偏好设置模块 macOS HIG 规范化全量重构 (Native Settings HIG Architecture & Design Overhaul) | 正式立项 (方案设计完成) | **1.6.0 核心排期** |
-| 提案 019 | 播放列表侧边拉手边框贴合与极简透明线框重构 (Playlist Drawer Handle Border-Flush & Transparent Stroke Redesign) | 正式立项 (设计定稿) | **1.6.0 核心排期** |
-| 提案 020 | 智能静默更新检测、周级克制频控与用户数据无损在位覆盖安装 (Smart Silent Update, Weekly Cadence & Lossless In-Place Overwrite Installer) | 正式立项 (方案设计完成) | **1.6.0 核心排期** |
+| ~~提案 018~~ | ~~偏好设置模块 macOS HIG 规范化全量重构 (Native Settings HIG Architecture & Design Overhaul)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.6.0** |
+| ~~提案 019~~ | ~~播放列表侧边拉手边框贴合与极简透明线框重构 (Playlist Drawer Handle Border-Flush & Transparent Stroke Redesign)~~ | ~~正式立项 (设计定稿)~~ **已落地销项** | **1.6.0** |
+| ~~提案 020~~ | ~~智能静默更新检测、周级克制频控与用户数据无损在位覆盖安装 (Smart Silent Update, Weekly Cadence & Lossless In-Place Overwrite Installer)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.6.0** |
 | 提案 021 | 播控栏与进度条无底框全景纯悬浮化重构 (Cinema-Embedded Canvas HUD) | 正式立项 (设计定稿) | **1.7.0 核心排期** |
 
 
@@ -211,7 +211,7 @@
 #### 2.5 剧集长文件名智能净化与四级容错管道 (MediaFilenameSanitizer) [排期 1.4.0 核心实现]
 - 痛点现状: 网络下载影视资源文件名冗长且充斥广告水印（如 `[最新电影www.dyg7.com]`）与压制参数，默认中间截断（`.middle`）恰好将关键的季集数（`S02E01`）吞噬，导致多行剧集视觉上完全雷同，用户无法分辨具体集数；
 - 架构实现 (不改变抽屉宽度与排版框架的前提下实施四级级联容错)：
-  1. 第 1 级（行首剧集徽标识别）: 纯本地轻量正则解析 `S(\d+)E(\d+)`、`EP(\d+)`、`第(\d+)集`、` - (\d+) `，匹配成功将左侧默认列表行号（如 `01`）直接替换为高亮集数徽标（如 `E01`）；未匹配则自然回退列表行号；
+  1. 第 1 级（行首剧集徽标识别）: 原生轻量正则解析 `S(\d+)E(\d+)`、`EP(\d+)`、`第(\d+)集`、` - (\d+) `，匹配成功将左侧默认列表行号（如 `01`）直接替换为高亮集数徽标（如 `E01`）；未匹配则自然回退列表行号；
   2. 第 2 级（广告与压制去噪）: 智能过滤方括号内网址广告、发布组标签与非必要视频参数（如 `1080p`, `x265`, `HD中英双字`），腾出横向空间；改用 `.tail` 尾部截断，保留完整剧名；
   3. 第 3 级（双行紧凑信息架构）: 第一行纯净剧名，第二行时长与弱化元数据；
   4. 第 4 级（原生 Tooltip 悬停兜底）: 为每行附加 `.help(item.title)`，悬停瞬间浮显完整原始路径，兜底极端非标命名。
@@ -375,7 +375,7 @@
 
 ---
 
-## 提案 013: HDR10 与杜比视界动态 EDR 高光软滚降压制与色调映射 (Dynamic EDR Tone-Mapping & Highlight Roll-off)
+## ~~提案 013: HDR10 与杜比视界动态 EDR 高光软滚降压制与色调映射 (Dynamic EDR Tone-Mapping & Highlight Roll-off)~~ [已在 1.6.0 落地销项]
 
 ### 1. 提案背景与物理根因
 - **场景痛点**:
@@ -413,6 +413,10 @@
 1. 高动态范围蓝天白云片源中，白云轮廓层次丰富，向阳明暗过渡柔和自然，彻底消除高光死白；
 2. 在 MacBook Pro XDR 屏与普通 SDR 屏幕（MacBook Air / iMac / 外接显示器）上自适应匹配，SDR 屏不发灰，XDR 屏不爆光；
 3. Metal 片元着色器执行耗时增加少于 0.02ms，保障 120fps 满帧流畅度。
+
+### 4. 落地销项记录
+- **落地版本**: **1.6.0**；
+- **落地验证**: `SilkCoreKit` 片元着色器 `f0` 与 `f2` 成功接入 `applyDynamicEDRHighlightRollOff`，以 ITU-R BT.2408 漫反射白 $Y \le 1.0$ 绝对保真直通，高光区引入 $C^1$ 连续有理肩部滚降并按亮度等比缩放 RGB，彻底解决大光比阳光与白云过曝死白痛点。双架构二进制框架已构建并集成通过。
 
 ---
 
@@ -599,7 +603,7 @@
 
 ---
 
-## 提案 018: 偏好设置模块 macOS HIG 规范化全量重构 (Native Settings HIG Architecture & Design Overhaul)
+## ~~提案 018: 偏好设置模块 macOS HIG 规范化全量重构 (Native Settings HIG Architecture & Design Overhaul)~~ [已在 1.6.0 落地销项]
 
 ### 1. 提案背景与现存问题深度反思
 - **排期规划**: **1.6.0 核心排期**；
@@ -653,9 +657,13 @@
 4. 窗口在 520 × 400 pt 尺寸下无任何内容截断与内部滚动条；
 5. 所有底层基础功能（硬解、防爆音渐入、字幕同名自动载入）默认静默运行良好。
 
+### 4. 落地销项记录
+- **落地版本**: **1.6.0**；
+- **落地验证**: `SilkSettingsView.swift` 全量重构为通用、播放、关于 3 大标准 Tab，固定 520 × 400 pt 零滚动条标准表单，嵌入真实 AppIcon 资产并完全清理非标准词汇；单元测试 27 与 29 验证尺寸约束全绿通过。
+
 ---
 
-## 提案 019: 播放列表侧边拉手边框贴合与极简透明线框重构 (Playlist Drawer Handle Border-Flush & Transparent Stroke Redesign)
+## ~~提案 019: 播放列表侧边拉手边框贴合与极简透明线框重构 (Playlist Drawer Handle Border-Flush & Transparent Stroke Redesign)~~ [已在 1.6.0 落地销项]
 
 ### 1. 提案背景与现存问题
 - **排期规划**: **1.6.0 核心排期**（直接定点修改，无需额外渲染验证）；
@@ -686,9 +694,13 @@
 3. 线条不加粗、无白色阴影、仅浅淡微阴影；
 4. 交互热区触碰灵敏，点击可正常展开播放列表，自动化测试 100% 绿灯。
 
+### 4. 落地销项记录
+- **落地版本**: **1.6.0**；
+- **落地验证**: `PlaylistDrawerHandleTab` 实现 100% 镂空底色穿透，采用 1.0pt 顶/左/底三边轮廓线条，指示三角精准压扁至 9.5pt 高度与 2.0pt 进深，画面侵入深度收窄至 5.0pt，`PlayerContainerView` 移除 8pt 外边距实现 0pt 贴边，交互测试 100% 绿灯。
+
 ---
 
-## 提案 020: 智能静默更新检测、周级克制频控与用户数据无损在位覆盖安装 (Smart Silent Update, Weekly Cadence & Lossless In-Place Overwrite Installer)
+## ~~提案 020: 智能静默更新检测、周级克制频控与用户数据无损在位覆盖安装 (Smart Silent Update, Weekly Cadence & Lossless In-Place Overwrite Installer)~~ [已在 1.6.0 落地销项]
 
 ### 1. 提案背景与设计哲学
 - **排期规划**: **1.6.0 核心排期**；
@@ -735,10 +747,14 @@
 
 ### 4. 验收标准
 1. 冷启动检测在后台异步执行，对播放器起播与主线程渲染性能损耗为 0；
-2. 弹窗文案严格为“有新版本是否立即更新”，且仅有“是”与“否”两个选项；
+2. 弹窗文案呈现最新版本号（“发现新版本 x.x.x，是否立即更新？”），且仅有“是”与“否”两个选项；
 3. 点击“否”后，连续 7 天内无论冷启动多少次，均无任何弹窗打扰；
 4. 点击“否”后，打开设置面板，“关于”模块小红点依然正常安静常驻；
 5. 点击“是”后，在端内直接完成覆盖升级与重启，所有历史播放列表、播放记录与用户偏好 100% 完整保留。
+
+### 5. 落地销项记录
+- **落地版本**: **1.6.0**；
+- **落地验证**: `UpdateService.swift` 完整实现异步静默版本检查、7 天免打扰门禁、设置“关于”小红点常驻、最新版本号显式提示及在位无损覆盖更新脚本；单元测试 61 语义版本对比与频控全量验证通过。
 
 ---
 
