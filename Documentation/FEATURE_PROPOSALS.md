@@ -25,7 +25,7 @@
 | 提案 010 | 私有自用增强分支与端侧离线听译/网络流沙盒 (Personal Edition & On-Device ASR/Radio Pipeline) | 需求立项 (自用验证中) | 自用专用分支 / 待成熟毕业 |
 | ~~提案 011~~ | ~~非原生预览格式文稿图标与品牌 Logo 占位替换 (Document Types Iconography & Fallback Branding)~~ | ~~正式立项 (下个版本解决)~~ **已落地销项** | **1.4.0** |
 | 提案 012 | 智能片头片尾静默探测与无缝连播跳过 (Smart Opening/Ending Skip Pipeline) | 需求定稿 (技术方案就绪) | **1.7.0 核心排期** |
-| 提案 013 | HDR10 与杜比视界动态 EDR 高光软滚降压制 (Dynamic EDR Tone-Mapping & Highlight Roll-off) | 需求立项 (方案设计完成) | 技术储备 (1.5.0 顺延) |
+| 提案 013 | HDR10 与杜比视界动态 EDR 高光软滚降压制 (Dynamic EDR Tone-Mapping & Highlight Roll-off) | 需求定稿 (方案设计就绪) | **1.6.0 核心排期** |
 | 提案 014 | 全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion) | 技术攻关立项 (算法探索) | 技术储备 (1.5.0 顺延) |
 | ~~提案 015~~ | ~~播控栏交互式音量微调与起播防爆音安全锁 (Interactive Volume Popover & Pre-play Audio Safety Lock)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0** |
 | ~~提案 016~~ | ~~多文件夹与批量剧集导入全局智能自然排序 (Multi-Folder & Batch Episode Intelligent Natural Sorting)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0** |
@@ -438,7 +438,7 @@
   - 片源中超过屏幕物理头顶高度（`edrHeadroom`）的高光像素未经过任何肩部平滑过渡，遭遇 macOS 显示合成器硬截断（Hard-clipping）；
   - 在大光比场景下（例如户外蓝天白云、直射阳光照耀、高光反光面），漫反射的蓝天（约 300~500 nits）尚在屏幕硬件线性显示舒适区，但白云向阳面（1,500~4,000+ nits）超出显示器硬件极限，导致白云内部棉絮阴影与卷积纹理全部糊成大面积死白，轮廓局部过曝。
 - **目标定位**:
-  - **纳入 1.5.0 核心排期**；
+  - **纳入 1.6.0 核心排期**；
   - 建立“中低光 1:1 绝对保真 + 高光区自适应软滚降”的动态 EDR 色调映射管线。
 
 ### 2. 架构设计与技术路径
