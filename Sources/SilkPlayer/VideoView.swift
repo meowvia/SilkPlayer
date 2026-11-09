@@ -82,10 +82,13 @@ public final class MetalPlayerContainerView: NSView {
 
             let isFullscreen = window.styleMask.contains(.fullScreen)
 
-            // 1. 四周 8pt 原生缩放边框绝对放行
+            // 1. 四周 8pt 原生缩放边框绝对放行（特别排除右侧播放列表拉手胶囊区域，禁止触发拉伸）
             if !isFullscreen {
                 let margin: CGFloat = 8.0
-                if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
+                let isOverHandle = (player.isPlaylistDrawerVisible == false) &&
+                    (loc.x >= b.width - 32.0) &&
+                    (abs(loc.y - b.height * 0.5) <= 72.0)
+                if !isOverHandle && (loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin) {
                     return event
                 }
             }
@@ -106,7 +109,7 @@ public final class MetalPlayerContainerView: NSView {
                 if loc.y >= topButtonsMinY && (loc.x >= b.width - 148.0 || (!isFullscreen && loc.x <= 78.0)) {
                     return event
                 }
-                if !player.isPlaylistDrawerVisible && loc.x >= b.width - 32.0 && abs(loc.y - b.height * 0.5) <= 36.0 {
+                if !player.isPlaylistDrawerVisible && loc.x >= b.width - 32.0 && abs(loc.y - b.height * 0.5) <= 72.0 {
                     return event
                 }
                 if loc.y <= 86.0 {
@@ -511,7 +514,11 @@ public final class MetalPlayerContainerView: NSView {
         let b = bounds
         let margin: CGFloat = 8.0
         // 四周边框与四角（8pt）绝对放行：返回 nil，直通 AppKit 系统 NSThemeFrame，激活原生八向缩放手柄与原生拖拽循环
-        if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
+        // 关键防护：在右侧拉手胶囊区域（宽 28pt，高 128pt，垂直居中），禁止返回 nil，确保在拉手区域只允许展开播放列表，严禁触发窗口拉伸动作
+        let isOverHandle = (playerCore?.isPlaylistDrawerVisible == false) &&
+            (loc.x >= b.width - 32.0) &&
+            (abs(loc.y - b.height * 0.5) <= 72.0)
+        if !isOverHandle && (loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin) {
             return nil
         }
         return super.hitTest(point)

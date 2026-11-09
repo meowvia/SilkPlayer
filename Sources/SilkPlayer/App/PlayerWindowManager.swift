@@ -456,7 +456,7 @@ extension Notification.Name {
             return
         }
 
-        let contentRect = NSRect(x: 0, y: 0, width: 520, height: 400)
+        let contentRect = NSRect(x: 0, y: 0, width: 520, height: 490)
         let window = NSWindow(
             contentRect: contentRect,
             styleMask: [.titled, .closable, .fullSizeContentView],
@@ -474,8 +474,8 @@ extension Notification.Name {
         // Fullscreen auxiliary space support strictly prevents macOS Space jump
         window.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
         window.level = .floating
-        window.minSize = NSSize(width: 520, height: 400)
-        window.maxSize = NSSize(width: 520, height: 400)
+        window.minSize = NSSize(width: 520, height: 490)
+        window.maxSize = NSSize(width: 520, height: 490)
 
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,

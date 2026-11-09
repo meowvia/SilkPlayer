@@ -49,19 +49,19 @@ public struct SilkBrandLogoView: View {
                 .frame(width: size, height: size)
                 .shadow(color: Color.black.opacity(0.45), radius: size * 0.14, x: 0, y: size * 0.06)
 
-            // Specular Chamfer Rim
+            // Specular Chamfer Rim (Soft anti-aliased gradient, zero white fringe on dark backgrounds)
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(isHovered ? 0.40 : 0.25),
-                            Color.white.opacity(0.08),
-                            Color.cyan.opacity(0.15)
+                            Color.cyan.opacity(isHovered ? 0.35 : 0.22),
+                            Color.white.opacity(isHovered ? 0.12 : 0.05),
+                            Color.blue.opacity(0.18)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: max(1.0, size * 0.015)
+                    lineWidth: 1.0
                 )
                 .frame(width: size, height: size)
 

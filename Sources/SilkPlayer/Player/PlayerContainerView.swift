@@ -8,6 +8,7 @@ public struct PlayerContainerView: View {
     var playlist: PlaylistManager
     @State private var navigationModel = AppNavigationModel.shared
     @State private var isHoveringRightEdge: Bool = false
+    @State private var isHoveringHandle: Bool = false
     @State private var drawerDismissTask: Task<Void, Never>? = nil
     var onPlayNext: () -> Void
     var onPlayPrevious: () -> Void
@@ -91,13 +92,13 @@ public struct PlayerContainerView: View {
                     .animation(.silkSnappy, value: player.isVolumeHUDVisible)
                 }
 
-                // Right-Edge Invisible Hover Trigger Zone (within 24pt of right edge)
+                // Right-Edge Invisible Hover Trigger Zone (within 28pt of right edge)
                 // Strictly active in FULLSCREEN mode only; in windowed mode, user must click the side triangle tab.
                 if player.isFullscreen {
                     HStack {
                         Spacer()
                         Color.clear
-                            .frame(width: 24)
+                            .frame(width: 28)
                             .frame(maxHeight: .infinity)
                             .contentShape(Rectangle())
                             .onHover { isHovering in
@@ -114,13 +115,29 @@ public struct PlayerContainerView: View {
                             }
                     }
                     .allowsHitTesting(!player.isPlaylistDrawerVisible)
+                    .zIndex(27)
                 }
 
                 // Right-Edge Floating Side Triangle Pull Tab (always accessible on right border)
-                let isHandleVisible = (player.isHUDVisible || isHoveringRightEdge) && !player.isPlaylistDrawerVisible
+                let isHandleVisible = (player.isHUDVisible || isHoveringRightEdge || isHoveringHandle) && !player.isPlaylistDrawerVisible
                 PlaylistDrawerHandleTab(
                     isDrawerVisible: player.isPlaylistDrawerVisible,
-                    drawerWidth: drawerWidth
+                    drawerWidth: drawerWidth,
+                    onHoverChange: { isHovering in
+                        isHoveringHandle = isHovering
+                        if isHovering {
+                            player.reportUserActivity()
+                        }
+                        if player.isFullscreen && isHovering {
+                            drawerDismissTask?.cancel()
+                            drawerDismissTask = nil
+                            if !player.isPlaylistDrawerVisible && !player.isInspectorVisible {
+                                withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                    player.isPlaylistDrawerVisible = true
+                                }
+                            }
+                        }
+                    }
                 ) {
                     withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
                         player.togglePlaylistDrawer()
@@ -128,10 +145,10 @@ public struct PlayerContainerView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.trailing, 0)
-                .opacity(isHandleVisible ? 1.0 : 0.0)
-                .allowsHitTesting(isHandleVisible)
+                .opacity(isHandleVisible ? 1.0 : 0.001)
+                .allowsHitTesting(!player.isPlaylistDrawerVisible)
                 .animation(.easeInOut(duration: 0.2), value: isHandleVisible)
-                .zIndex(26)
+                .zIndex(30)
 
                 // Interactive Backdrop for Drawer Dismissal:
                 // Tapping anywhere outside the drawer closes the drawer without pausing playback.
@@ -257,7 +274,7 @@ public struct PlayerContainerView: View {
         guard player.isFullscreen else { return }
         drawerDismissTask?.cancel()
         drawerDismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 600_000_000)
+            try? await Task.sleep(nanoseconds: 450_000_000)
             guard !Task.isCancelled, player.isFullscreen else { return }
             withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
                 player.isPlaylistDrawerVisible = false

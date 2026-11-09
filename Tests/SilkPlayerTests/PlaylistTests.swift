@@ -549,7 +549,7 @@ final class PlaylistRegressionTests: XCTestCase {
     windowMgr.openSettings()
     XCTAssert(windowMgr.settingsWindow != nil, "Settings window is instantiated")
     XCTAssert(windowMgr.settingsWindow?.frame.width == 520, "Settings window width is 520")
-    XCTAssert(windowMgr.settingsWindow?.frame.height == 400, "Settings window height is 400")
+    XCTAssert(windowMgr.settingsWindow?.frame.height == 490, "Settings window height is 490")
     XCTAssert(windowMgr.settingsWindow?.collectionBehavior.contains(.fullScreenAuxiliary) == true, "Settings window has .fullScreenAuxiliary behavior")
     XCTAssert(windowMgr.settingsWindow?.collectionBehavior.contains(.canJoinAllSpaces) == true, "Settings window has .canJoinAllSpaces behavior")
     windowMgr.closeSettings()
@@ -595,7 +595,7 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(windowMgr.settingsWindow != nil, "Settings window opened successfully")
     XCTAssert(windowMgr.settingsWindow?.level == .floating, "Settings window is permanently floating above player canvas")
     XCTAssert(windowMgr.settingsWindow?.frame.width == 520, "Settings window width is 520")
-    XCTAssert(windowMgr.settingsWindow?.frame.height == 400, "Settings window height is 400 for macOS HIG zero-scroll standard")
+    XCTAssert(windowMgr.settingsWindow?.frame.height == 490, "Settings window height is 490 for macOS HIG zero-scroll standard")
     windowMgr.closeSettings()
     XCTAssert(windowMgr.settingsWindow == nil, "Settings window closed cleanly")
 

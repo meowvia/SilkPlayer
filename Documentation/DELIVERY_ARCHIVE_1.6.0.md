@@ -106,7 +106,7 @@
   - 开源前端: `SilkPlayer`（Commit `a6e16ec`）
   - 闭源内核: `SilkCoreKit`（Commit `a491ae1`）
 - **发布安装镜像**:
-  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构): `3e1a488300d672ab02d4e6a55d4bbc8fd65a72976442e120b7f54ee22a599438`
+  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构): `47856f687239ba788a60bff38ab5823dd25c75d6d4c19a8b69aa69efb7f24dd2`
   - `SilkPlayer-1.6.0-arm64.dmg` (Apple Silicon 专用): `e991673a0ffae4a63cde8911dd3dd58d54fcfc2ecc5f545a3fa7a5968dea7e2f`
   - `SilkPlayer-1.6.0-x86_64.dmg` (Intel 64 位专用): `7a90dbfa94820bd2fd08f29986a623fa75c12970f2fec051b8a9ba2f11b257b8`
 - **动态库依赖审计 (@rpath)**:
