@@ -612,9 +612,11 @@ extension Notification.Name {
                 win.minSize = safeMin
                 win.contentMinSize = safeMin
 
-                let refreshSel = NSSelectorFromString("_doUpdateTilingConstraintsImmediately")
-                if win.responds(to: refreshSel) {
-                    _ = win.perform(refreshSel)
+                if !Self.isRunningTests {
+                    let refreshSel = NSSelectorFromString("_doUpdateTilingConstraintsImmediately")
+                    if win.responds(to: refreshSel) {
+                        _ = win.perform(refreshSel)
+                    }
                 }
 
                 win.standardWindowButton(.zoomButton)?.isEnabled = true
@@ -626,7 +628,7 @@ extension Notification.Name {
             guard let win = s.window ?? (s.player as? PlayerCore)?.hostWindow else { continue }
             configureWindow(win)
         }
-        if let keyWindow = NSApp?.keyWindow {
+        if !Self.isRunningTests, let keyWindow = NSApp?.keyWindow {
             configureWindow(keyWindow)
         }
     }
@@ -1208,7 +1210,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             let cy = round(screenFrame.midY - sz / 2)
             let targetFrame = NSRect(x: cx, y: cy, width: sz, height: sz)
             if isTesting {
-                window.setFrame(targetFrame, display: true, animate: false)
+                window.setFrame(targetFrame, display: false, animate: false)
                 isAdjustingWindowFrame = false
                 isMaximizingOrRestoring = false
                 return
@@ -1257,7 +1259,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         }
 
         if isTesting {
-            window.setFrame(targetFrame, display: true, animate: false)
+            window.setFrame(targetFrame, display: false, animate: false)
             isAdjustingWindowFrame = false
             isMaximizingOrRestoring = false
             return

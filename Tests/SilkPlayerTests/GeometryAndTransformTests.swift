@@ -258,7 +258,7 @@ final class GeometryAndTransformTests: XCTestCase {
 
         // 2. 模拟置顶下拉伸窗口
         let newSize = delegate.windowWillResize(window, to: NSSize(width: 1200, height: 675))
-        window.setFrame(NSRect(origin: window.frame.origin, size: newSize), display: true)
+        window.setFrame(NSRect(origin: window.frame.origin, size: newSize), display: false)
         NotificationCenter.default.post(name: NSWindow.didEndLiveResizeNotification, object: window)
         XCTAssertTrue(window.collectionBehavior.contains(.fullScreenPrimary))
 

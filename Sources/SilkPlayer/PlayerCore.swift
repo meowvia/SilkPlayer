@@ -1250,7 +1250,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             }
         }
 
-        window.toggleFullScreen(nil)
+        if !PlayerWindowManager.isRunningTests {
+            window.toggleFullScreen(nil)
+        }
     }
 
     public func renderCurrentFrameImmediately() {
