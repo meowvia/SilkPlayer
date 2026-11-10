@@ -1817,5 +1817,10 @@ final class PlaylistRegressionTests: XCTestCase {
     let resNative = WindowDimensionFormatter.format(size: CGSize(width: 1920, height: 1080), videoWidth: 1920, videoHeight: 1080)
     XCTAssertEqual(resNative.dimensions, "1920 × 1080", "Native 1080p dimensions")
     XCTAssertTrue(resNative.ratio.contains("100%"), "Native resolution matches 100% badge: \(resNative.ratio)")
+
+    // Verify WindowResizeHUDView instantiation, update, and mouse transparency
+    let hud = WindowResizeHUDView(frame: NSRect(x: 0, y: 0, width: 220, height: 40))
+    hud.update(size: CGSize(width: 1920, height: 1080), videoWidth: 1920, videoHeight: 1080, isAudioOnly: false)
+    XCTAssertNil(hud.hitTest(NSPoint(x: 50, y: 20)), "HUD must be completely click-through to allow seamless window interaction")
     }
 }

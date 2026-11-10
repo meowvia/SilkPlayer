@@ -1,5 +1,5 @@
-import SwiftUI
 import AppKit
+import SwiftUI
 
 /// Formatter that calculates live dimensions and human-readable aspect ratio.
 public struct WindowDimensionFormatter: Sendable {
@@ -52,114 +52,204 @@ public struct WindowDimensionFormatter: Sendable {
     }
 }
 
-/// Floating HUD badge showing current window dimensions and aspect ratio during manual drag resize.
-/// Follows cursor dynamically with safe viewport padding.
-public struct WindowResizeDimensionHUD: View {
-    public let size: CGSize
-    public let cursorLocation: CGPoint?
-    public let windowSize: CGSize
-    public let videoWidth: Int
-    public let videoHeight: Int
-    public let isAudioOnly: Bool
+/// AppKit native centered bezel HUD showing live window dimensions and aspect ratio during manual drag resizing.
+/// Synchronously drawn in `NSEventTrackingRunLoopMode` on every frame without runloop lag.
+@MainActor
+public final class WindowResizeHUDView: NSView {
+    private let visualEffectView = NSVisualEffectView()
+    private let stackView = NSStackView()
+    private let dimensionLabel = NSTextField(labelWithString: "")
+    private let dividerView = NSView()
+    private let ratioLabel = NSTextField(labelWithString: "")
+    private let nativeBadge = NSView()
+    private let nativeLabel = NSTextField(labelWithString: "100%")
 
-    public init(
-        size: CGSize,
-        cursorLocation: CGPoint? = nil,
-        windowSize: CGSize,
-        videoWidth: Int = 0,
-        videoHeight: Int = 0,
-        isAudioOnly: Bool = false
-    ) {
-        self.size = size
-        self.cursorLocation = cursorLocation
-        self.windowSize = windowSize
-        self.videoWidth = videoWidth
-        self.videoHeight = videoHeight
-        self.isAudioOnly = isAudioOnly
+    private var dismissTimer: Timer?
+
+    public override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupUI()
     }
 
-    private var formatted: (dimensions: String, ratio: String) {
-        WindowDimensionFormatter.format(
+    public required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupUI()
+    }
+
+    public override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil // Mouse transparent: never intercepts clicks or window drags
+    }
+
+    private func setupUI() {
+        wantsLayer = true
+        layer?.zPosition = 9999
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.40
+        layer?.shadowRadius = 14
+        layer?.shadowOffset = CGSize(width: 0, height: -3)
+
+        // Frosted glass bezel container
+        visualEffectView.translatesAutoresizingMaskIntoConstraints = false
+        visualEffectView.material = .hudWindow
+        visualEffectView.blendingMode = .withinWindow
+        visualEffectView.state = .active
+        visualEffectView.wantsLayer = true
+        visualEffectView.layer?.cornerRadius = 12
+        visualEffectView.layer?.masksToBounds = true
+        visualEffectView.layer?.borderWidth = 1.0
+        visualEffectView.layer?.borderColor = NSColor(white: 1.0, alpha: 0.18).cgColor
+        addSubview(visualEffectView)
+
+        // Stack View
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.orientation = .horizontal
+        stackView.alignment = .centerY
+        stackView.spacing = 9
+        stackView.edgeInsets = NSEdgeInsets(top: 7, left: 14, bottom: 7, right: 14)
+        visualEffectView.addSubview(stackView)
+
+        // Dimension Label (e.g. "1920 × 1080")
+        dimensionLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 14.5, weight: .semibold)
+        dimensionLabel.textColor = .white
+        dimensionLabel.isBezeled = false
+        dimensionLabel.drawsBackground = false
+        dimensionLabel.isEditable = false
+        dimensionLabel.isSelectable = false
+        dimensionLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        stackView.addArrangedSubview(dimensionLabel)
+
+        // Subtle hairline separator
+        dividerView.translatesAutoresizingMaskIntoConstraints = false
+        dividerView.wantsLayer = true
+        dividerView.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.22).cgColor
+        dividerView.widthAnchor.constraint(equalToConstant: 1.0).isActive = true
+        dividerView.heightAnchor.constraint(equalToConstant: 13.0).isActive = true
+        stackView.addArrangedSubview(dividerView)
+
+        // Aspect Ratio Label (e.g. "16:9")
+        ratioLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .medium)
+        ratioLabel.textColor = NSColor(white: 1.0, alpha: 0.85)
+        ratioLabel.isBezeled = false
+        ratioLabel.drawsBackground = false
+        ratioLabel.isEditable = false
+        ratioLabel.isSelectable = false
+        ratioLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        stackView.addArrangedSubview(ratioLabel)
+
+        // Native 100% Badge
+        setupNativeBadge()
+        stackView.addArrangedSubview(nativeBadge)
+        nativeBadge.isHidden = true
+
+        NSLayoutConstraint.activate([
+            visualEffectView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            visualEffectView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            visualEffectView.topAnchor.constraint(equalTo: topAnchor),
+            visualEffectView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            stackView.leadingAnchor.constraint(equalTo: visualEffectView.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: visualEffectView.trailingAnchor),
+            stackView.topAnchor.constraint(equalTo: visualEffectView.topAnchor),
+            stackView.bottomAnchor.constraint(equalTo: visualEffectView.bottomAnchor),
+        ])
+    }
+
+    private func setupNativeBadge() {
+        nativeBadge.translatesAutoresizingMaskIntoConstraints = false
+        nativeBadge.wantsLayer = true
+        nativeBadge.layer?.cornerRadius = 4.0
+        nativeBadge.layer?.masksToBounds = true
+        nativeBadge.layer?.backgroundColor = NSColor.systemGreen.withAlphaComponent(0.22).cgColor
+        nativeBadge.layer?.borderWidth = 1.0
+        nativeBadge.layer?.borderColor = NSColor.systemGreen.withAlphaComponent(0.45).cgColor
+
+        nativeLabel.translatesAutoresizingMaskIntoConstraints = false
+        nativeLabel.stringValue = "100%"
+        nativeLabel.font = NSFont.systemFont(ofSize: 10, weight: .bold)
+        nativeLabel.textColor = NSColor.systemGreen
+        nativeLabel.isBezeled = false
+        nativeLabel.drawsBackground = false
+        nativeLabel.isEditable = false
+        nativeLabel.isSelectable = false
+
+        nativeBadge.addSubview(nativeLabel)
+        NSLayoutConstraint.activate([
+            nativeLabel.leadingAnchor.constraint(equalTo: nativeBadge.leadingAnchor, constant: 5),
+            nativeLabel.trailingAnchor.constraint(equalTo: nativeBadge.trailingAnchor, constant: -5),
+            nativeLabel.topAnchor.constraint(equalTo: nativeBadge.topAnchor, constant: 1.5),
+            nativeLabel.bottomAnchor.constraint(equalTo: nativeBadge.bottomAnchor, constant: -1.5),
+        ])
+    }
+
+    public func update(size: CGSize, videoWidth: Int, videoHeight: Int, isAudioOnly: Bool) {
+        let formatted = WindowDimensionFormatter.format(
             size: size,
             videoWidth: videoWidth,
             videoHeight: videoHeight,
             isAudioOnly: isAudioOnly
         )
+
+        dimensionLabel.stringValue = formatted.dimensions
+
+        if formatted.ratio.contains("· 100%") {
+            let cleanRatio = formatted.ratio.replacingOccurrences(of: " · 100%", with: "")
+            ratioLabel.stringValue = cleanRatio
+            nativeBadge.isHidden = false
+        } else {
+            ratioLabel.stringValue = formatted.ratio
+            nativeBadge.isHidden = true
+        }
+
+        dividerView.isHidden = formatted.ratio.isEmpty
+        layoutSubtreeIfNeeded()
     }
 
-    private var targetPosition: CGPoint {
-        let pillW: CGFloat = 175
-        let pillH: CGFloat = 34
+    public func show(size: CGSize, videoWidth: Int, videoHeight: Int, isAudioOnly: Bool) {
+        dismissTimer?.invalidate()
+        dismissTimer = nil
 
-        guard let cursor = cursorLocation, cursor.x > 0 || cursor.y > 0 else {
-            // Default center if cursor location is unknown
-            return CGPoint(x: windowSize.width / 2, y: windowSize.height / 2)
+        update(size: size, videoWidth: videoWidth, videoHeight: videoHeight, isAudioOnly: isAudioOnly)
+
+        // Ensure brought to front
+        if let superview = self.superview {
+            superview.addSubview(self, positioned: .above, relativeTo: nil)
         }
 
-        // Convert AppKit (bottom-left) to SwiftUI (top-left)
-        let cursorSwiftUI = CGPoint(x: cursor.x, y: windowSize.height - cursor.y)
-
-        var posX = cursorSwiftUI.x
-        var posY = cursorSwiftUI.y
-
-        // Offset intelligently toward interior of window so pill stays visible
-        if posX > windowSize.width - 140 {
-            posX -= (pillW / 2 + 20)
-        } else if posX < 140 {
-            posX += (pillW / 2 + 20)
-        }
-
-        if posY > windowSize.height - 70 {
-            posY -= (pillH / 2 + 22)
-        } else if posY < 70 {
-            posY += (pillH / 2 + 22)
-        }
-
-        // Clamp securely inside safe margins
-        let minX = pillW / 2 + 16
-        let maxX = max(minX, windowSize.width - pillW / 2 - 16)
-        let minY = pillH / 2 + 16
-        let maxY = max(minY, windowSize.height - pillH / 2 - 16)
-
-        return CGPoint(
-            x: min(max(minX, posX), maxX),
-            y: min(max(minY, posY), maxY)
-        )
-    }
-
-    public var body: some View {
-        let (dimensions, ratio) = formatted
-        HStack(spacing: 6) {
-            Image(systemName: "aspectratio")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
-
-            Text(dimensions)
-                .font(.system(size: 12.5, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-
-            if !ratio.isEmpty {
-                Text("·")
-                    .foregroundColor(.white.opacity(0.45))
-                    .font(.system(size: 12, weight: .medium))
-
-                Text(ratio)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color(nsColor: .systemTeal).opacity(0.95))
+        isHidden = false
+        if alphaValue < 1.0 {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.1
+                self.animator().alphaValue = 1.0
             }
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.black.opacity(0.78))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-        )
-        .shadow(color: Color.black.opacity(0.40), radius: 6, x: 0, y: 3)
-        .position(targetPosition)
-        .allowsHitTesting(false)
+    }
+
+    public func dismiss(afterDelay delay: TimeInterval = 0.35, duration: TimeInterval = 0.25) {
+        dismissTimer?.invalidate()
+        let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self = self else { return }
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = duration
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    self.animator().alphaValue = 0.0
+                }, completionHandler: {
+                    MainActor.assumeIsolated {
+                        if self.alphaValue <= 0.01 {
+                            self.isHidden = true
+                        }
+                    }
+                })
+            }
+        }
+        self.dismissTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    public func hideImmediately() {
+        dismissTimer?.invalidate()
+        dismissTimer = nil
+        alphaValue = 0.0
+        isHidden = true
     }
 }
