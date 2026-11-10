@@ -234,7 +234,7 @@ cd SilkPlayer
 
 SilkPlayer 目前仍处于早期版本，许多功能与细节还在持续改进中。我们会认真参考用户的反馈与建议，持续优化播放体验。
 
-**我们郑重承诺**：SilkPlayer 的基础本地播放功能将**永久免费**提供给广大用户使用。如果您在使用中遇到问题或有改进建议，欢迎随时提交 [Issues](https://github.com/meowvia/SilkPlayer/issues)。
+SilkPlayer 的基础本地播放功能面向广大用户免费开放使用。如果您在使用中遇到问题或有改进建议，欢迎随时提交 [Issues](https://github.com/meowvia/SilkPlayer/issues)，帮助我们持续打磨与优化。
 
 ---
 
