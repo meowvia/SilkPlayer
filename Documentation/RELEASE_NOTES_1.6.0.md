@@ -1,7 +1,7 @@
 # SilkPlayer 1.6.0 版本更新说明 / Release Notes
 
-SilkPlayer 1.6.0 带来了全新设计的偏好设置窗口、窗口拉伸实时尺寸提示、HDR 动态高光映射优化，并修复了播放进度记忆失效的问题。
-SilkPlayer 1.6.0 introduces a redesigned Settings panel, live window resize dimensions, improved HDR highlight tone-mapping, and fixes for playback progress retention.
+SilkPlayer 1.6.0 带来了全新设计的偏好设置窗口、窗口拉伸实时尺寸提示以及 HDR 动态高光映射优化。
+SilkPlayer 1.6.0 introduces a redesigned Settings panel, live window resize dimensions, and improved HDR highlight tone-mapping.
 
 ---
 
@@ -14,10 +14,6 @@ SilkPlayer 1.6.0 introduces a redesigned Settings panel, live window resize dime
   - 重新梳理设置为「通用」、「播放」、「关于」三个面板，界面布局更符合 macOS 原生风格。
   - 新增全屏时钟悬浮、截图格式与存储路径选择、快进快退步长调节以及鼠标滚轮行为配置。
   - Reorganized preferences into General, Playback, and About tabs with a cleaner macOS layout. Added options for fullscreen clock, screenshot format/path, seek intervals, and mouse wheel actions.
-- **播放进度记忆与播放列表模式 / Playback Resume & Playlist Modes**:
-  - 修复重新打开视频或重启应用时无法恢复上次播放进度的问题。
-  - 在设置中提供「单播放列表」与「双播放列表（连续剧与独立影片分流）」两种管理模式。
-  - Fixed an issue where playback position was lost after restarting the app. Added an option in Settings to switch between Single Playlist and Dual Playlist modes.
 - **HDR 高光渲染优化 / Improved HDR Highlights**:
   - 优化 HDR10 与杜比视界在高光区域的色彩映射，根据显示器实际亮度动态压缩高光细节，减少过曝发白现象。
   - Improved highlight tone-mapping for HDR10 and Dolby Vision based on screen headroom, preserving details in bright scenes.
