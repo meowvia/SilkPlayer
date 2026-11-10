@@ -849,6 +849,16 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         return false
     }
 
+    public func windowWillStartLiveResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              !window.styleMask.contains(.fullScreen),
+              !isFullscreenTransitioning,
+              let player = self.player as? PlayerCore else { return }
+        player.isLiveResizing = true
+        player.liveResizeSize = window.frame.size
+        player.liveResizeCursorLocation = window.mouseLocationOutsideOfEventStream
+    }
+
     public func windowWillResize(_ window: NSWindow, to frameSize: NSSize) -> NSSize {
         let idleMinW: CGFloat = 640
         let screen = window.screen ?? NSScreen.main
@@ -1036,7 +1046,14 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return frameSize
         }
 
-        return NSSize(width: round(targetW), height: round(targetH))
+        let resolved = NSSize(width: round(targetW), height: round(targetH))
+        if let player = self.player as? PlayerCore, !window.styleMask.contains(.fullScreen), !isFullscreenTransitioning {
+            player.isLiveResizing = true
+            player.liveResizeSize = resolved
+            player.liveResizeCursorLocation = window.mouseLocationOutsideOfEventStream
+        }
+
+        return resolved
     }
 
     public func windowDidEndLiveResize(_ notification: Notification) {
@@ -1044,6 +1061,18 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
               !window.styleMask.contains(.fullScreen),
               !isFullscreenTransitioning,
               let player = self.player else { return }
+
+        // Update final frame size and smoothly dismiss HUD after a brief pause
+        if let player = self.player as? PlayerCore {
+            player.liveResizeSize = window.frame.size
+            player.liveResizeCursorLocation = window.mouseLocationOutsideOfEventStream
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak player] in
+                guard let player = player else { return }
+                withAnimation(SilkAnimation.adaptive(reduceMotion: false, preferred: .silkSnappy)) {
+                    player.isLiveResizing = false
+                }
+            }
+        }
 
         savedPreZoomFrame = nil
 

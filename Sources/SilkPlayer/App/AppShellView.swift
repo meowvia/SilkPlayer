@@ -154,6 +154,20 @@ public struct AppShellView: View {
                         .zIndex(17)
                     }
                 }
+
+                // Window Live-Resize Precision Dimension HUD (Proposal 023 / 1.6.0 Feature)
+                if player.isLiveResizing && player.liveResizeSize.width > 0 && player.liveResizeSize.height > 0 {
+                    WindowResizeDimensionHUD(
+                        size: player.liveResizeSize,
+                        cursorLocation: player.liveResizeCursorLocation,
+                        windowSize: geometry.size,
+                        videoWidth: player.displayVideoWidth > 0 ? player.displayVideoWidth : player.videoWidth,
+                        videoHeight: player.displayVideoHeight > 0 ? player.displayVideoHeight : player.videoHeight,
+                        isAudioOnly: player.isAudioOnly
+                    )
+                    .transition(SilkAnimation.transition(reduceMotion: reduceMotion, standard: .opacity.combined(with: .scale(scale: 0.95))))
+                    .zIndex(99)
+                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
         }

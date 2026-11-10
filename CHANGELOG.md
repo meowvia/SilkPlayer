@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.6.0] - 2026-11-09
 
 ### Added
+- **Window Live-Resize Precision Dimension HUD (Proposal 023)**:
+  - Dynamically floats a translucent, monospaced dimension badge near the cursor during manual window edge resizing.
+  - Reports exact physical pixel dimensions (`width × height`) and standard aspect ratios (`16:9`, `16:10`, `4:3`, `21:9`, `2.39:1`, `1:1`).
+  - Automatically identifies native resolution with `100%` badge for pixel-perfect promotional screenshots and professional viewing, smoothly fading out 0.35s after resize ends.
 - **Dynamic EDR Tone-Mapping & Rational Highlight Roll-off (Proposal 013)**:
   - Injected dynamic display physical headroom (`cachedEDRHeadroom`) into Metal fragment shaders for HDR10 and Dolby Vision pipelines.
   - Standardized on ITU-R BT.2408 diffuse white reference level ($Y \le 1.0$) for 1:1 uncompressed absolute fidelity.

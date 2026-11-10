@@ -1791,5 +1791,31 @@ final class PlaylistRegressionTests: XCTestCase {
     let lastDate = UserDefaults.standard.double(forKey: "SilkPlayer.Update.LastColdStartReminderDate")
     XCTAssert(lastDate > 0, "Decline update persists last cold start reminder timestamp")
     XCTAssert(updateService.isShowingUpdateAlert == false, "Declining update cleanly dismisses prompt")
+
+    // 62. Window Live-Resize Precision Dimension HUD & Formatter Invariants (Proposal 023)
+    print("\n--- Test 62: Window Live-Resize Precision Dimension HUD & Formatter Invariants ---")
+    let res169 = WindowDimensionFormatter.format(size: CGSize(width: 1280, height: 720))
+    XCTAssertEqual(res169.dimensions, "1280 × 720", "Exact dimensions formatted with multiplication symbol")
+    XCTAssertEqual(res169.ratio, "16:9", "1280x720 recognized as standard 16:9")
+
+    let res1610 = WindowDimensionFormatter.format(size: CGSize(width: 1920, height: 1200))
+    XCTAssertEqual(res1610.dimensions, "1920 × 1200", "Dimensions match 1920x1200")
+    XCTAssertEqual(res1610.ratio, "16:10", "Recognized as standard 16:10")
+
+    let res43 = WindowDimensionFormatter.format(size: CGSize(width: 800, height: 600))
+    XCTAssertEqual(res43.dimensions, "800 × 600", "Dimensions match 800x600")
+    XCTAssertEqual(res43.ratio, "4:3", "Recognized as standard 4:3")
+
+    let res239 = WindowDimensionFormatter.format(size: CGSize(width: 1920, height: 803))
+    XCTAssertEqual(res239.dimensions, "1920 × 803", "Dimensions match 1920x803")
+    XCTAssertEqual(res239.ratio, "2.39:1", "Recognized as Cinemascope 2.39:1")
+
+    let resAudio = WindowDimensionFormatter.format(size: CGSize(width: 520, height: 520), isAudioOnly: true)
+    XCTAssertEqual(resAudio.dimensions, "520 × 520", "Audio dimensions match 520x520")
+    XCTAssertEqual(resAudio.ratio, "1:1", "Audio mode strictly forces 1:1 aspect ratio")
+
+    let resNative = WindowDimensionFormatter.format(size: CGSize(width: 1920, height: 1080), videoWidth: 1920, videoHeight: 1080)
+    XCTAssertEqual(resNative.dimensions, "1920 × 1080", "Native 1080p dimensions")
+    XCTAssertTrue(resNative.ratio.contains("100%"), "Native resolution matches 100% badge: \(resNative.ratio)")
     }
 }

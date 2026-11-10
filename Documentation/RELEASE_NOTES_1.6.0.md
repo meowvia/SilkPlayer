@@ -1,12 +1,17 @@
 # SilkPlayer 1.6.0 版本更新说明 / Release Notes
 
-SilkPlayer 1.6.0 全面重构原生偏好设置中心并遵循 macOS HIG 规范，恢复断点进度记忆与双播放列表模式，升级 HDR10 与杜比视界动态 EDR 高光滚降色调映射，重构边框贴合的极简透明播放列表拉手，并新增端内静默更新检测服务。
-SilkPlayer 1.6.0 overhauls the native Settings panel with macOS HIG compliance, restores playback breakpoint resuming and dual-playlist routing, upgrades HDR10 and Dolby Vision dynamic EDR tone-mapping, redesigns the border-flush transparent playlist drawer handle, and introduces in-app silent update detection.
+SilkPlayer 1.6.0 全面重构原生偏好设置中心并遵循 macOS HIG 规范，恢复断点进度记忆与双播放列表模式，升级 HDR10 与杜比视界动态 EDR 高光滚降色调映射，重构边框贴合的极简透明播放列表拉手，新增窗口实时拉伸像素尺寸与画幅比例指示器，并集成端内静默更新检测服务。
+SilkPlayer 1.6.0 overhauls the native Settings panel with macOS HIG compliance, restores playback breakpoint resuming and dual-playlist routing, upgrades HDR10 and Dolby Vision dynamic EDR tone-mapping, redesigns the border-flush transparent playlist drawer handle, introduces the live-resize precision dimension HUD, and integrates in-app silent update detection.
 
 ---
 
 ## 核心特性 / Key Features
 
+- **窗口实时拉伸像素尺寸与画幅比例指示器 (提案 023) / Window Live-Resize Precision Dimension HUD (Proposal 023)**:
+  - 手动拖拽拉伸播放器窗口边缘时，在光标位置动态浮现半透明等宽微型指示器，实时呈现当前窗口的绝对物理像素尺寸（如 `1280 × 720`）与标准画幅比例（如 `16:9`、`16:10`、`4:3`、`21:9`、`2.39:1`、`1:1`）；
+    Dynamically presents a translucent floating indicator near the cursor during manual window edge resizing, reporting live pixel dimensions (e.g., `1280 × 720`) and standardized aspect ratios (e.g., `16:9`, `16:10`, `4:3`, `21:9`, `2.39:1`, `1:1`);
+  - 当尺寸精准对齐片源原始分辨率时自动标注 `100% 原尺寸`，为官网截图、宣发排版与专业观影提供像素级精度反馈；松手后 0.35 秒平滑淡出，日常观影零视觉遮挡。
+    Automatically annotates `100% Native` when dimensions align with source resolution for pixel-perfect promotional screenshots and professional viewing, smoothly fading out 0.35s after resize ends with zero playback interference.
 - **偏好设置模块 macOS HIG 规范化全量重构 (提案 018) / Native Settings HIG Architecture Overhaul (Proposal 018)**:
   - 遵循 macOS 人机交互指南规范，聚焦收拢为通用、播放、关于三大标准标签页，采用 520 × 490 pt 视窗尺寸与全面板零纵向滚动条；
     Consolidates preferences into 3 standard tabs (General, Playback, About) adhering to macOS HIG, standardized on 520 × 490 pt fixed dimensions with zero vertical scrollbars;

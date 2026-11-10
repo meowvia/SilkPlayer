@@ -33,6 +33,7 @@
 | ~~提案 020~~ | ~~智能静默更新检测、周级克制频控与用户数据无损在位覆盖安装 (Smart Silent Update, Weekly Cadence & Lossless In-Place Overwrite Installer)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.6.0** |
 | 提案 021 | 播控栏与进度条无底框全景纯悬浮化重构 (Cinema-Embedded Canvas HUD) | 正式立项 (设计定稿) | **1.7.0 核心排期** |
 | 提案 022 | 播放列表多模态快速识别检索与防误触清空管线 (Playlist Multimodal Instant Search & Safe-Clear Pipeline) | 正式立项 (方案设计定稿) | **1.7.0 核心排期** |
+| ~~提案 023~~ | ~~窗口实时拉伸像素尺寸与画幅比例指示器 (Window Live-Resize Precision Dimension HUD)~~ | ~~需求就绪~~ **已落地销项** | **1.6.0** |
 
 
 ---
@@ -839,6 +840,35 @@
 2. 汉字、纯英文、拼音首字母及全拼检索 100% 准确命中目标项目；
 3. 一键清空具备可靠的二次确认防护，超时自动复原；
 4. 单元测试覆盖多模态检索算法边界，全量通过。
+
+---
+
+## ~~提案 023: 窗口实时拉伸像素尺寸与画幅比例指示器 (Window Live-Resize Precision Dimension HUD)~~ [已在 1.6.0 落地销项]
+
+### 1. 提案背景与痛点
+- **场景痛点**:
+  - 用户或开发者在制作宣发物料、官网截图、排版截图或调整播放器窗口时，随手截取的窗口往往是 `1273 × 719` 等非标奇数像素，导致素材比例不一致且缩放模糊；
+  - 观影者在手动拉伸窗口时，缺乏对当前窗口是否等比、是否处于标准画幅（`16:9`、`2.39:1`、`4:3`）或是否达到 1:1 点对点原尺寸的直观视觉反馈。
+- **设计哲学**:
+  - 顺应专业设计工具（如 Figma、Final Cut Pro、系统截图 `⌘⇧4`）的高精度反馈规范；
+  - 仅在手动拖拽拉伸窗口时动态浮现，松手后 0.35 秒平滑淡出，日常观影零遮挡。
+
+### 2. 技术架构与交互实现
+- **生命周期挂载**:
+  - `PlayerWindowDelegate` 接入 `windowWillStartLiveResize`、`windowWillResize` 与 `windowDidEndLiveResize`；
+  - 毫秒级捕获光标位置与当前帧尺寸，注入 `PlayerCore`；
+- **动态排布与避让**:
+  - `WindowResizeDimensionHUD.swift` 将 AppKit 坐标系（左下角原点）转换为 SwiftUI 坐标系（左上角原点）；
+  - 智能内缩避让边缘，安全边界内自适应贴近光标，绝不超出窗口可视区；
+- **标准比例与 100% 点对点识别**:
+  - `WindowDimensionFormatter` 自动识别 `16:9`、`16:10`、`4:3`、`21:9`、`2.39:1`、`1:1`；
+  - 当尺寸与片源原始分辨率相差 $\le 1$ 像素时，自动点亮 `100% 原尺寸` 徽章。
+
+### 3. 落地销项记录
+- **落地版本**: **1.6.0**；
+- **落地验证**:
+  - `WindowResizeDimensionHUD.swift`、`PlayerWindowManager.swift`、`AppShellView.swift` 完整联动；
+  - 自动化测试用例 62 项全量绿灯通过。
 
 
 

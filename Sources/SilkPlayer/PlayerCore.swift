@@ -106,6 +106,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var activeOSD: OSDNotification? = nil
     public var hasAppliedInitialWindowSize: Bool = false
 
+    // MARK: - Live Resize Precision HUD
+    @Published public var isLiveResizing: Bool = false
+    @Published public var liveResizeSize: CGSize = .zero
+    @Published public var liveResizeCursorLocation: CGPoint? = nil
+
     // MARK: - Tracks & Chapters
     @Published public var audioTracks: [TrackItem] = []
     @Published public var subtitleTracks: [TrackItem] = []
@@ -509,6 +514,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             isPlaylistDrawerVisible = false
             isInspectorVisible = false
         }
+        isLiveResizing = false
+        liveResizeSize = .zero
+        liveResizeCursorLocation = nil
         hasAppliedInitialWindowSize = false
         isDolbyVision = false
         isHDRContent = false

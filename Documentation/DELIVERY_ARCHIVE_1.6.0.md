@@ -91,22 +91,38 @@
 
 ---
 
+### 1.7 待办 7: 窗口实时拉伸像素尺寸与画幅比例指示器 (提案 023)
+- **目标与根因**:
+  - 为满足用户官网截图、宣发排版与专业观影对像素级标准比例和统一尺寸的严苛需求，解决随手拉伸产生非标奇数像素与比例割裂感痛点。
+- **技术实现路径**:
+  - `PlayerWindowDelegate` 接入 `windowWillStartLiveResize`、`windowWillResize` 与 `windowDidEndLiveResize`；
+  - 捕获当前实时帧尺寸与 AppKit 光标位置，注入 `PlayerCore` 状态机；
+  - 封装 `WindowDimensionFormatter`，精准识别 `16:9`、`16:10`、`4:3`、`21:9`、`2.39:1`、`1:1`，并在对齐片源分辨率时提供 `100% 原尺寸` 徽章；
+  - `WindowResizeDimensionHUD.swift` 实现极简等宽深色毛玻璃胶囊，安全视口内自适应贴近光标，松手后 0.35 秒平滑淡出，零遮挡观影。
+- **交付资产**:
+  - `Sources/SilkPlayer/Player/WindowResizeDimensionHUD.swift`
+  - `PlayerWindowManager.swift`、`PlayerCore.swift`、`AppShellView.swift`
+  - `Tests/SilkPlayerTests/PlaylistTests.swift` 新增 Test 62 格式化与画幅判定断言。
+
+---
+
 ## 2. 自动化测试验证基准
 - **测试框架**: XCTest + Swift Testing 双引擎；
-- **测试套件**: 全量 61 项回归测试套件全量通过（100% PASS）；
+- **测试套件**: 全量 62 项回归测试套件全量通过（100% PASS）；
 - **基准固化**:
   - Test 1-60：几何约束、播放列表、双轨分流、自然排序、Metal 容错等全部绿灯；
   - Test 61：UpdateService 语义版本对比与 7 天静默频控测试绿灯；
+  - Test 62：窗口实时拉伸尺寸指示器与多画幅判定测试绿灯；
   - SwiftTestingSanityTests：基准测试绿灯。
 
 ---
 
 ## 3. 正式发布安装镜像与 SHA-256 校验和
 - **工程 Git 基准**:
-  - 开源前端: `SilkPlayer`（Commit `a6e16ec`）
+  - 开源前端: `SilkPlayer`（Commit `6ccdcda`）
   - 闭源内核: `SilkCoreKit`（Commit `a491ae1`）
 - **发布安装镜像**:
-  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构): `47856f687239ba788a60bff38ab5823dd25c75d6d4c19a8b69aa69efb7f24dd2`
+  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构): `8acfb4902f6777b4251fd693a55dfa2a4054982eb1bd86be239fc887e63fac33`
   - `SilkPlayer-1.6.0-arm64.dmg` (Apple Silicon 专用): `e991673a0ffae4a63cde8911dd3dd58d54fcfc2ecc5f545a3fa7a5968dea7e2f`
   - `SilkPlayer-1.6.0-x86_64.dmg` (Intel 64 位专用): `7a90dbfa94820bd2fd08f29986a623fa75c12970f2fec051b8a9ba2f11b257b8`
 - **动态库依赖审计 (@rpath)**:
