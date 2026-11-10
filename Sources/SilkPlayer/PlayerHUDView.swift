@@ -537,8 +537,8 @@ public struct PlayerHUDView: View {
             // 0. 播放模式 (顺序播放 / 列表循环 / 单曲循环 / 随机播放)
             PlaybackModeButton(playlist: playlist)
 
-            // 1. 播放倍速选择菜单 (expanded, standard, compact 模式直显)
-            if tier != .minimal {
+            // 1. 播放倍速选择菜单 (纯音频/音乐模式始终直显；视频模式在 expanded, standard, compact 模式直显)
+            if player.isAudioOnly || tier != .minimal {
                 HUDSpeedMenuButton(player: player)
             }
 
@@ -574,43 +574,8 @@ public struct PlayerHUDView: View {
     @ViewBuilder
     private func rightWingControls(tier: HUDLayoutTier) -> some View {
         HStack(spacing: tier == .minimal ? 10 : 12) {
-            // 常态交互式音量微调与起播防爆音安全锁 (24pt 动态图标，悬停平滑展开微型滑块)
-            HUDVolumeSlider(player: player)
-
-            // 1. 音轨选择原生菜单 (expanded 和 standard 模式直显，compact/minimal 收纳进更多)
-            if tier == .expanded || tier == .standard {
-                HUDMenuButton(
-                    icon: "waveform",
-                    size: 14,
-                    weight: .medium,
-                    helpText: L10n.tr("Audio Track Selection (A)", "音轨选择 (A)")
-                ) {
-                    audioTracksMenuContent
-                }
-            }
-
-            // 3. 字幕选择原生菜单 (expanded, standard, compact 模式直显，minimal 收纳进更多)
-            if tier != .minimal {
-                HUDMenuButton(
-                    icon: "captions.bubble",
-                    size: 14,
-                    weight: .medium,
-                    isActive: player.selectedSubtitleTrackId > 0,
-                    helpText: L10n.tr("Subtitle Track Selection (S)", "字幕选择 (S)")
-                ) {
-                    subtitleTracksMenuContent
-                }
-            }
-
-            // 4. 更多控制菜单 (当处于 standard, compact, minimal 模式时动态出现，收纳次级功能)
-            if tier != .expanded {
-                HUDMoreMenuButton {
-                    moreMenuContent(tier: tier)
-                }
-            }
-
-            // 5. 偏好设置 (仅 expanded 模式直显，其余模式在“更多”菜单中)
-            if tier == .expanded {
+            if player.isAudioOnly {
+                // 纯音频/音乐模式极简底栏：仅保留偏好设置与全屏切换，其余按钮一概移除以保持空间呼吸感并杜绝遮挡
                 HUDTransportButton(
                     icon: "gearshape",
                     size: 14,
@@ -621,19 +586,80 @@ public struct PlayerHUDView: View {
                     PlayerWindowManager.shared.openSettings()
                 }
                 .accessibilityLabel(L10n.settings)
-            }
 
-            // 6. 全屏切换 (永远常驻最右侧，符合 macOS 原生操作直觉与肌肉记忆)
-            HUDTransportButton(
-                icon: player.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                size: 13.5,
-                weight: .medium,
-                color: .white.opacity(0.90),
-                helpText: L10n.tr("Toggle Fullscreen (F / Return)", "切换全屏 (F / 回车)")
-            ) {
-                player.toggleFullscreen()
+                HUDTransportButton(
+                    icon: player.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                    size: 13.5,
+                    weight: .medium,
+                    color: .white.opacity(0.90),
+                    helpText: L10n.tr("Toggle Fullscreen (F / Return)", "切换全屏 (F / 回车)")
+                ) {
+                    player.toggleFullscreen()
+                }
+                .accessibilityLabel(player.isFullscreen ? L10n.exitFullscreen : L10n.enterFullscreen)
+            } else {
+                // 视频模式底栏控件
+                // 常态交互式音量微调与起播防爆音安全锁 (24pt 动态图标，悬停平滑展开微型滑块)
+                HUDVolumeSlider(player: player)
+
+                // 1. 音轨选择原生菜单 (expanded 和 standard 模式直显，compact/minimal 收纳进更多)
+                if tier == .expanded || tier == .standard {
+                    HUDMenuButton(
+                        icon: "waveform",
+                        size: 14,
+                        weight: .medium,
+                        helpText: L10n.tr("Audio Track Selection (A)", "音轨选择 (A)")
+                    ) {
+                        audioTracksMenuContent
+                    }
+                }
+
+                // 3. 字幕选择原生菜单 (expanded, standard, compact 模式直显，minimal 收纳进更多)
+                if tier != .minimal {
+                    HUDMenuButton(
+                        icon: "captions.bubble",
+                        size: 14,
+                        weight: .medium,
+                        isActive: player.selectedSubtitleTrackId > 0,
+                        helpText: L10n.tr("Subtitle Track Selection (S)", "字幕选择 (S)")
+                    ) {
+                        subtitleTracksMenuContent
+                    }
+                }
+
+                // 4. 更多控制菜单 (当处于 standard, compact, minimal 模式时动态出现，收纳次级功能)
+                if tier != .expanded {
+                    HUDMoreMenuButton {
+                        moreMenuContent(tier: tier)
+                    }
+                }
+
+                // 5. 偏好设置 (仅 expanded 模式直显，其余模式在“更多”菜单中)
+                if tier == .expanded {
+                    HUDTransportButton(
+                        icon: "gearshape",
+                        size: 14,
+                        weight: .medium,
+                        color: .white.opacity(0.90),
+                        helpText: L10n.tr("Preferences (Cmd+,)", "偏好设置 (Cmd+,)")
+                    ) {
+                        PlayerWindowManager.shared.openSettings()
+                    }
+                    .accessibilityLabel(L10n.settings)
+                }
+
+                // 6. 全屏切换 (永远常驻最右侧，符合 macOS 原生操作直觉与肌肉记忆)
+                HUDTransportButton(
+                    icon: player.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                    size: 13.5,
+                    weight: .medium,
+                    color: .white.opacity(0.90),
+                    helpText: L10n.tr("Toggle Fullscreen (F / Return)", "切换全屏 (F / 回车)")
+                ) {
+                    player.toggleFullscreen()
+                }
+                .accessibilityLabel(player.isFullscreen ? L10n.exitFullscreen : L10n.enterFullscreen)
             }
-            .accessibilityLabel(player.isFullscreen ? L10n.exitFullscreen : L10n.enterFullscreen)
         }
     }
 
