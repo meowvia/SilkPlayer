@@ -223,7 +223,7 @@ cd SilkPlayer
 ./scripts/run_tests.sh
 
 # Package release DMG
-./scripts/package_app.sh 1.6.0 universal
+./scripts/package_app.sh 1.5.1 universal
 ```
 
 > **Build Notes**:
@@ -236,7 +236,7 @@ cd SilkPlayer
 
 SilkPlayer is an independent media player developed in spare time. Keeping resource usage exceptionally low while maintaining solid stability has always been a core ambition of this project; clear optimization paths are actively being pursued with the aim of rivaling mainstream players.
 
-**We promise**: SilkPlayer's core local playback features will remain **permanently free** for all users. If you encounter issues or have ideas for improvement, feel free to open an [Issue](https://github.com/meowvia/SilkPlayer/issues)—we will do our best to follow up in future updates.
+SilkPlayer's core local playback features are freely available to users. If you encounter issues or have ideas for improvement, feel free to open an [Issue](https://github.com/meowvia/SilkPlayer/issues)—we appreciate your feedback as we continue to refine the experience.
 
 ---
 
