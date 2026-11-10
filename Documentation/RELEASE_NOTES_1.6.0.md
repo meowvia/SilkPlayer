@@ -1,18 +1,18 @@
 # SilkPlayer 1.6.0 版本更新说明 / Release Notes
 
-SilkPlayer 1.6.0 带来了全新设计的偏好设置窗口、窗口拉伸尺寸提示、HDR 动态高光映射优化，并修复了播放进度记忆失效的问题。
+SilkPlayer 1.6.0 带来了全新设计的偏好设置窗口、窗口拉伸实时尺寸提示、HDR 动态高光映射优化，并修复了播放进度记忆失效的问题。
 SilkPlayer 1.6.0 introduces a redesigned Settings panel, live window resize dimensions, improved HDR highlight tone-mapping, and fixes for playback progress retention.
 
 ---
 
-## 核心更新 / What's New
+## 核心特性 / Key Features
 
-- **窗口拉伸尺寸与比例显示 / Window Resize Dimensions HUD**:
-  - 拖拽调整窗口大小时，在光标旁显示当前窗口尺寸（如 `1920 × 1080`）与标准画幅比例（`16:9`、`4:3`、`21:9` 等）；匹配片源原始分辨率时显示 `100%` 标识。
-  - Shows live window dimensions and standard aspect ratios near the cursor while resizing, with a `100%` badge when matching the video's native resolution.
-- **全新偏好设置窗口 / Redesigned Settings**:
-  - 重新梳理设置为「通用」、「播放」、「关于」三个面板，界面布局更贴合 macOS 原生风格。
-  - 新增全屏时钟悬浮、截图格式与存储目录选择、快进快退步长调节以及滚轮行为配置。
+- **窗口拉伸实时尺寸与画幅比例 / Live Window Resize Dimensions**:
+  - 拖拽调整窗口大小时，在窗口顶部居中实时显示当前分辨率（如 `1920 × 1080`）与标准画幅比例（`16:9`、`4:3`、`21:9` 等）；达到片源原始尺寸时显示 `100%` 标识。
+  - Shows live window dimensions and standard aspect ratios at the top-center of the window while resizing, with a `100%` badge when matching the video's native resolution.
+- **重构偏好设置窗口 / Redesigned Settings**:
+  - 重新梳理设置为「通用」、「播放」、「关于」三个面板，界面布局更符合 macOS 原生风格。
+  - 新增全屏时钟悬浮、截图格式与存储路径选择、快进快退步长调节以及鼠标滚轮行为配置。
   - Reorganized preferences into General, Playback, and About tabs with a cleaner macOS layout. Added options for fullscreen clock, screenshot format/path, seek intervals, and mouse wheel actions.
 - **播放进度记忆与播放列表模式 / Playback Resume & Playlist Modes**:
   - 修复重新打开视频或重启应用时无法恢复上次播放进度的问题。
@@ -32,8 +32,8 @@ SilkPlayer 1.6.0 introduces a redesigned Settings panel, live window resize dime
 
 ## 系统要求 / Requirements
 
-- **macOS**: 14.0 (Sonoma) 或更高版本 / macOS 14.0 (Sonoma) or later
-- **架构 / Architecture**: Apple Silicon (M 系列芯片) 与 Intel 64 位芯片 (Universal Binary) / Apple Silicon & Intel 64-bit
+- **操作系统 / OS**: macOS 14.0 (Sonoma) 或更高版本 / macOS 14.0 (Sonoma) or later
+- **芯片架构 / Architecture**: Apple Silicon (M 系列芯片) 与 Intel 64 位芯片 (Universal Binary) / Apple Silicon & Intel 64-bit
 
 ---
 
