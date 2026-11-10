@@ -94,7 +94,7 @@ public final class WindowResizeHUDView: NSView {
         visualEffectView.blendingMode = .withinWindow
         visualEffectView.state = .active
         visualEffectView.wantsLayer = true
-        visualEffectView.layer?.cornerRadius = 12
+        visualEffectView.layer?.cornerRadius = 10
         visualEffectView.layer?.masksToBounds = true
         visualEffectView.layer?.borderWidth = 1.0
         visualEffectView.layer?.borderColor = NSColor(white: 1.0, alpha: 0.18).cgColor
@@ -104,12 +104,12 @@ public final class WindowResizeHUDView: NSView {
         stackView.translatesAutoresizingMaskIntoConstraints = false
         stackView.orientation = .horizontal
         stackView.alignment = .centerY
-        stackView.spacing = 9
-        stackView.edgeInsets = NSEdgeInsets(top: 7, left: 14, bottom: 7, right: 14)
+        stackView.spacing = 8
+        stackView.edgeInsets = NSEdgeInsets(top: 5, left: 12, bottom: 5, right: 12)
         visualEffectView.addSubview(stackView)
 
         // Dimension Label (e.g. "1920 × 1080")
-        dimensionLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 14.5, weight: .semibold)
+        dimensionLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 13.0, weight: .semibold)
         dimensionLabel.textColor = .white
         dimensionLabel.isBezeled = false
         dimensionLabel.drawsBackground = false
@@ -123,11 +123,11 @@ public final class WindowResizeHUDView: NSView {
         dividerView.wantsLayer = true
         dividerView.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.22).cgColor
         dividerView.widthAnchor.constraint(equalToConstant: 1.0).isActive = true
-        dividerView.heightAnchor.constraint(equalToConstant: 13.0).isActive = true
+        dividerView.heightAnchor.constraint(equalToConstant: 12.0).isActive = true
         stackView.addArrangedSubview(dividerView)
 
         // Aspect Ratio Label (e.g. "16:9")
-        ratioLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .medium)
+        ratioLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 12.0, weight: .medium)
         ratioLabel.textColor = NSColor(white: 1.0, alpha: 0.85)
         ratioLabel.isBezeled = false
         ratioLabel.drawsBackground = false

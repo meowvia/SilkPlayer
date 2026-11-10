@@ -113,7 +113,7 @@ public struct PlayerHUDView: View {
                 VStack(spacing: 0) {
                     topBar(tier: tier, isHUDActive: isHUDActive)
                         .padding(.horizontal, 16)
-                        .padding(.top, player.isFullscreen ? 16 : 30)
+                        .padding(.top, player.isFullscreen ? 16 : 40)
                         .allowsHitTesting(isHUDActive)
                     Spacer()
                         .allowsHitTesting(false)

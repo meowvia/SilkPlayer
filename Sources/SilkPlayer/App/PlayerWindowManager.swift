@@ -772,7 +772,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         contentView.addSubview(hud, positioned: .above, relativeTo: nil)
         NSLayoutConstraint.activate([
             hud.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            hud.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24)
+            hud.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12)
         ])
         self.resizeHUDView = hud
         return hud
