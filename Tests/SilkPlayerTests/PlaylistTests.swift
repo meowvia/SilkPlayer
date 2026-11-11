@@ -1822,5 +1822,38 @@ final class PlaylistRegressionTests: XCTestCase {
     let hud = WindowResizeHUDView(frame: NSRect(x: 0, y: 0, width: 220, height: 40))
     hud.update(size: CGSize(width: 1920, height: 1080), videoWidth: 1920, videoHeight: 1080, isAudioOnly: false)
     XCTAssertNil(hud.hitTest(NSPoint(x: 50, y: 20)), "HUD must be completely click-through to allow seamless window interaction")
+
+    // 63. Music Mode vs Video Mode Bottom HUD Control Visibility Invariants
+    print("\n--- Test 63: Music Mode vs Video Mode Bottom HUD Control Visibility Invariants ---")
+    let allTiers: [HUDLayoutTier] = [.minimal, .compact, .standard, .expanded]
+    for tier in allTiers {
+        // Music mode: strip volume slider, audio/subtitle tracks, and more menu; preserve speed and settings across all tiers
+        XCTAssert(tier.showsSpeedButton(isAudioOnly: true) == true, "Music mode always shows speed button in \(tier)")
+        XCTAssert(tier.showsDirectSettingsButton(isAudioOnly: true) == true, "Music mode always shows settings button in \(tier)")
+        XCTAssert(tier.showsVolumeSlider(isAudioOnly: true) == false, "Music mode hides bottom volume slider in \(tier)")
+        XCTAssert(tier.showsAudioTrackButton(isAudioOnly: true) == false, "Music mode hides audio track menu in \(tier)")
+        XCTAssert(tier.showsSubtitleTrackButton(isAudioOnly: true) == false, "Music mode hides subtitle track menu in \(tier)")
+        XCTAssert(tier.showsMoreMenuButton(isAudioOnly: true) == false, "Music mode hides more menu in \(tier)")
+        XCTAssert(tier.retainsPrevNextButtons == true, "Music mode retains prev/next buttons in \(tier)")
+    }
+
+    // Video mode remains completely unaffected across every tier
+    XCTAssert(HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == true, "Video minimal shows volume slider")
+    XCTAssert(HUDLayoutTier.minimal.showsSpeedButton(isAudioOnly: false) == false, "Video minimal hides speed button")
+    XCTAssert(HUDLayoutTier.minimal.showsSubtitleTrackButton(isAudioOnly: false) == false, "Video minimal hides subtitle button")
+    XCTAssert(HUDLayoutTier.minimal.showsMoreMenuButton(isAudioOnly: false) == true, "Video minimal shows more menu")
+    XCTAssert(HUDLayoutTier.minimal.showsDirectSettingsButton(isAudioOnly: false) == false, "Video minimal hides direct settings button")
+
+    XCTAssert(HUDLayoutTier.compact.showsSpeedButton(isAudioOnly: false) == true, "Video compact shows speed button")
+    XCTAssert(HUDLayoutTier.compact.showsSubtitleTrackButton(isAudioOnly: false) == true, "Video compact shows subtitle button")
+    XCTAssert(HUDLayoutTier.compact.showsAudioTrackButton(isAudioOnly: false) == false, "Video compact folds audio track button")
+    XCTAssert(HUDLayoutTier.compact.showsMoreMenuButton(isAudioOnly: false) == true, "Video compact shows more menu")
+
+    XCTAssert(HUDLayoutTier.standard.showsAudioTrackButton(isAudioOnly: false) == true, "Video standard shows audio track button")
+    XCTAssert(HUDLayoutTier.standard.showsMoreMenuButton(isAudioOnly: false) == true, "Video standard shows more menu")
+    XCTAssert(HUDLayoutTier.standard.showsDirectSettingsButton(isAudioOnly: false) == false, "Video standard hides direct settings button")
+
+    XCTAssert(HUDLayoutTier.expanded.showsMoreMenuButton(isAudioOnly: false) == false, "Video expanded hides more menu")
+    XCTAssert(HUDLayoutTier.expanded.showsDirectSettingsButton(isAudioOnly: false) == true, "Video expanded shows direct settings button")
     }
 }
