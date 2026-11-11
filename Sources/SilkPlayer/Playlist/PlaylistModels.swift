@@ -67,3 +67,34 @@ public enum PlaybackMode: String, CaseIterable, Codable, Sendable {
         }
     }
 }
+
+public enum PlaylistSortOrder: String, CaseIterable, Codable, Sendable {
+    case manual = "manual"
+    case title = "title"
+    case artist = "artist"
+    case album = "album"
+    case duration = "duration"
+    case format = "format"
+    case dateModified = "dateModified"
+
+    public var title: String {
+        switch self {
+        case .manual: return L10n.tr("Custom Order", "自定义顺序")
+        case .title: return L10n.tr("Title", "歌曲名称")
+        case .artist: return L10n.tr("Artist", "歌手名")
+        case .album: return L10n.tr("Album", "所属专辑")
+        case .duration: return L10n.tr("Duration", "歌曲时长")
+        case .format: return L10n.tr("Format", "音频格式")
+        case .dateModified: return L10n.tr("Date Modified", "添加/修改时间")
+        }
+    }
+}
+
+public enum SortDirection: String, Codable, Sendable {
+    case ascending = "ascending"
+    case descending = "descending"
+
+    public var toggled: SortDirection {
+        self == .ascending ? .descending : .ascending
+    }
+}

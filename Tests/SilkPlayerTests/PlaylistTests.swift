@@ -1492,21 +1492,23 @@ final class PlaylistRegressionTests: XCTestCase {
     renderView.videoRotation = 90
     XCTAssert(renderView.videoRotation == 90, "Video rotation is set correctly")
 
-    // 50. Audio-only Window Resize & 1:1 Proportional (等比) Scaling
-    print("\n--- Test 50: Audio-only Window Resize & 1:1 Proportional Scaling ---")
+    // 50. Music Mode Locked-Width & Vertical-Only Resize Clamping
+    print("\n--- Test 50: Music Mode Locked-Width & Vertical-Only Resize ---")
     let audioDelegate = PlayerWindowDelegate(session: nil, player: testPlayer)
     testPlayer.isAudioOnly = true
-    let dummyWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 520), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
-    let requestedResize = NSSize(width: 450, height: 420)
+    let dummyWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 760), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+    let dummyScreenFrame = (dummyWindow.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+    let expectedLockedW = MusicModeGeometry.lockedWidth(forScreenWidth: dummyScreenFrame.width)
+    let requestedResize = NSSize(width: 900, height: 680)
     let resolvedSize = audioDelegate.windowWillResize(dummyWindow, to: requestedResize)
-    XCTAssert(resolvedSize.width == resolvedSize.height, "Audio window resize strictly maintains 1:1 square aspect ratio")
-    XCTAssert(resolvedSize.width >= 380 && resolvedSize.width < 520, "Audio window resize scales proportionally without forcing 640")
+    XCTAssertEqual(resolvedSize.width, expectedLockedW, "Music Mode locks width per active screen resolution")
+    XCTAssertEqual(resolvedSize.height, min(dummyScreenFrame.height, max(MusicModeGeometry.minHeight, 680)), "Music Mode allows free vertical resizing")
 
-    // Clamping to min audio size 380
+    // Clamping to min height 500 while preserving locked width
     let tinyResize = NSSize(width: 200, height: 200)
     let clampedTiny = audioDelegate.windowWillResize(dummyWindow, to: tinyResize)
-    XCTAssert(clampedTiny.width == 380, "Audio window width is clamped to minimum 380")
-    XCTAssert(clampedTiny.height == 380, "Audio window height is clamped to minimum 380")
+    XCTAssertEqual(clampedTiny.width, expectedLockedW, "Music Mode keeps width locked on tiny resize proposals")
+    XCTAssertEqual(clampedTiny.height, MusicModeGeometry.effectiveMinHeight(forScreenHeight: dummyScreenFrame.height), "Music Mode clamps height to minimum 500")
 
     // 51. Audio File Drag-and-Drop Classification & Acceptance
     print("\n--- Test 51: Audio File Drag-and-Drop Classification & Acceptance ---")
@@ -1810,9 +1812,9 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssertEqual(res239.dimensions, "1920 × 803", "Dimensions match 1920x803")
     XCTAssertEqual(res239.ratio, "2.39:1", "Recognized as Cinemascope 2.39:1")
 
-    let resAudio = WindowDimensionFormatter.format(size: CGSize(width: 520, height: 520), isAudioOnly: true)
-    XCTAssertEqual(resAudio.dimensions, "520 × 520", "Audio dimensions match 520x520")
-    XCTAssertEqual(resAudio.ratio, "1:1", "Audio mode strictly forces 1:1 aspect ratio")
+    let resAudio = WindowDimensionFormatter.format(size: CGSize(width: 520, height: 1026), isAudioOnly: true)
+    XCTAssertEqual(resAudio.dimensions, "520 × 1026", "Audio dimensions match Music Mode locked width")
+    XCTAssertEqual(resAudio.ratio, L10n.tr("Fixed Width", "固定宽度"), "Music Mode badge indicates fixed width vertical resizing")
 
     let resNative = WindowDimensionFormatter.format(size: CGSize(width: 1920, height: 1080), videoWidth: 1920, videoHeight: 1080)
     XCTAssertEqual(resNative.dimensions, "1920 × 1080", "Native 1080p dimensions")
@@ -1827,10 +1829,11 @@ final class PlaylistRegressionTests: XCTestCase {
     print("\n--- Test 63: Music Mode vs Video Mode Bottom HUD Control Visibility Invariants ---")
     let allTiers: [HUDLayoutTier] = [.minimal, .compact, .standard, .expanded]
     for tier in allTiers {
-        // Music mode: strip volume slider, audio/subtitle tracks, and more menu; preserve speed and settings across all tiers
+        // Music mode: shows inline volume slider, speed and settings, hides fullscreen, audio/subtitle tracks, and more menu
         XCTAssert(tier.showsSpeedButton(isAudioOnly: true) == true, "Music mode always shows speed button in \(tier)")
         XCTAssert(tier.showsDirectSettingsButton(isAudioOnly: true) == true, "Music mode always shows settings button in \(tier)")
-        XCTAssert(tier.showsVolumeSlider(isAudioOnly: true) == false, "Music mode hides bottom volume slider in \(tier)")
+        XCTAssert(tier.showsVolumeSlider(isAudioOnly: true) == true, "Music mode shows bottom volume slider in \(tier)")
+        XCTAssert(tier.showsFullscreenButton(isAudioOnly: true) == false, "Music mode hides fullscreen button in \(tier)")
         XCTAssert(tier.showsAudioTrackButton(isAudioOnly: true) == false, "Music mode hides audio track menu in \(tier)")
         XCTAssert(tier.showsSubtitleTrackButton(isAudioOnly: true) == false, "Music mode hides subtitle track menu in \(tier)")
         XCTAssert(tier.showsMoreMenuButton(isAudioOnly: true) == false, "Music mode hides more menu in \(tier)")
@@ -1839,6 +1842,7 @@ final class PlaylistRegressionTests: XCTestCase {
 
     // Video mode remains completely unaffected across every tier
     XCTAssert(HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == true, "Video minimal shows volume slider")
+    XCTAssert(HUDLayoutTier.minimal.showsFullscreenButton(isAudioOnly: false) == true, "Video minimal retains fullscreen button")
     XCTAssert(HUDLayoutTier.minimal.showsSpeedButton(isAudioOnly: false) == false, "Video minimal hides speed button")
     XCTAssert(HUDLayoutTier.minimal.showsSubtitleTrackButton(isAudioOnly: false) == false, "Video minimal hides subtitle button")
     XCTAssert(HUDLayoutTier.minimal.showsMoreMenuButton(isAudioOnly: false) == true, "Video minimal shows more menu")

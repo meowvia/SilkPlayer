@@ -159,13 +159,44 @@ extension Notification.Name {
             let notifWindow = notification.object as? NSWindow
             MainActor.assumeIsolated {
                 guard let self = self, let notifWindow = notifWindow else { return }
-                // Only insert .fullScreenPrimary into actual player session windows, never settingsWindow
-                if notifWindow !== self.settingsWindow && self.sessions.contains(where: { $0.window === notifWindow }) {
-                    notifWindow.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+                // Only insert .fullScreenPrimary into non-audio player session windows, never settingsWindow
+                if notifWindow !== self.settingsWindow,
+                   let session = self.sessions.first(where: { $0.window === notifWindow }) {
+                    if session.player?.isAudioOnly == true {
+                        (session.player as? PlayerCore)?.configureMusicModeChrome(on: notifWindow)
+                    } else {
+                        notifWindow.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+                    }
                 }
             }
         }
-        windowObservers = [obs1, obs2, obs3, obs4]
+        let obs5 = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeScreenNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let notifWindow = notification.object as? NSWindow
+            MainActor.assumeIsolated {
+                guard let self = self, let notifWindow = notifWindow else { return }
+                if let session = self.sessions.first(where: { $0.window === notifWindow }),
+                   session.player?.isAudioOnly == true {
+                    (session.player as? PlayerCore)?.applyAudioWindowGeometry(animated: true)
+                }
+            }
+        }
+        let obs6 = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self = self else { return }
+                for session in self.sessions where session.player?.isAudioOnly == true {
+                    (session.player as? PlayerCore)?.applyAudioWindowGeometry(animated: true)
+                }
+            }
+        }
+        windowObservers = [obs1, obs2, obs3, obs4, obs5, obs6]
     }
 
     private func setupGlobalKeyMonitor() {
@@ -596,6 +627,12 @@ extension Notification.Name {
             win.level = targetLevel
 
             if !onTop && !win.styleMask.contains(.fullScreen) {
+                let matchingSession = self.sessions.first(where: { $0.window === win || ($0.player as? PlayerCore)?.hostWindow === win })
+                if matchingSession?.player?.isAudioOnly == true {
+                    (matchingSession?.player as? PlayerCore)?.applyAudioWindowGeometry(animated: false)
+                    return
+                }
+
                 // 1. 恢复普通层级后，强制刷新 AppKit 与 WindowServer 的全屏/分屏能力标记，
                 // 清除在 .floating 置顶期间手动拉伸窗口留下的脏约束状态 (_CGXPackagesSetWindowConstraints)
                 win.collectionBehavior.remove([.fullScreenAuxiliary, .fullScreenNone])
@@ -933,36 +970,25 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return frameSize
         }
 
+        // Dedicated Music Mode branch: locked responsive width per screen with vertical-only resizing
+        if player?.isAudioOnly == true {
+            let res = MusicModeGeometry.clampedResizeProposal(frameSize, screenVisibleFrame: screenFrame)
+            if window.inLiveResize {
+                updateResizeHUD(window: window, resolvedSize: res)
+            }
+            return res
+        }
+
         // Allow Shift-key freeform resizing without aspect ratio constraints during interactive dragging
         if window.inLiveResize && NSEvent.modifierFlags.contains(.shift) {
-            let minSide: CGFloat = (player?.isAudioOnly == true) ? 380.0 : 360.0
-            let minWidth: CGFloat = (player?.isAudioOnly == true) ? 380.0 : idleMinW
+            let minSide: CGFloat = 360.0
+            let minWidth: CGFloat = idleMinW
             let res = NSSize(
                 width: max(minWidth, min(maxSize.width, frameSize.width)),
                 height: max(minSide, min(maxSize.height, frameSize.height))
             )
             updateResizeHUD(window: window, resolvedSize: res)
             return res
-        }
-
-        // Dedicated pure-audio window resize branch: decouple interactive live dragging from programmatic 1:1 square sizing
-        if player?.isAudioOnly == true {
-            let minAudioSize: CGFloat = 380.0
-            let maxAudioDimension = min(maxSize.width, maxSize.height)
-
-            if window.inLiveResize {
-                // Live interactive drag: decouple axes to track mouse pointer smoothly without feedback oscillation
-                let res = NSSize(
-                    width: max(minAudioSize, min(maxSize.width, frameSize.width)),
-                    height: max(minAudioSize, min(maxSize.height, frameSize.height))
-                )
-                updateResizeHUD(window: window, resolvedSize: res)
-                return res
-            } else {
-                // Non-live programmatic resize (or snap/init): maintain 1:1 proportional square
-                let side = max(minAudioSize, min(maxAudioDimension, frameSize.width))
-                return NSSize(width: round(side), height: round(side))
-            }
         }
 
         guard let player = self.player, (player.videoWidth > 0 || player.videoHeight > 0) else {
@@ -1151,8 +1177,12 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         capturePreFullScreenFrameIfNeeded(window: window)
 
         let contentSize = window.contentRect(forFrameRect: window.frame).size
-        if let p = self.player, p.videoWidth > 0 || p.videoHeight > 0 {
-            p.updateRememberedWindowSize(contentSize)
+        if let p = self.player {
+            if p.isAudioOnly {
+                UserDefaults.standard.set(Double(window.frame.height), forKey: PlayerCore.musicModeHeightDefaultsKey)
+            } else if p.videoWidth > 0 || p.videoHeight > 0 {
+                p.updateRememberedWindowSize(contentSize)
+            }
         }
     }
 
@@ -1233,16 +1263,17 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         guard let player = self.player else { return defaultFrame }
 
         if player.isAudioOnly {
-            let sz: CGFloat = 520
-            let cx = round(defaultFrame.minX + (defaultFrame.width - sz) / 2)
-            let cy = round(defaultFrame.minY + (defaultFrame.height - sz) / 2)
-            return NSRect(x: cx, y: cy, width: sz, height: sz)
+            let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame ?? defaultFrame
+            return MusicModeGeometry.clampedFrame(around: window.frame, screenVisibleFrame: screenFrame)
         }
 
         return defaultFrame
     }
 
     @objc public func handleZoomButtonClick(_ sender: Any?) {
+        if player?.isAudioOnly == true {
+            return
+        }
         if let session = self.session, let window = session.window {
             toggleMaximize(window: window)
         } else if let win = NSApp?.keyWindow {
@@ -1273,12 +1304,26 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         isMaximizingOrRestoring = true
         isAdjustingWindowFrame = true
 
-        // A. 纯音频模式：固定 520x520 居中
+        // A. Music Mode: toggle full vertical workspace height while keeping locked screen-proportional width
         if player?.isAudioOnly == true {
-            let sz: CGFloat = 520
-            let cx = round(screenFrame.midX - sz / 2)
-            let cy = round(screenFrame.midY - sz / 2)
-            let targetFrame = NSRect(x: cx, y: cy, width: sz, height: sz)
+            let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
+            let isFullVertical = abs(window.frame.height - screenFrame.height) <= 12.0 &&
+                                 abs(window.frame.width - lockedW) <= 2.0
+            let targetFrame: NSRect
+            if isFullVertical {
+                let restoreH = savedPreZoomFrame?.height ?? MusicModeGeometry.resolvedHeight(forScreenHeight: screenFrame.height)
+                savedPreZoomFrame = nil
+                targetFrame = MusicModeGeometry.clampedFrame(
+                    around: window.frame,
+                    targetHeight: restoreH,
+                    screenVisibleFrame: screenFrame
+                )
+            } else {
+                savedPreZoomFrame = window.frame
+                let clampedX = max(screenFrame.minX, min(screenFrame.maxX - lockedW, round(window.frame.midX - lockedW / 2.0)))
+                targetFrame = NSRect(x: clampedX, y: screenFrame.minY, width: lockedW, height: floor(screenFrame.height))
+            }
+
             if isTesting {
                 window.setFrame(targetFrame, display: false, animate: false)
                 isAdjustingWindowFrame = false
@@ -1402,7 +1447,16 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
 
             let targetFrame: NSRect
-            if let preState = preFullScreenState {
+            if player?.isAudioOnly == true {
+                let storedH = UserDefaults.standard.object(forKey: PlayerCore.musicModeHeightDefaultsKey) as? Double
+                targetFrame = MusicModeGeometry.clampedFrame(
+                    around: nil,
+                    rememberedHeight: storedH.map { CGFloat($0) },
+                    screenVisibleFrame: screenFrame
+                )
+                preFullScreenState = nil
+                currentInteractiveMode = .normal
+            } else if let preState = preFullScreenState {
                 switch preState {
                 case .maximized(let preZoom):
                     // 【全屏 -> 双击播放区 -> 恢复最大化】
@@ -1439,6 +1493,11 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         player?.setFullscreenState(false)
         if let window = notification.object as? NSWindow {
             window.contentView?.layer?.cornerRadius = 10.0
+        }
+
+        if let p = self.player, p.isAudioOnly {
+            (p as? PlayerCore)?.applyAudioWindowGeometry(animated: false)
+            return
         }
 
         if let window = notification.object as? NSWindow {

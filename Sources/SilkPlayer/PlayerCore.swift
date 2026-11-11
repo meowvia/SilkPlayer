@@ -105,6 +105,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var isPlaylistDrawerVisible: Bool = false
     @Published public var activeOSD: OSDNotification? = nil
     public var hasAppliedInitialWindowSize: Bool = false
+    public var pendingAudioGeometryAfterExitFullScreen: Bool = false
+    public static let musicModeHeightDefaultsKey = "SilkPlayer.MusicMode.WindowHeight"
 
     // MARK: - Live Resize Precision HUD
     @Published public var isLiveResizing: Bool = false
@@ -363,6 +365,16 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         self.isAudioOnly = isIncomingAudio
         if !isIncomingAudio {
             self.artworkImage = nil
+            if let window = self.hostWindow ?? NSApp.keyWindow {
+                restoreStandardWindowChrome(on: window)
+                if let sf = (window.screen ?? NSScreen.main)?.visibleFrame {
+                    window.maxSize = sf.size
+                    window.contentMaxSize = sf.size
+                }
+            }
+        } else {
+            self.isPlaylistDrawerVisible = false
+            applyAudioWindowGeometry(animated: true)
         }
 
         options.startPlayTime = startTime
@@ -540,6 +552,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
         if resetUI, let window = hostWindow ?? NSApp.keyWindow {
             window.title = "SilkPlayer"
+            restoreStandardWindowChrome(on: window)
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
             window.resizeIncrements = NSSize(width: 1, height: 1)
@@ -547,6 +560,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             let emptyMin = NSSize(width: 640, height: 360)
             window.minSize = emptyMin
             window.contentMinSize = emptyMin
+            let screenSize = (window.screen ?? NSScreen.main)?.visibleFrame.size ?? NSSize(width: 1920, height: 1080)
+            window.maxSize = screenSize
+            window.contentMaxSize = screenSize
         }
     }
 
@@ -831,8 +847,30 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 isSelected: track.isEnabled
             )
         }
-        if let selectedA = aTracks.first(where: { $0.isEnabled }) {
+        if let selectedA = aTracks.first(where: { $0.isEnabled }) ?? aTracks.first {
             self.selectedAudioTrackId = Int(selectedA.trackID)
+            if self.isAudioOnly, let path = self.currentFilePath {
+                var detectedSampleRate: Double? = nil
+                var detectedBitDepth: Int? = nil
+                if let desc = selectedA.formatDescription,
+                   let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(desc)?.pointee {
+                    if asbd.mSampleRate > 0 {
+                        detectedSampleRate = asbd.mSampleRate
+                    }
+                    if (detectedBitDepth ?? 0) <= 0 && asbd.mBitsPerChannel > 0 {
+                        detectedBitDepth = Int(asbd.mBitsPerChannel)
+                    }
+                }
+                AudioTrackMetadataService.shared.mergeLiveStreamInfo(
+                    path: path,
+                    rawTitle: self.mediaTitle,
+                    codec: selectedA.codecName,
+                    sampleRateHz: detectedSampleRate,
+                    bitDepth: detectedBitDepth,
+                    duration: self.duration > 0 ? self.duration : nil,
+                    tags: player.dynamicInfo?.metadata
+                )
+            }
         }
 
         if !subtitleModel.subtitleInfos.isEmpty {
@@ -1213,6 +1251,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         guard let window = hostWindow ?? NSApp.keyWindow else { return }
         guard !isFullscreenTransitioning else { return }
 
+        // Music Mode disables fullscreen transitions (zoom & Space fullscreen stay locked)
+        if isAudioOnly && !isFullscreen && !window.styleMask.contains(.fullScreen) {
+            return
+        }
+
         // 置顶状态下禁止切入全屏，弹出 OSD 明确提醒用户
         if AppSettings.shared.keepWindowOnTop && !isFullscreen {
             showOSD(.pictureAdjustment(
@@ -1329,6 +1372,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func togglePlaylistDrawer() {
+        guard !isAudioOnly else { return }
         isPlaylistDrawerVisible.toggle()
         if isPlaylistDrawerVisible {
             isInspectorVisible = false
@@ -1749,6 +1793,17 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             self.videoCodec = "Audio Stream"
             self.hwdecCurrent = "CoreAudio (Hardware Master Clock)"
             self.isHUDVisible = true
+            if let path = self.currentFilePath {
+                AudioTrackMetadataService.shared.mergeLiveStreamInfo(
+                    path: path,
+                    rawTitle: self.mediaTitle,
+                    codec: nil,
+                    sampleRateHz: nil,
+                    bitDepth: nil,
+                    duration: self.duration > 0 ? self.duration : nil,
+                    tags: player.dynamicInfo?.metadata
+                )
+            }
             if isPlaying {
                 startAudioRhythmMonitoring()
             }

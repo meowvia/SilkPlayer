@@ -36,7 +36,8 @@ public struct AppShellView: View {
 
     private var rootMinWidth: CGFloat {
         if player.isAudioOnly {
-            return 380
+            let screenW = (player.hostWindow?.screen ?? NSScreen.main)?.visibleFrame.width ?? 1920
+            return MusicModeGeometry.lockedWidth(forScreenWidth: screenW)
         } else if isPlaying || player.isLoaded {
             return 200
         } else {
@@ -46,7 +47,7 @@ public struct AppShellView: View {
 
     private var rootMinHeight: CGFloat {
         if player.isAudioOnly {
-            return 380
+            return MusicModeGeometry.minHeight
         } else if isPlaying || player.isLoaded {
             return 200
         } else {
@@ -101,57 +102,59 @@ public struct AppShellView: View {
                     .edgesIgnoringSafeArea(.all)
                     .transition(.opacity)
 
-                    // Right-Edge Floating Side Triangle Pull Tab (always accessible on right border)
-                    if !player.isPlaylistDrawerVisible {
-                        PlaylistDrawerHandleTab(
-                            isDrawerVisible: player.isPlaylistDrawerVisible,
-                            drawerWidth: drawerWidth
-                        ) {
-                            withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                                player.togglePlaylistDrawer()
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .edgesIgnoringSafeArea(.all)
-                        .allowsHitTesting(true)
-                        .zIndex(18)
-                    }
-
-                    if player.isPlaylistDrawerVisible {
-                        Color.black.opacity(0.001)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .edgesIgnoringSafeArea(.all)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
+                    // Right-Edge Floating Side Triangle Pull Tab (omitted in Music Mode, which embeds its own queue)
+                    if !(isPlaying && player.isAudioOnly) {
+                        if !player.isPlaylistDrawerVisible {
+                            PlaylistDrawerHandleTab(
+                                isDrawerVisible: player.isPlaylistDrawerVisible,
+                                drawerWidth: drawerWidth
+                            ) {
                                 withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                                    player.isPlaylistDrawerVisible = false
+                                    player.togglePlaylistDrawer()
                                 }
                             }
-                            .zIndex(16)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .edgesIgnoringSafeArea(.all)
+                            .allowsHitTesting(true)
+                            .zIndex(18)
+                        }
 
-                        HStack(spacing: 0) {
-                            Spacer()
-                            SilkPlaylistDrawerView(
-                                player: player,
-                                playlist: playlistManager,
-                                drawerWidth: drawerWidth,
-                                onSelectPlaylistItem: { item in
-                                    playPlaylistItem(item)
-                                },
-                                onClose: {
+                        if player.isPlaylistDrawerVisible {
+                            Color.black.opacity(0.001)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .edgesIgnoringSafeArea(.all)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
                                     withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
                                         player.isPlaylistDrawerVisible = false
                                     }
                                 }
-                            )
-                            .environment(\.colorScheme, .dark)
-                            .transition(SilkAnimation.transition(reduceMotion: reduceMotion, standard: .move(edge: .trailing)))
+                                .zIndex(16)
+
+                            HStack(spacing: 0) {
+                                Spacer()
+                                SilkPlaylistDrawerView(
+                                    player: player,
+                                    playlist: playlistManager,
+                                    drawerWidth: drawerWidth,
+                                    onSelectPlaylistItem: { item in
+                                        playPlaylistItem(item)
+                                    },
+                                    onClose: {
+                                        withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                            player.isPlaylistDrawerVisible = false
+                                        }
+                                    }
+                                )
+                                .environment(\.colorScheme, .dark)
+                                .transition(SilkAnimation.transition(reduceMotion: reduceMotion, standard: .move(edge: .trailing)))
+                            }
+                            .padding(.top, 36)
+                            .padding(.bottom, 16)
+                            .padding(.trailing, 8)
+                            .edgesIgnoringSafeArea(.all)
+                            .zIndex(17)
                         }
-                        .padding(.top, 36)
-                        .padding(.bottom, 16)
-                        .padding(.trailing, 8)
-                        .edgesIgnoringSafeArea(.all)
-                        .zIndex(17)
                     }
                 }
 
@@ -187,6 +190,7 @@ public struct AppShellView: View {
                 player.hostWindow?.contentResizeIncrements = NSSize(width: 1, height: 1)
                 let emptyMin = NSSize(width: 640, height: 360)
                 if let w = player.hostWindow, !w.styleMask.contains(.fullScreen), !player.isFullscreen {
+                    player.restoreStandardWindowChrome(on: w)
                     w.minSize = emptyMin
                     w.contentMinSize = emptyMin
                     let screen = w.screen ?? NSScreen.main
@@ -477,7 +481,12 @@ public struct AppShellView: View {
         window.toolbar = nil
         window.titlebarSeparatorStyle = .none
         window.acceptsMouseMovedEvents = true
-        window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+        if player.isAudioOnly {
+            player.configureMusicModeChrome(on: window)
+        } else {
+            window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+            window.standardWindowButton(.zoomButton)?.isEnabled = true
+        }
         window.tabbingMode = .disallowed
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true

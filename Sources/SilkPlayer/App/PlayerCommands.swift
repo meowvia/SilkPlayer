@@ -276,6 +276,7 @@ public struct PlayerCommands: Commands {
                 activePlayer?.toggleFullscreen()
             }
             .keyboardShortcut("f", modifiers: [.command])
+            .disabled(activePlayer?.isAudioOnly == true)
 
             Button(L10n.tr("Capture Screenshot", "截取画面")) {
                 activePlayer?.takeScreenshot()
@@ -366,7 +367,7 @@ public struct PlayerCommands: Commands {
                 activePlayer?.togglePlaylistDrawer()
             }
             .keyboardShortcut("p", modifiers: .command)
-            .disabled(activePlayer == nil)
+            .disabled(activePlayer == nil || activePlayer?.isAudioOnly == true)
 
             Divider()
 

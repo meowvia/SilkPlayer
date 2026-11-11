@@ -36,6 +36,11 @@ public enum HUDLayoutTier: Equatable {
 
     /// Whether the inline volume slider is shown on the bottom control bar.
     public func showsVolumeSlider(isAudioOnly: Bool) -> Bool {
+        true
+    }
+
+    /// Whether the fullscreen toggle button is displayed on the bottom bar.
+    public func showsFullscreenButton(isAudioOnly: Bool) -> Bool {
         !isAudioOnly
     }
 
@@ -657,17 +662,19 @@ public struct PlayerHUDView: View {
                 .accessibilityLabel(L10n.settings)
             }
 
-            // 6. 全屏切换 (永远常驻最右侧，符合 macOS 原生操作直觉与肌肉记忆)
-            HUDTransportButton(
-                icon: player.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                size: 13.5,
-                weight: .medium,
-                color: .white.opacity(0.90),
-                helpText: L10n.tr("Toggle Fullscreen (F / Return)", "切换全屏 (F / 回车)")
-            ) {
-                player.toggleFullscreen()
+            // 6. 全屏切换 (音乐模式下隐藏，视频模式下常驻最右侧)
+            if tier.showsFullscreenButton(isAudioOnly: isAudio) {
+                HUDTransportButton(
+                    icon: player.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                    size: 13.5,
+                    weight: .medium,
+                    color: .white.opacity(0.90),
+                    helpText: L10n.tr("Toggle Fullscreen (F / Return)", "切换全屏 (F / 回车)")
+                ) {
+                    player.toggleFullscreen()
+                }
+                .accessibilityLabel(player.isFullscreen ? L10n.exitFullscreen : L10n.enterFullscreen)
             }
-            .accessibilityLabel(player.isFullscreen ? L10n.exitFullscreen : L10n.enterFullscreen)
         }
     }
 

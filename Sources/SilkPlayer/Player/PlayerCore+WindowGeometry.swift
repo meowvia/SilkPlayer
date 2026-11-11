@@ -83,46 +83,87 @@ extension PlayerCore {
         window.contentResizeIncrements = NSSize(width: 1, height: 1)
     }
 
-    public func applyAudioWindowGeometry(animated: Bool = false) {
-        guard let window = self.hostWindow ?? NSApp.keyWindow,
-              !isFullscreen,
-              !window.styleMask.contains(.fullScreen) else { return }
+    public func configureMusicModeChrome(on window: NSWindow) {
+        if !window.styleMask.contains(.fullScreen) {
+            window.collectionBehavior.remove([.fullScreenPrimary, .fullScreenAllowsTiling, .fullScreenAuxiliary])
+            window.collectionBehavior.insert(.fullScreenNone)
+        }
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
+        window.standardWindowButton(.zoomButton)?.alphaValue = 1.0
+    }
 
+    public func restoreStandardWindowChrome(on window: NSWindow) {
+        if !window.styleMask.contains(.fullScreen) {
+            window.collectionBehavior.remove([.fullScreenAuxiliary, .fullScreenNone])
+            window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+        }
+        window.standardWindowButton(.zoomButton)?.isEnabled = true
+    }
+
+    public func applyAudioWindowGeometry(animated: Bool = false) {
+        guard let window = self.hostWindow ?? NSApp.keyWindow else { return }
+
+        if isFullscreen || window.styleMask.contains(.fullScreen) {
+            if !pendingAudioGeometryAfterExitFullScreen && !isFullscreenTransitioning && !PlayerWindowManager.isRunningTests {
+                pendingAudioGeometryAfterExitFullScreen = true
+                window.toggleFullScreen(nil)
+            }
+            return
+        }
+
+        pendingAudioGeometryAfterExitFullScreen = false
         applyContentAspectRatioLock()
+        configureMusicModeChrome(on: window)
 
         let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-        let minAudioSize = NSSize(width: 380, height: 380)
-        let maxSquare = min(screenFrame.width, screenFrame.height)
-        let maxAudioSize = NSSize(width: maxSquare, height: maxSquare)
+        let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
+        let minH = MusicModeGeometry.effectiveMinHeight(forScreenHeight: screenFrame.height)
+        let maxH = max(minH, floor(screenFrame.height))
+
+        let minAudioSize = NSSize(width: lockedW, height: minH)
+        let maxAudioSize = NSSize(width: lockedW, height: maxH)
+
+        let storedHeight = UserDefaults.standard.object(forKey: PlayerCore.musicModeHeightDefaultsKey) as? Double
+        let rememberedHeight = storedHeight.map { CGFloat($0) }
+
+        let currentFrame = window.frame
+        let isAlreadyMusicWidth = abs(currentFrame.width - lockedW) <= 1.0 &&
+            currentFrame.height >= minH && currentFrame.height <= maxH
+        let targetHeight: CGFloat? = isAlreadyMusicWidth ? currentFrame.height : nil
+
+        let newFrame = MusicModeGeometry.clampedFrame(
+            around: currentFrame,
+            targetHeight: targetHeight,
+            rememberedHeight: rememberedHeight,
+            screenVisibleFrame: screenFrame
+        )
+
+        // Release constraints temporarily so AppKit accepts both shrink and expand smoothly
+        window.minSize = NSSize(width: 100, height: 100)
+        window.contentMinSize = NSSize(width: 100, height: 100)
+        window.maxSize = NSSize(width: max(lockedW, currentFrame.width), height: max(maxH, currentFrame.height))
+        window.contentMaxSize = window.maxSize
+
+        if abs(currentFrame.width - newFrame.width) > 0.5 ||
+           abs(currentFrame.height - newFrame.height) > 0.5 ||
+           abs(currentFrame.origin.x - newFrame.origin.x) > 0.5 ||
+           abs(currentFrame.origin.y - newFrame.origin.y) > 0.5 {
+            window.setFrame(newFrame, display: true, animate: animated)
+        }
 
         window.minSize = minAudioSize
         window.contentMinSize = minAudioSize
         window.maxSize = maxAudioSize
         window.contentMaxSize = maxAudioSize
-
-        let currentFrame = window.frame
-        let isAlreadySquareAudio = abs(currentFrame.width - currentFrame.height) <= 4.0 && currentFrame.width >= 360
-
-        if isAlreadySquareAudio {
-            // Already an active square audio window, preserve user's size
-            return
-        }
-
-        let targetW: CGFloat = 520
-        let targetH: CGFloat = 520
-
-        let currentCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
-        let newX = max(screenFrame.minX, min(screenFrame.maxX - targetW, currentCenter.x - targetW / 2))
-        let newY = max(screenFrame.minY, min(screenFrame.maxY - targetH, currentCenter.y - targetH / 2))
-        let newFrame = NSRect(x: newX, y: newY, width: targetW, height: targetH)
-
-        window.setFrame(newFrame, display: true, animate: false)
+        configureMusicModeChrome(on: window)
     }
 
     public func applyAdaptiveWindowGeometry(animated: Bool = true) {
         guard let window = self.hostWindow ?? NSApp.keyWindow,
               !isFullscreen,
               !window.styleMask.contains(.fullScreen) else { return }
+
+        restoreStandardWindowChrome(on: window)
 
         let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         window.maxSize = screenFrame.size

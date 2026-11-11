@@ -36,45 +36,51 @@ public struct PlayerContainerView: View {
             let drawerWidth = PlaylistDrawerDimensions.drawerWidth(for: geometry.size.width, isFullscreen: player.isFullscreen)
 
             ZStack(alignment: .topLeading) {
-                // Video Canvas Surface (Right-click context menu is handled natively in MetalPlayerContainerView)
-                VideoView(playerCore: player)
-                    .edgesIgnoringSafeArea(.all)
-
-                // Native Audio Artwork & Minimalist Presentation Layer (for pure audio)
                 if player.isAudioOnly {
-                    AudioArtworkView(player: player, playlist: playlist)
+                    MusicModeView(
+                        player: player,
+                        playlist: playlist,
+                        onPlayNext: onPlayNext,
+                        onPlayPrevious: onPlayPrevious,
+                        onSelectPlaylistItem: onSelectPlaylistItem,
+                        onClosePlayback: onClosePlayback
+                    )
+                    .edgesIgnoringSafeArea(.all)
+                } else {
+                    // Video Canvas Surface (Right-click context menu is handled natively in MetalPlayerContainerView)
+                    VideoView(playerCore: player)
+                        .edgesIgnoringSafeArea(.all)
+
+                    // Subtitle Display Layer (Adaptive text & PGS bitmap rendering)
+                    SubtitleOverlayView(player: player)
                         .edgesIgnoringSafeArea(.all)
                         .allowsHitTesting(false)
+                        .zIndex(15)
+
+                    // Immersive Playback HUD (Embedded Scrubber + Controls + Autohide)
+                    PlayerHUDView(
+                        player: player,
+                        playlist: playlist,
+                        onPlayNext: onPlayNext,
+                        onPlayPrevious: onPlayPrevious,
+                        onClosePlayback: onClosePlayback
+                    )
+                    .environment(\.colorScheme, .dark)
+                    .zIndex(20)
                 }
-
-                // Subtitle Display Layer (Adaptive text & PGS bitmap rendering)
-                SubtitleOverlayView(player: player)
-                    .edgesIgnoringSafeArea(.all)
-                    .allowsHitTesting(false)
-                    .zIndex(15)
-
-                // Immersive Playback HUD (Embedded Scrubber + Controls + Autohide)
-                PlayerHUDView(
-                    player: player,
-                    playlist: playlist,
-                    onPlayNext: onPlayNext,
-                    onPlayPrevious: onPlayPrevious,
-                    onClosePlayback: onClosePlayback
-                )
-                .environment(\.colorScheme, .dark)
-                .zIndex(20)
 
                 // Transient On-Screen Display (OSD) HUD (Seek, Play/Pause, Track, Adjustments, Screenshot)
                 // Centered at Top with uniform margin across windowed & fullscreen modes (macOS standard)
                 if let osd = player.activeOSD {
                     VStack {
                         PlayerOSDView(notification: osd)
-                            .padding(.top, player.isFullscreen ? 76 : 84)
+                            .padding(.top, player.isAudioOnly ? 58 : (player.isFullscreen ? 76 : 84))
                         Spacer()
                     }
                     .environment(\.colorScheme, .dark)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(false)
+                    .zIndex(40)
                 }
 
                 // Right-Side Vertical Hidden Volume Bar (Instant feedback, auto-hiding)
@@ -90,70 +96,73 @@ public struct PlayerContainerView: View {
                         removal: .opacity.combined(with: .offset(x: 14))
                     ))
                     .animation(.silkSnappy, value: player.isVolumeHUDVisible)
+                    .zIndex(40)
                 }
 
-                // Right-Edge Invisible Hover Trigger Zone (within 28pt of right edge)
-                // Strictly active in FULLSCREEN mode only; in windowed mode, user must click the side triangle tab.
-                if player.isFullscreen {
-                    HStack {
-                        Spacer()
-                        Color.clear
-                            .frame(width: 28)
-                            .frame(maxHeight: .infinity)
-                            .contentShape(Rectangle())
-                            .onHover { isHovering in
-                                isHoveringRightEdge = isHovering
-                                if isHovering {
-                                    drawerDismissTask?.cancel()
-                                    drawerDismissTask = nil
-                                    if !player.isPlaylistDrawerVisible && !player.isInspectorVisible {
-                                        withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                                            player.isPlaylistDrawerVisible = true
+                if !player.isAudioOnly {
+                    // Right-Edge Invisible Hover Trigger Zone (within 28pt of right edge)
+                    // Strictly active in FULLSCREEN mode only; in windowed mode, user must click the side triangle tab.
+                    if player.isFullscreen {
+                        HStack {
+                            Spacer()
+                            Color.clear
+                                .frame(width: 28)
+                                .frame(maxHeight: .infinity)
+                                .contentShape(Rectangle())
+                                .onHover { isHovering in
+                                    isHoveringRightEdge = isHovering
+                                    if isHovering {
+                                        drawerDismissTask?.cancel()
+                                        drawerDismissTask = nil
+                                        if !player.isPlaylistDrawerVisible && !player.isInspectorVisible {
+                                            withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                                player.isPlaylistDrawerVisible = true
+                                            }
                                         }
                                     }
                                 }
-                            }
-                    }
-                    .allowsHitTesting(!player.isPlaylistDrawerVisible)
-                    .zIndex(27)
-                }
-
-                // Right-Edge Floating Side Triangle Pull Tab (always accessible on right border)
-                let isHandleVisible = (player.isHUDVisible || isHoveringRightEdge || isHoveringHandle) && !player.isPlaylistDrawerVisible
-                PlaylistDrawerHandleTab(
-                    isDrawerVisible: player.isPlaylistDrawerVisible,
-                    drawerWidth: drawerWidth,
-                    onHoverChange: { isHovering in
-                        isHoveringHandle = isHovering
-                        if isHovering {
-                            player.reportUserActivity()
                         }
-                        if player.isFullscreen && isHovering {
-                            drawerDismissTask?.cancel()
-                            drawerDismissTask = nil
-                            if !player.isPlaylistDrawerVisible && !player.isInspectorVisible {
-                                withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                                    player.isPlaylistDrawerVisible = true
+                        .allowsHitTesting(!player.isPlaylistDrawerVisible)
+                        .zIndex(27)
+                    }
+
+                    // Right-Edge Floating Side Triangle Pull Tab (always accessible on right border)
+                    let isHandleVisible = (player.isHUDVisible || isHoveringRightEdge || isHoveringHandle) && !player.isPlaylistDrawerVisible
+                    PlaylistDrawerHandleTab(
+                        isDrawerVisible: player.isPlaylistDrawerVisible,
+                        drawerWidth: drawerWidth,
+                        onHoverChange: { isHovering in
+                            isHoveringHandle = isHovering
+                            if isHovering {
+                                player.reportUserActivity()
+                            }
+                            if player.isFullscreen && isHovering {
+                                drawerDismissTask?.cancel()
+                                drawerDismissTask = nil
+                                if !player.isPlaylistDrawerVisible && !player.isInspectorVisible {
+                                    withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                        player.isPlaylistDrawerVisible = true
+                                    }
                                 }
                             }
                         }
+                    ) {
+                        withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                            player.togglePlaylistDrawer()
+                        }
                     }
-                ) {
-                    withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                        player.togglePlaylistDrawer()
-                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.trailing, 0)
+                    .opacity(isHandleVisible ? 1.0 : 0.001)
+                    .allowsHitTesting(!player.isPlaylistDrawerVisible)
+                    .animation(.easeInOut(duration: 0.2), value: isHandleVisible)
+                    .zIndex(30)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.trailing, 0)
-                .opacity(isHandleVisible ? 1.0 : 0.001)
-                .allowsHitTesting(!player.isPlaylistDrawerVisible)
-                .animation(.easeInOut(duration: 0.2), value: isHandleVisible)
-                .zIndex(30)
 
                 // Interactive Backdrop for Drawer Dismissal:
                 // Tapping anywhere outside the drawer closes the drawer without pausing playback.
                 // Avoids top 60pt region so top bar quick action buttons (Close, Pin, Inspector) are never obstructed.
-                if player.isPlaylistDrawerVisible || player.isInspectorVisible {
+                if (!player.isAudioOnly && player.isPlaylistDrawerVisible) || player.isInspectorVisible {
                     Color.black.opacity(0.001)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
@@ -165,13 +174,13 @@ public struct PlayerContainerView: View {
                         }
                         .padding(.top, 60)
                         .padding(player.isFullscreen ? 0 : 8)
-                        .zIndex(10)
+                        .zIndex(35)
                 }
 
                 // Right-Side Slide-In Pure Playlist Drawer
                 // Strictly framed within playback area with vertical avoidance (+64pt top, -96pt bottom)
                 // to never obstruct top-right Pin / Inspector buttons or bottom scrubber timeline.
-                if player.isPlaylistDrawerVisible {
+                if !player.isAudioOnly && player.isPlaylistDrawerVisible {
                     HStack(spacing: 0) {
                         Spacer()
                         HStack(spacing: 0) {
@@ -206,7 +215,7 @@ public struct PlayerContainerView: View {
                     .padding(.top, 64)
                     .padding(.bottom, geometry.size.height < 450 ? 64 : 96)
                     .transition(SilkAnimation.transition(reduceMotion: reduceMotion, standard: .move(edge: .trailing)))
-                    .zIndex(25)
+                    .zIndex(42)
                 }
 
             // Right-Side Slide-In Media Inspector Drawer (Triggered by 'I')
@@ -224,9 +233,9 @@ public struct PlayerContainerView: View {
                     .transition(SilkAnimation.transition(reduceMotion: reduceMotion, standard: .move(edge: .trailing)))
                 }
                 .padding(.top, 64)
-                .padding(.bottom, geometry.size.height < 450 ? 64 : 96)
+                .padding(.bottom, (player.isAudioOnly ? false : geometry.size.height < 450) ? 64 : 96)
                 .padding(.trailing, 8)
-                .zIndex(25)
+                .zIndex(45)
             }
 
             // Drag & Drop Feedback Overlay

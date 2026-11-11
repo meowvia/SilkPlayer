@@ -1,0 +1,1256 @@
+import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
+
+/// Unified three-tier Music Mode interface rendered inside PlayerContainerView when playing audio.
+@MainActor
+public struct MusicModeView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var settings = AppSettings.shared
+    private var metadataService = AudioTrackMetadataService.shared
+
+    @ObservedObject var player: PlayerCore
+    var playlist: PlaylistManager
+    public var onPlayNext: () -> Void
+    public var onPlayPrevious: () -> Void
+    public var onSelectPlaylistItem: (PlaylistItem) -> Void
+    public var onClosePlayback: () -> Void
+
+    @State private var browsingCategory: MediaCategory = .audio
+    @State private var searchQuery: String = ""
+    @State private var isDropTargeted: Bool = false
+    @State private var isAddHovered: Bool = false
+    @State private var isClearHovered: Bool = false
+    @State private var isSortHovered: Bool = false
+    @State private var isModeHovered: Bool = false
+
+    public init(
+        player: PlayerCore,
+        playlist: PlaylistManager,
+        onPlayNext: @escaping () -> Void,
+        onPlayPrevious: @escaping () -> Void,
+        onSelectPlaylistItem: @escaping (PlaylistItem) -> Void,
+        onClosePlayback: @escaping () -> Void
+    ) {
+        self.player = player
+        self.playlist = playlist
+        self.onPlayNext = onPlayNext
+        self.onPlayPrevious = onPlayPrevious
+        self.onSelectPlaylistItem = onSelectPlaylistItem
+        self.onClosePlayback = onClosePlayback
+    }
+
+    private var effectiveBrowsingCategory: MediaCategory {
+        settings.dualPlaylistMode ? browsingCategory : playlist.activeCategory
+    }
+
+    private var sourceQueueItems: [PlaylistItem] {
+        if !settings.dualPlaylistMode {
+            return playlist.unifiedItems
+        }
+        return effectiveBrowsingCategory == .video ? playlist.videoItems : playlist.audioItems
+    }
+
+    private var activePlayingAudioItem: PlaylistItem? {
+        if let path = player.currentFilePath {
+            if let match = playlist.audioItems.first(where: { $0.path == path }) {
+                return match
+            }
+            if let match = playlist.items.first(where: { $0.path == path }) {
+                return match
+            }
+            return PlaylistItem(path: path, title: player.mediaTitle, duration: player.duration)
+        }
+        return playlist.currentItem
+    }
+
+    private var activePlayingAudioIndex: Int? {
+        if let path = player.currentFilePath,
+           let idx = playlist.audioItems.firstIndex(where: { $0.path == path }) {
+            return idx
+        }
+        if playlist.activeCategory == .audio, playlist.audioCurrentIndex >= 0, playlist.audioCurrentIndex < playlist.audioItems.count {
+            return playlist.audioCurrentIndex
+        }
+        return nil
+    }
+
+    private var filteredEntries: [(index: Int, item: PlaylistItem, metadata: AudioTrackMetadata)] {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return sourceQueueItems.enumerated().compactMap { idx, item in
+            let meta = metadataService.metadata(for: item)
+            if !trimmed.isEmpty {
+                let haystack = "\(item.title) \(meta.title) \(meta.artist) \(meta.album) \(meta.formatLabel)".lowercased()
+                if !haystack.contains(trimmed) {
+                    return nil
+                }
+            }
+            return (index: idx, item: item, metadata: meta)
+        }
+    }
+
+    public var body: some View {
+        GeometryReader { geometry in
+            let windowWidth = geometry.size.width
+            let sidePadding = MusicModeGeometry.contentHorizontalPadding
+
+            ZStack {
+                // Background Smoked Glass Canvas
+                musicBackgroundLayer
+
+                VStack(spacing: 12) {
+                    // Top Chrome Titlebar
+                    topChromeBar(windowWidth: windowWidth)
+                        .padding(.horizontal, sidePadding)
+                        .padding(.top, 10)
+
+                    // Tier 1: Compact Hero Card
+                    heroCard(windowWidth: windowWidth)
+                        .padding(.horizontal, sidePadding)
+
+                    // Tier 2: Single-Row Toolbar + Headerless Queue
+                    queueSectionCard(windowWidth: windowWidth)
+                        .padding(.horizontal, sidePadding)
+                        .frame(maxHeight: .infinity)
+
+                    // Tier 3: Unified Bottom Playback HUD
+                    bottomControlSection(windowWidth: windowWidth)
+                        .padding(.horizontal, sidePadding)
+                        .padding(.bottom, 14)
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear {
+            browsingCategory = .audio
+            metadataService.ensureLoaded(for: playlist.audioItems)
+            if let path = player.currentFilePath,
+               let currentItem = playlist.audioItems.first(where: { $0.path == path }) {
+                metadataService.ensureLoaded(for: [currentItem])
+            }
+        }
+        .onChange(of: playlist.audioItems) { _, items in
+            metadataService.ensureLoaded(for: items)
+        }
+        .onChange(of: player.currentFilePath) { _, newPath in
+            if let newPath = newPath {
+                if let match = playlist.audioItems.first(where: { $0.path == newPath }) {
+                    metadataService.ensureLoaded(for: [match])
+                } else {
+                    metadataService.ensureLoaded(for: [PlaylistItem(path: newPath, title: player.mediaTitle, duration: player.duration)])
+                }
+            }
+        }
+    }
+
+    // MARK: - Background Canvas
+
+    private var musicBackgroundLayer: some View {
+        ZStack {
+            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                .edgesIgnoringSafeArea(.all)
+
+            LinearGradient(
+                colors: [
+                    Color(red: 0.08, green: 0.08, blue: 0.10).opacity(0.92),
+                    Color(red: 0.05, green: 0.05, blue: 0.07).opacity(0.96)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .edgesIgnoringSafeArea(.all)
+
+            if let artwork = player.artworkImage {
+                GeometryReader { geo in
+                    Image(nsImage: artwork)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .blur(radius: 75)
+                        .saturation(1.25)
+                        .opacity(0.22)
+                        .clipped()
+                }
+                .edgesIgnoringSafeArea(.all)
+            } else {
+                RadialGradient(
+                    colors: [
+                        Color(red: 0.25, green: 0.20, blue: 0.12).opacity(0.16),
+                        Color.clear
+                    ],
+                    center: .top,
+                    startRadius: 20,
+                    endRadius: 420
+                )
+                .edgesIgnoringSafeArea(.all)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    // MARK: - Top Titlebar
+
+    private func topChromeBar(windowWidth: CGFloat) -> some View {
+        ZStack {
+            MusicWindowDragStrip()
+                .frame(maxWidth: .infinity)
+                .frame(height: 36)
+
+            HStack(spacing: 8) {
+                // Reserve space for native macOS traffic lights (Close / Minimize / Disabled Zoom)
+                Spacer()
+                    .frame(width: 58)
+                    .allowsHitTesting(false)
+
+                Spacer(minLength: 4)
+
+                // Trailing quick actions: Pin, Inspector, Close
+                HStack(spacing: 8) {
+                    HUDCircleButton(
+                        icon: settings.keepWindowOnTop ? "pin.fill" : "pin",
+                        isActive: settings.keepWindowOnTop,
+                        helpText: settings.keepWindowOnTop
+                            ? L10n.tr("Unpin Window", "取消窗口置顶")
+                            : L10n.tr("Keep Window on Top", "保持窗口置顶")
+                    ) {
+                        PlayerWindowManager.shared.toggleAlwaysOnTop()
+                        let next = PlayerWindowManager.shared.isAlwaysOnTop
+                        player.showOSD(.pictureAdjustment(
+                            name: L10n.tr("Always on Top", "窗口置顶"),
+                            value: next ? L10n.tr("On", "开启") : L10n.tr("Off", "关闭")
+                        ))
+                    }
+
+                    HUDCircleButton(
+                        icon: player.isInspectorVisible ? "info.circle.fill" : "info.circle",
+                        isActive: player.isInspectorVisible,
+                        helpText: L10n.tr("Media Properties (I)", "媒体属性 (I)")
+                    ) {
+                        player.toggleInspector()
+                    }
+
+                    HUDCircleButton(
+                        icon: "xmark",
+                        isActive: false,
+                        helpText: L10n.tr("Close Playback / Return Home (Esc / Cmd+W)", "退出播放 / 返回主页 (Esc / Cmd+W)")
+                    ) {
+                        player.isPlaylistDrawerVisible = false
+                        player.isInspectorVisible = false
+                        onClosePlayback()
+                    }
+                }
+            }
+
+            // Centered Dual-Track Switcher Pill
+            if settings.dualPlaylistMode {
+                HStack(spacing: 2) {
+                    titlebarCategoryTab(category: .video, count: playlist.videoCount)
+                    titlebarCategoryTab(category: .audio, count: playlist.audioCount)
+                }
+                .padding(3)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(0.08))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.6)
+                )
+                .frame(maxWidth: max(180, windowWidth - 230))
+            } else {
+                Text("\(L10n.tr("Queue", "播放列表")) · \(playlist.audioCount)")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.6))
+                    .allowsHitTesting(false)
+            }
+        }
+        .frame(height: 36)
+    }
+
+    private func titlebarCategoryTab(category: MediaCategory, count: Int) -> some View {
+        let isSelected = browsingCategory == category
+        return Button {
+            withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                browsingCategory = category
+                searchQuery = ""
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: category.iconName)
+                    .font(.system(size: 10.5, weight: isSelected ? .semibold : .regular))
+                Text(category.title)
+                    .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundColor(isSelected ? .cyan : .white.opacity(0.45))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule()
+                                .fill(isSelected ? Color.cyan.opacity(0.18) : Color.white.opacity(0.08))
+                        )
+                }
+            }
+            .foregroundColor(isSelected ? .white : .white.opacity(0.62))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4.5)
+            .background(
+                Capsule()
+                    .fill(isSelected ? Color.white.opacity(0.14) : Color.clear)
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .focusEffectDisabled()
+    }
+
+    // MARK: - Tier 1: Hero Card
+
+    private func heroCard(windowWidth: CGFloat) -> some View {
+        let artSize = MusicModeGeometry.heroArtworkSize(forWindowWidth: windowWidth)
+        let currentItem = activePlayingAudioItem
+        let meta = currentItem.map { metadataService.metadata(for: $0) }
+        let titleText: String = {
+            if let m = meta, !m.title.isEmpty { return m.title }
+            let sanitized = MediaFilenameSanitizer.sanitize(player.mediaTitle).cleanTitle
+            return sanitized.isEmpty ? L10n.tr("Unknown Track", "未知曲目") : sanitized
+        }()
+        let subtitleText: String = {
+            guard let m = meta else { return "" }
+            let a = m.artist.trimmingCharacters(in: .whitespacesAndNewlines)
+            let al = m.album.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !a.isEmpty && !al.isEmpty {
+                return "\(a) · \(al)"
+            } else if !a.isEmpty {
+                return a
+            } else if !al.isEmpty {
+                return al
+            }
+            return L10n.tr("Local Audio", "本地音频")
+        }()
+        let specText: String = {
+            let text = meta?.heroSpecText ?? ""
+            if !text.isEmpty { return text }
+            if let codec = player.audioTracks.first(where: { $0.id == player.selectedAudioTrackId })?.codec, !codec.isEmpty {
+                return codec.uppercased()
+            }
+            return "AUDIO"
+        }()
+        let isLossless = ["FLAC", "ALAC", "WAV", "AIFF", "DSD", "APE", "PCM"].contains(meta?.formatLabel.uppercased() ?? "")
+        let indexLabel: String = {
+            let total = playlist.audioCount
+            if let idx = activePlayingAudioIndex, total > 0 {
+                return "\(idx + 1) / \(total)"
+            }
+            return total > 0 ? "— / \(total)" : "0 / 0"
+        }()
+
+        return HStack(alignment: .center, spacing: 14) {
+            // Leading Vinyl / Album Artwork
+            Group {
+                if let artwork = player.artworkImage {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(Color.black.opacity(0.35))
+                        Image(nsImage: artwork)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: artSize, height: artSize)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .frame(width: artSize, height: artSize)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.7)
+                    )
+                    .shadow(color: Color.black.opacity(0.38), radius: 8, x: 0, y: 3)
+                } else {
+                    FloatingVinylDiscView(
+                        diameter: artSize * 0.82,
+                        isPlaying: player.isPlaying,
+                        levels: player.audioRhythmLevels
+                    )
+                    .frame(width: artSize, height: artSize)
+                }
+            }
+
+            // Middle: Now Playing + Title + Artist/Album
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(player.isPlaying ? Color.cyan : Color.white.opacity(0.35))
+                        .frame(width: 6, height: 6)
+                    Text(player.isPlaying ? L10n.tr("NOW PLAYING", "正在播放") : L10n.tr("PAUSED", "已暂停"))
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(player.isPlaying ? .cyan.opacity(0.92) : .white.opacity(0.55))
+                        .tracking(0.6)
+                }
+
+                Text(titleText)
+                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(player.mediaTitle)
+
+                Text(subtitleText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.62))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(minWidth: 110, maxWidth: .infinity, alignment: .leading)
+
+            // Trailing: Audio Spec Pill + Spectrum Bars + Counter
+            VStack(alignment: .trailing, spacing: 7) {
+                Text(specText)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(
+                        isLossless
+                            ? Color(red: 0.98, green: 0.80, blue: 0.45)
+                            : .cyan.opacity(0.92)
+                    )
+                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3.5)
+                    .background(
+                        Capsule()
+                            .fill(
+                                isLossless
+                                    ? Color(red: 0.98, green: 0.78, blue: 0.35).opacity(0.14)
+                                    : Color.cyan.opacity(0.12)
+                            )
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(
+                                isLossless
+                                    ? Color(red: 0.98, green: 0.78, blue: 0.35).opacity(0.32)
+                                    : Color.cyan.opacity(0.28),
+                                lineWidth: 0.6
+                            )
+                    )
+                    .fixedSize(horizontal: true, vertical: false)
+
+                HStack(spacing: 8) {
+                    MusicSpectrumMiniMeter(
+                        levels: player.audioRhythmLevels,
+                        isPlaying: player.isPlaying
+                    )
+                    Text(indexLabel)
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundColor(.white.opacity(0.62))
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.055))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.11), lineWidth: 0.75)
+        )
+    }
+
+    // MARK: - Tier 2: Single-Row Toolbar & Headerless Queue
+
+    private func queueSectionCard(windowWidth: CGFloat) -> some View {
+        let entries = filteredEntries
+        let upcomingId = (effectiveBrowsingCategory == .audio) ? playlist.upcomingItem?.id : nil
+        let showExtendedColumns = MusicModeGeometry.showsExtendedQueueColumns(width: windowWidth)
+        let currentPlayingPath = player.currentFilePath
+
+        return VStack(spacing: 0) {
+            // Single-row Toolbar: + Add, Clear, Search, Custom Sort
+            HStack(spacing: 7) {
+                Button(action: addMediaViaPicker) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 10.5, weight: .bold))
+                        Text(L10n.tr("Add", "添加"))
+                            .font(.system(size: 11, weight: .semibold))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .foregroundColor(.white.opacity(0.92))
+                    .padding(.horizontal, 10)
+                    .frame(height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.white.opacity(isAddHovered ? 0.16 : 0.10))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.6)
+                    )
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .focusEffectDisabled()
+                .onHover { isAddHovered = $0 }
+                .help(L10n.tr("Add Music, Videos, or Folders", "添加音乐、视频或文件夹"))
+
+                Button {
+                    withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                        if settings.dualPlaylistMode {
+                            playlist.clearCategory(browsingCategory)
+                        } else {
+                            playlist.clear()
+                        }
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(
+                            sourceQueueItems.isEmpty
+                                ? .white.opacity(0.25)
+                                : (isClearHovered ? Color(nsColor: .systemRed) : .white.opacity(0.68))
+                        )
+                        .frame(width: 28, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(isClearHovered && !sourceQueueItems.isEmpty ? Color.red.opacity(0.14) : Color.white.opacity(0.06))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.6)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(sourceQueueItems.isEmpty)
+                .focusable(false)
+                .focusEffectDisabled()
+                .onHover { isClearHovered = $0 }
+                .help(L10n.tr("Clear Current Queue", "清空当前列表"))
+
+                // Search Capsule
+                HStack(spacing: 5) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.42))
+
+                    TextField(
+                        L10n.tr("Search songs / artists...", "搜索歌曲 / 歌手..."),
+                        text: $searchQuery
+                    )
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11.5))
+                    .foregroundColor(.white.opacity(0.92))
+
+                    if !searchQuery.isEmpty {
+                        Button {
+                            searchQuery = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.45))
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                    }
+                }
+                .padding(.horizontal, 9)
+                .frame(height: 28)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.black.opacity(0.24))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.6)
+                )
+
+                // Custom Sort Menu (enabled when viewing Audio queue)
+                if effectiveBrowsingCategory == .audio {
+                    sortMenuButton
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+
+            Divider()
+                .opacity(0.14)
+
+            // Queue List (Headerless)
+            if entries.isEmpty {
+                emptyQueuePlaceholder(isFilteredEmpty: !searchQuery.isEmpty && !sourceQueueItems.isEmpty)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: true) {
+                        LazyVStack(spacing: 2) {
+                            ForEach(entries, id: \.item.id) { entry in
+                                let isCurrent = (entry.item.path == currentPlayingPath)
+                                let isUpcoming = (!isCurrent && upcomingId == entry.item.id && effectiveBrowsingCategory == .audio)
+                                MusicQueueRowView(
+                                    displayIndex: entry.index + 1,
+                                    item: entry.item,
+                                    metadata: entry.metadata,
+                                    category: effectiveBrowsingCategory,
+                                    isCurrent: isCurrent,
+                                    isPlaying: isCurrent && player.isPlaying,
+                                    isUpcoming: isUpcoming,
+                                    showExtendedColumns: showExtendedColumns,
+                                    windowWidth: windowWidth,
+                                    onSelect: {
+                                        handleSelectQueueItem(entry.item, in: effectiveBrowsingCategory)
+                                    },
+                                    onRemove: {
+                                        withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                            if settings.dualPlaylistMode {
+                                                playlist.removeItem(id: entry.item.id, inCategory: effectiveBrowsingCategory)
+                                            } else {
+                                                playlist.removeItem(id: entry.item.id)
+                                            }
+                                        }
+                                    }
+                                )
+                                .id(entry.item.id)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                    }
+                    .onAppear {
+                        if let active = activePlayingAudioItem {
+                            proxy.scrollTo(active.id, anchor: .center)
+                        }
+                    }
+                    .onChange(of: player.currentFilePath) { _, _ in
+                        if let active = activePlayingAudioItem, searchQuery.isEmpty {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                proxy.scrollTo(active.id, anchor: .center)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(
+                    isDropTargeted ? Color.cyan.opacity(0.65) : Color.white.opacity(0.10),
+                    lineWidth: isDropTargeted ? 1.5 : 0.75
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+            handleDrop(providers: providers)
+        }
+    }
+
+    private var sortMenuButton: some View {
+        let activeOrder = playlist.audioSortOrder
+        let directionArrow = playlist.audioSortDirection == .ascending ? "↑" : "↓"
+        let buttonTitle: String = activeOrder == .manual
+            ? activeOrder.title
+            : "\(activeOrder.title) \(directionArrow)"
+
+        return Menu {
+            ForEach(PlaylistSortOrder.allCases, id: \.self) { order in
+                Button {
+                    if order == .manual {
+                        playlist.sortAudioItems(by: .manual, metadataProvider: { metadataService.metadata(for: $0) })
+                    } else if playlist.audioSortOrder == order {
+                        let nextDir = playlist.audioSortDirection.toggled
+                        playlist.sortAudioItems(by: order, direction: nextDir, metadataProvider: { metadataService.metadata(for: $0) })
+                    } else {
+                        playlist.sortAudioItems(by: order, direction: .ascending, metadataProvider: { metadataService.metadata(for: $0) })
+                    }
+                } label: {
+                    let isSelected = playlist.audioSortOrder == order
+                    let prefix = isSelected ? "✓ " : ""
+                    let suffix = (isSelected && order != .manual) ? " \(directionArrow)" : ""
+                    Text("\(prefix)\(order.title)\(suffix)")
+                }
+            }
+
+            if playlist.audioSortOrder != .manual {
+                Divider()
+                Button(L10n.tr("Toggle Ascending / Descending", "切换升序 / 降序")) {
+                    playlist.sortAudioItems(
+                        by: playlist.audioSortOrder,
+                        direction: playlist.audioSortDirection.toggled,
+                        metadataProvider: { metadataService.metadata(for: $0) }
+                    )
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(buttonTitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundColor(activeOrder == .manual ? .white.opacity(0.80) : .cyan)
+            .padding(.horizontal, 9)
+            .frame(height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(activeOrder == .manual ? Color.white.opacity(isSortHovered ? 0.14 : 0.07) : Color.cyan.opacity(0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(activeOrder == .manual ? Color.white.opacity(0.11) : Color.cyan.opacity(0.32), lineWidth: 0.6)
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { isSortHovered = $0 }
+        .help(L10n.tr("Sort Audio Queue", "排序音乐播放列表"))
+    }
+
+    private func emptyQueuePlaceholder(isFilteredEmpty: Bool) -> some View {
+        VStack(spacing: 8) {
+            Spacer()
+            Image(systemName: isFilteredEmpty ? "magnifyingglass" : (effectiveBrowsingCategory == .video ? "film.stack" : "music.note.list"))
+                .font(.system(size: 26, weight: .light))
+                .foregroundColor(.white.opacity(0.28))
+
+            Text(
+                isFilteredEmpty
+                    ? L10n.tr("No matching songs", "未找到匹配的曲目")
+                    : (effectiveBrowsingCategory == .video
+                        ? L10n.tr("No videos in queue", "暂无视频文件")
+                        : L10n.tr("Drop music files or folders here", "拖拽音乐文件或文件夹到此处"))
+            )
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(.white.opacity(0.45))
+
+            if isFilteredEmpty {
+                Button(L10n.tr("Clear Search", "清除搜索")) {
+                    searchQuery = ""
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.cyan)
+                .padding(.top, 2)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Tier 3: Unified Bottom Playback HUD
+
+    private func bottomControlSection(windowWidth: CGFloat) -> some View {
+        let scrubberTier = HUDLayoutTier.determine(width: windowWidth, isFullscreen: false)
+        let compact = MusicModeGeometry.usesCompactBottomControls(width: windowWidth)
+        let volWidth = MusicModeGeometry.bottomVolumeTrackWidth(forWindowWidth: windowWidth)
+        let showVolPercent = MusicModeGeometry.showsVolumePercentage(forWindowWidth: windowWidth)
+
+        return VStack(spacing: compact ? 8 : 10) {
+            // 1. Native Scrubber
+            PlayerProgressSection(player: player, clock: player.clock, playlist: playlist, tier: scrubberTier)
+
+            // 2. Centered Transport + Wings
+            ZStack(alignment: .center) {
+                // Center Group: Prev, Play/Pause, Next
+                HStack(spacing: compact ? 12 : 16) {
+                    HUDTransportButton(
+                        icon: "backward.end.fill",
+                        size: compact ? 12.5 : 13.5,
+                        weight: .medium,
+                        disabled: !playlist.hasPrevious && !player.canRewindToStart,
+                        helpText: playlist.hasPrevious
+                            ? (playlist.previousItem.map { "\($0.title) (Cmd+Left)" } ?? L10n.previousTrack)
+                            : (player.canRewindToStart ? "\(L10n.previousTrack) (0:00)" : L10n.noPreviousTrack)
+                    ) {
+                        onPlayPrevious()
+                    }
+                    .accessibilityLabel(L10n.previousTrack)
+
+                    Button(action: { player.togglePlayPause() }) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.24),
+                                            Color.white.opacity(0.12)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: 38, height: 38)
+                                .overlay(
+                                    Circle()
+                                        .strokeBorder(Color.white.opacity(0.30), lineWidth: 0.8)
+                                )
+                                .shadow(color: Color.black.opacity(0.28), radius: 5, x: 0, y: 2)
+
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 15.5, weight: .bold))
+                                .foregroundColor(.white)
+                                .offset(x: player.isPlaying ? 0 : 1.0)
+                        }
+                        .contentShape(Circle())
+                    }
+                    .buttonStyle(HUDInteractiveButtonStyle(hoverScale: 1.08))
+                    .accessibilityLabel(player.isPlaying ? L10n.pause : L10n.play)
+                    .hudTooltip("\(player.isPlaying ? L10n.pause : L10n.play) (Space)", edge: .top)
+                    .help("\(player.isPlaying ? L10n.pause : L10n.play) (Space)")
+
+                    HUDTransportButton(
+                        icon: "forward.end.fill",
+                        size: compact ? 12.5 : 13.5,
+                        weight: .medium,
+                        disabled: !playlist.hasNext,
+                        helpText: playlist.hasNext
+                            ? (playlist.nextItem.map { "\($0.title) (Cmd+Right)" } ?? L10n.nextTrack)
+                            : L10n.noNextTrack
+                    ) {
+                        onPlayNext()
+                    }
+                    .accessibilityLabel(L10n.nextTrack)
+                }
+
+                // Wings
+                HStack(alignment: .center, spacing: 0) {
+                    // Left Wing: Playback Mode + Speed
+                    HStack(spacing: compact ? 6 : 8) {
+                        let mode = playlist.playbackMode
+                        let isHighlighted = mode != .sequential
+                        Button {
+                            playlist.togglePlaybackMode()
+                            player.showOSD(.pictureAdjustment(
+                                name: L10n.tr("Playback Mode", "播放模式"),
+                                value: playlist.playbackMode.title
+                            ))
+                        } label: {
+                            Image(systemName: mode.iconName)
+                                .font(.system(size: 13.5, weight: .medium))
+                                .foregroundColor(isHighlighted ? .cyan : .white.opacity(0.88))
+                                .frame(width: 28, height: 28)
+                                .background(
+                                    Circle()
+                                        .fill(Color.white.opacity(isModeHovered ? 0.14 : (isHighlighted ? 0.10 : 0.0)))
+                                )
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { isModeHovered = $0 }
+                        .hudTooltip("\(mode.title) (\(L10n.tr("Click to switch", "点击切换模式")))", edge: .top)
+                        .help(mode.title)
+
+                        HUDSpeedMenuButton(player: player)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    // Right Wing: Compact Inline Volume Slider + Settings (NO Fullscreen Button)
+                    HStack(spacing: compact ? 6 : 10) {
+                        MusicInlineVolumeSlider(
+                            player: player,
+                            trackWidth: volWidth,
+                            showPercentage: showVolPercent
+                        )
+
+                        HUDTransportButton(
+                            icon: "gearshape",
+                            size: 14,
+                            weight: .medium,
+                            color: .white.opacity(0.90),
+                            helpText: L10n.tr("Preferences (Cmd+,)", "偏好设置 (Cmd+,)")
+                        ) {
+                            PlayerWindowManager.shared.openSettings()
+                        }
+                        .accessibilityLabel(L10n.settings)
+                    }
+                }
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    // MARK: - Actions
+
+    private func handleSelectQueueItem(_ item: PlaylistItem, in category: MediaCategory) {
+        if settings.dualPlaylistMode && playlist.activeCategory != category {
+            playlist.switchCategory(category)
+        }
+        onSelectPlaylistItem(item)
+    }
+
+    private func addMediaViaPicker() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.message = L10n.chooseVideoDialog
+        panel.prompt = L10n.tr("Add", "添加")
+        if panel.runModal() == .OK {
+            let paths = panel.urls.map(\.path)
+            importPaths(paths)
+        }
+    }
+
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        guard !providers.isEmpty else { return false }
+        Task { @MainActor in
+            var collectedURLs: [URL] = []
+            for provider in providers {
+                let url: URL? = await withCheckedContinuation { continuation in
+                    _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                        continuation.resume(returning: url)
+                    }
+                }
+                if let url = url {
+                    collectedURLs.append(url)
+                }
+            }
+            let paths = collectedURLs.map(\.path)
+            if !paths.isEmpty {
+                importPaths(paths)
+            }
+        }
+        return true
+    }
+
+    private func importPaths(_ paths: [String]) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
+            guard !expanded.isEmpty else { return }
+
+            var newItems: [PlaylistItem] = []
+            for p in expanded {
+                let title = URL(fileURLWithPath: p).deletingPathExtension().lastPathComponent
+                let size = (try? FileManager.default.attributesOfItem(atPath: p)[.size] as? Int64) ?? 0
+                let item = MediaItem(path: p, title: title, fileSize: size)
+                newItems.append(PlaylistItem(from: item))
+            }
+
+            Task { @MainActor in
+                let wasEmpty = playlist.isEmpty
+                let needsAutoPlay = wasEmpty || !player.isLoaded
+                playlist.appendItems(newItems)
+                metadataService.ensureLoaded(for: newItems)
+                if needsAutoPlay, let target = newItems.first {
+                    handleSelectQueueItem(target, in: PlaylistManager.category(for: target.url))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Helper Subviews
+
+@MainActor
+private struct MusicQueueRowView: View {
+    let displayIndex: Int
+    let item: PlaylistItem
+    let metadata: AudioTrackMetadata
+    let category: MediaCategory
+    let isCurrent: Bool
+    let isPlaying: Bool
+    let isUpcoming: Bool
+    let showExtendedColumns: Bool
+    let windowWidth: CGFloat
+    let onSelect: () -> Void
+    let onRemove: () -> Void
+
+    @State private var isHovered: Bool = false
+
+    private var rowTitleText: String {
+        if category == .video {
+            let cleaned = MediaFilenameSanitizer.sanitize(item.title).cleanTitle
+            return cleaned.isEmpty ? item.title : cleaned
+        }
+        let combined = metadata.queueDisplayTitle
+        if !combined.isEmpty { return combined }
+        let cleaned = MediaFilenameSanitizer.sanitize(item.title).cleanTitle
+        return cleaned.isEmpty ? item.title : cleaned
+    }
+
+    private var resolvedDuration: Double {
+        if item.duration > 0 { return item.duration }
+        if let metaDur = metadata.duration, metaDur > 0 { return metaDur }
+        return 0
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Leading Track Index / Playing Bars
+            Group {
+                if isCurrent {
+                    MusicMiniPlayingBars(isPlaying: isPlaying)
+                } else {
+                    Text("\(displayIndex)")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundColor(isHovered ? .white.opacity(0.75) : .white.opacity(0.40))
+                }
+            }
+            .frame(width: 26, alignment: .trailing)
+
+            // Song / Video Title + Inline Upcoming Badge
+            HStack(spacing: 6) {
+                Text(rowTitleText)
+                    .font(.system(size: 12.5, weight: isCurrent ? .semibold : .medium))
+                    .foregroundColor(isCurrent ? .cyan : .white.opacity(isHovered ? 0.96 : 0.88))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                if isUpcoming {
+                    Text(L10n.tr("Up Next", "下一首"))
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundColor(Color(red: 1.0, green: 0.78, blue: 0.35))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1.5)
+                        .background(
+                            Capsule()
+                                .fill(Color.orange.opacity(0.18))
+                        )
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(Color.orange.opacity(0.35), lineWidth: 0.5)
+                        )
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Extended Columns on Large Screens (>= 680 pt): Left-Aligned Album + Format
+            if showExtendedColumns {
+                if category == .audio {
+                    Text(metadata.album.isEmpty ? "—" : metadata.album)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundColor(metadata.album.isEmpty ? .white.opacity(0.22) : .white.opacity(0.48))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(width: min(156, max(110, windowWidth * 0.21)), alignment: .leading)
+                }
+
+                Text(metadata.formatLabel)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.46))
+                    .lineLimit(1)
+                    .frame(width: 44, alignment: .leading)
+            }
+
+            // Trailing Duration or Remove Button on Hover
+            ZStack(alignment: .trailing) {
+                Text(resolvedDuration > 0 ? formatPlaybackTime(resolvedDuration) : "--:--")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundColor(.white.opacity(0.48))
+                    .opacity(isHovered ? 0.0 : 1.0)
+
+                if isHovered {
+                    Button(action: onRemove) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundColor(.white.opacity(0.65))
+                            .frame(width: 22, height: 22)
+                            .background(Circle().fill(Color.white.opacity(0.12)))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.tr("Remove from Playlist", "从列表移除"))
+                }
+            }
+            .frame(width: 44, alignment: .trailing)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    isCurrent
+                        ? Color.cyan.opacity(0.14)
+                        : (isHovered ? Color.white.opacity(0.08) : Color.clear)
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(isCurrent ? Color.cyan.opacity(0.30) : Color.clear, lineWidth: 0.6)
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .onTapGesture {
+            onSelect()
+        }
+        .contextMenu {
+            Button(L10n.play) {
+                onSelect()
+            }
+            if !item.path.contains("://") {
+                Button(L10n.tr("Show in Finder", "在访达中显示")) {
+                    NSWorkspace.shared.activateFileViewerSelecting([item.url])
+                }
+            }
+            Divider()
+            Button(L10n.tr("Remove from Playlist", "从列表移除"), role: .destructive) {
+                onRemove()
+            }
+        }
+    }
+}
+
+@MainActor
+private struct MusicMiniPlayingBars: View {
+    let isPlaying: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.14, paused: !isPlaying)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(0..<3, id: \.self) { idx in
+                    let factor = isPlaying
+                        ? (0.35 + 0.65 * abs(sin(t * 5.2 + Double(idx) * 1.35)))
+                        : 0.35
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.cyan)
+                        .frame(width: 2.4, height: CGFloat(11.0 * factor))
+                }
+            }
+            .frame(height: 12, alignment: .center)
+        }
+    }
+}
+
+@MainActor
+private struct MusicSpectrumMiniMeter: View {
+    let levels: [CGFloat]
+    let isPlaying: Bool
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 2) {
+            ForEach(0..<6, id: \.self) { idx in
+                let raw = (idx < levels.count && isPlaying) ? levels[idx] : 0.08
+                let height = max(3.0, min(14.0, 3.0 + raw * 11.0))
+                Capsule()
+                    .fill(isPlaying ? Color.cyan.opacity(0.85) : Color.white.opacity(0.28))
+                    .frame(width: 2.2, height: height)
+            }
+        }
+        .frame(height: 14)
+        .animation(.easeOut(duration: 0.08), value: levels)
+    }
+}
+
+@MainActor
+private struct MusicInlineVolumeSlider: View {
+    @ObservedObject var player: PlayerCore
+    let trackWidth: CGFloat
+    let showPercentage: Bool
+
+    @State private var isDragging: Bool = false
+
+    private var iconName: String {
+        if player.isMuted || player.volume <= 0 {
+            return "speaker.slash.fill"
+        } else if player.volume < 33 {
+            return "speaker.wave.1.fill"
+        } else if player.volume < 66 {
+            return "speaker.wave.2.fill"
+        } else {
+            return "speaker.wave.3.fill"
+        }
+    }
+
+    var body: some View {
+        let maxLimit = max(100.0, AppSettings.shared.maxVolumeLimit)
+        let currentVol = player.isMuted ? 0.0 : player.volume
+        let fraction = CGFloat(max(0.0, min(1.0, currentVol / maxLimit)))
+
+        HStack(spacing: 6) {
+            Button(action: { player.toggleMute() }) {
+                Image(systemName: iconName)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundColor(player.isMuted ? .white.opacity(0.45) : (player.volume > 100 ? .orange : .white.opacity(0.88)))
+                    .frame(width: 26, height: 26)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("\(player.isMuted ? L10n.unmuteAudio : L10n.muteAudio) (M)")
+
+            GeometryReader { geo in
+                let trackH: CGFloat = isDragging ? 5.0 : 4.0
+                let knobSize: CGFloat = isDragging ? 11.0 : 9.0
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.20))
+                        .frame(height: trackH)
+
+                    Capsule()
+                        .fill(player.volume > 100 && !player.isMuted ? Color.orange : Color.cyan)
+                        .frame(width: max(0, min(geo.size.width, geo.size.width * fraction)), height: trackH)
+
+                    Circle()
+                        .fill(Color.white)
+                        .shadow(color: Color.black.opacity(0.35), radius: 2, x: 0, y: 1)
+                        .frame(width: knobSize, height: knobSize)
+                        .offset(x: max(0, min(geo.size.width - knobSize, geo.size.width * fraction - knobSize / 2.0)))
+                }
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            isDragging = true
+                            if player.isMuted {
+                                player.toggleMute()
+                            }
+                            let newFrac = max(0.0, min(1.0, value.location.x / max(1.0, geo.size.width)))
+                            player.setVolume(Double(newFrac) * maxLimit)
+                        }
+                        .onEnded { _ in
+                            isDragging = false
+                        }
+                )
+            }
+            .frame(width: trackWidth, height: 18)
+
+            if showPercentage {
+                Text("\(Int(round(currentVol)))%")
+                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundColor(.white.opacity(0.55))
+                    .frame(width: 34, alignment: .trailing)
+            }
+        }
+    }
+}
+
+/// Transparent AppKit drag surface behind the top titlebar supporting drag & double-click vertical maximize.
+@MainActor
+private struct MusicWindowDragStrip: NSViewRepresentable {
+    func makeNSView(context: Context) -> MusicDragStripNSView {
+        MusicDragStripNSView()
+    }
+
+    func updateNSView(_ nsView: MusicDragStripNSView, context: Context) {}
+
+    final class MusicDragStripNSView: NSView {
+        override var mouseDownCanMoveWindow: Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            guard let window = self.window else { return }
+            if event.clickCount == 2 {
+                (window.delegate as? PlayerWindowDelegate)?.toggleMaximize(window: window)
+                return
+            }
+            window.performDrag(with: event)
+        }
+    }
+}

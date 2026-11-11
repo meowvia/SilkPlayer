@@ -748,6 +748,41 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         removeItem(at: idx)
     }
 
+    public func removeItem(id: UUID, inCategory category: MediaCategory) {
+        if category == activeCategory {
+            removeItem(id: id)
+            return
+        }
+        if category == .video {
+            guard let index = videoItems.firstIndex(where: { $0.id == id }) else { return }
+            videoItems.remove(at: index)
+            videoPlayHistory = videoPlayHistory.compactMap { $0 == index ? nil : ($0 > index ? $0 - 1 : $0) }
+            videoShuffleQueue = videoShuffleQueue.compactMap { $0 == index ? nil : ($0 > index ? $0 - 1 : $0) }
+            if videoItems.isEmpty {
+                videoCurrentIndex = -1
+            } else if index < videoCurrentIndex {
+                videoCurrentIndex -= 1
+            } else if videoCurrentIndex >= videoItems.count {
+                videoCurrentIndex = videoItems.count - 1
+            }
+        } else {
+            guard let index = audioItems.firstIndex(where: { $0.id == id }) else { return }
+            audioItems.remove(at: index)
+            audioPlayHistory = audioPlayHistory.compactMap { $0 == index ? nil : ($0 > index ? $0 - 1 : $0) }
+            audioShuffleQueue = audioShuffleQueue.compactMap { $0 == index ? nil : ($0 > index ? $0 - 1 : $0) }
+            if audioItems.isEmpty {
+                audioCurrentIndex = -1
+            } else if index < audioCurrentIndex {
+                audioCurrentIndex -= 1
+            } else if audioCurrentIndex >= audioItems.count {
+                audioCurrentIndex = audioItems.count - 1
+            }
+        }
+        syncUnifiedItems()
+        syncUnifiedCurrentIndex()
+        saveToStorage()
+    }
+
     public func removeItem(at index: Int) {
         guard index >= 0 && index < items.count else { return }
         var currentItems = items
@@ -789,6 +824,174 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         currentShuffleQueue.removeAll()
         nextShuffleIndex = nil
         saveToStorage()
+    }
+
+    /// Clears a specific track category cleanly even while another category is actively playing.
+    public func clearCategory(_ category: MediaCategory) {
+        if category == activeCategory {
+            clear()
+            return
+        }
+        if category == .video {
+            videoItems = []
+            videoCurrentIndex = -1
+            videoPlayHistory.removeAll()
+            videoShuffleQueue.removeAll()
+        } else {
+            audioItems = []
+            audioCurrentIndex = -1
+            audioPlayHistory.removeAll()
+            audioShuffleQueue.removeAll()
+        }
+        syncUnifiedItems()
+        syncUnifiedCurrentIndex()
+        if !isDualPlaylistMode && playbackMode == .shuffle {
+            nextShuffleIndex = nil
+            ensureShuffleCandidate()
+        }
+        saveToStorage()
+    }
+
+    // MARK: - Queue Sorting & Reordering
+
+    public private(set) var audioSortOrder: PlaylistSortOrder = .manual
+    public private(set) var audioSortDirection: SortDirection = .ascending
+
+    /// Sorts the audio track queue in-place while keeping the currently playing item tracked cleanly.
+    public func sortAudioItems(
+        by order: PlaylistSortOrder,
+        direction: SortDirection? = nil,
+        metadataProvider: (PlaylistItem) -> AudioTrackMetadata
+    ) {
+        let resolvedDirection = direction ?? audioSortDirection
+        audioSortOrder = order
+        audioSortDirection = resolvedDirection
+
+        guard order != .manual, audioItems.count > 1 else {
+            saveToStorage()
+            return
+        }
+
+        let playingId: UUID? = (audioCurrentIndex >= 0 && audioCurrentIndex < audioItems.count)
+            ? audioItems[audioCurrentIndex].id
+            : nil
+
+        let metadataMap: [UUID: AudioTrackMetadata] = Dictionary(
+            uniqueKeysWithValues: audioItems.map { ($0.id, metadataProvider($0)) }
+        )
+
+        let sorted = audioItems.sorted { lhs, rhs in
+            let metaA = metadataMap[lhs.id] ?? AudioTrackMetadataService.fallbackMetadata(for: lhs)
+            let metaB = metadataMap[rhs.id] ?? AudioTrackMetadataService.fallbackMetadata(for: rhs)
+            let comparison = compareItems(lhs, rhs, metaA: metaA, metaB: metaB, by: order)
+            if resolvedDirection == .ascending {
+                return comparison == .orderedAscending
+            } else {
+                return comparison == .orderedDescending
+            }
+        }
+
+        audioItems = sorted
+        if let playingId = playingId,
+           let newIdx = audioItems.firstIndex(where: { $0.id == playingId }) {
+            audioCurrentIndex = newIdx
+        }
+        audioPlayHistory.removeAll()
+        audioShuffleQueue.removeAll()
+        if activeCategory == .audio {
+            nextShuffleIndex = nil
+            syncUnifiedItems()
+            syncUnifiedCurrentIndex()
+            if playbackMode == .shuffle {
+                ensureShuffleCandidate()
+            }
+        } else {
+            syncUnifiedItems()
+            syncUnifiedCurrentIndex()
+        }
+        saveToStorage()
+    }
+
+    /// Moves an audio item in manual custom order while preserving current track index.
+    public func moveAudioItem(fromOffsets source: IndexSet, toOffset destination: Int) {
+        guard !audioItems.isEmpty else { return }
+        let playingId: UUID? = (audioCurrentIndex >= 0 && audioCurrentIndex < audioItems.count)
+            ? audioItems[audioCurrentIndex].id
+            : nil
+
+        var updated = audioItems
+        let moving = source.sorted().map { updated[$0] }
+        for index in source.sorted(by: >) {
+            updated.remove(at: index)
+        }
+        let adjustedDest = max(0, min(updated.count, destination - source.filter { $0 < destination }.count))
+        updated.insert(contentsOf: moving, at: adjustedDest)
+
+        audioSortOrder = .manual
+        audioItems = updated
+        if let playingId = playingId,
+           let newIdx = audioItems.firstIndex(where: { $0.id == playingId }) {
+            audioCurrentIndex = newIdx
+        }
+        audioPlayHistory.removeAll()
+        audioShuffleQueue.removeAll()
+        syncUnifiedItems()
+        syncUnifiedCurrentIndex()
+        if activeCategory == .audio && playbackMode == .shuffle {
+            nextShuffleIndex = nil
+            ensureShuffleCandidate()
+        }
+        saveToStorage()
+    }
+
+    /// Selects a track inside a target category without disturbing an active category until playback triggers.
+    @discardableResult
+    public func selectItemInCategory(_ item: PlaylistItem, category: MediaCategory) -> PlaylistItem? {
+        if activeCategory != category {
+            switchCategory(category)
+        }
+        if let idx = items.firstIndex(where: { $0.id == item.id || $0.path == item.path }) {
+            return selectIndex(idx)
+        }
+        return nil
+    }
+
+    private func compareItems(
+        _ lhs: PlaylistItem,
+        _ rhs: PlaylistItem,
+        metaA: AudioTrackMetadata,
+        metaB: AudioTrackMetadata,
+        by order: PlaylistSortOrder
+    ) -> ComparisonResult {
+        switch order {
+        case .manual:
+            return .orderedSame
+        case .title:
+            let cmp = metaA.title.localizedStandardCompare(metaB.title)
+            if cmp != .orderedSame { return cmp }
+        case .artist:
+            let cmp = metaA.artist.localizedStandardCompare(metaB.artist)
+            if cmp != .orderedSame { return cmp }
+        case .album:
+            let cmp = metaA.album.localizedStandardCompare(metaB.album)
+            if cmp != .orderedSame { return cmp }
+        case .duration:
+            let dA = metaA.duration ?? lhs.duration
+            let dB = metaB.duration ?? rhs.duration
+            if dA != dB {
+                return dA < dB ? .orderedAscending : .orderedDescending
+            }
+        case .format:
+            let cmp = metaA.formatLabel.localizedStandardCompare(metaB.formatLabel)
+            if cmp != .orderedSame { return cmp }
+        case .dateModified:
+            let dateA = metaA.modificationDate ?? .distantPast
+            let dateB = metaB.modificationDate ?? .distantPast
+            if dateA != dateB {
+                return dateA < dateB ? .orderedAscending : .orderedDescending
+            }
+        }
+        return lhs.title.localizedStandardCompare(rhs.title)
     }
 
     // MARK: - Persistence & Storage Management
