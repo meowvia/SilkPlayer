@@ -1489,6 +1489,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     @MainActor
     public func triggerVolumeHUD() {
+        guard !isAudioOnly else {
+            volumeHideTask?.cancel()
+            if isVolumeHUDVisible { isVolumeHUDVisible = false }
+            return
+        }
         withAnimation(SilkAnimation.snappy) {
             isVolumeHUDVisible = true
         }
@@ -1504,6 +1509,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     @MainActor
     public func keepVolumeHUDAlive() {
+        guard !isAudioOnly else {
+            volumeHideTask?.cancel()
+            if isVolumeHUDVisible { isVolumeHUDVisible = false }
+            return
+        }
         volumeHideTask?.cancel()
         if !isVolumeHUDVisible {
             withAnimation(SilkAnimation.snappy) {
@@ -1515,6 +1525,10 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @MainActor
     public func scheduleVolumeHUDDismiss() {
         volumeHideTask?.cancel()
+        guard !isAudioOnly else {
+            if isVolumeHUDVisible { isVolumeHUDVisible = false }
+            return
+        }
         volumeHideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_200_000_000)
             guard !Task.isCancelled else { return }
@@ -1525,6 +1539,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func showVolumeOSD() {
+        guard !isAudioOnly else { return }
         triggerVolumeHUD()
     }
 
@@ -1746,8 +1761,20 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 self.currentTime = currentTime
             }
         }
+        let becameValidDuration = (self.duration <= 0 && totalTime > 0)
         self.duration = totalTime
         self.cachedDuration = totalTime
+        if becameValidDuration, self.isAudioOnly, let path = self.currentFilePath {
+            AudioTrackMetadataService.shared.mergeLiveStreamInfo(
+                path: path,
+                rawTitle: self.mediaTitle,
+                codec: nil,
+                sampleRateHz: nil,
+                bitDepth: nil,
+                duration: totalTime,
+                tags: nil
+            )
+        }
         _ = self.subtitleModel.subtitle(currentTime: currentTime)
         self.onProgressUpdate?(self.currentFilePath ?? "", currentTime, totalTime)
     }
@@ -1793,6 +1820,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             self.videoCodec = "Audio Stream"
             self.hwdecCurrent = "CoreAudio (Hardware Master Clock)"
             self.isHUDVisible = true
+            self.volumeHideTask?.cancel()
+            self.isVolumeHUDVisible = false
             if let path = self.currentFilePath {
                 AudioTrackMetadataService.shared.mergeLiveStreamInfo(
                     path: path,

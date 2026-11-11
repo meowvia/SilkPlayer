@@ -83,8 +83,8 @@ public struct PlayerContainerView: View {
                     .zIndex(40)
                 }
 
-                // Right-Side Vertical Hidden Volume Bar (Instant feedback, auto-hiding)
-                if player.isVolumeHUDVisible {
+                // Right-Side Vertical Hidden Volume Bar (Video modes only; Music Mode uses bottom inline bar)
+                if !player.isAudioOnly && player.isVolumeHUDVisible {
                     HStack {
                         Spacer()
                         SilkVerticalVolumeBarView(player: player)

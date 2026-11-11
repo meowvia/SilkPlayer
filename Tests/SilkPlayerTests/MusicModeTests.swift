@@ -209,4 +209,194 @@ final class MusicModeTests: XCTestCase {
         XCTAssertEqual(manager.audioCount, 3)
         XCTAssertEqual(manager.currentItem?.id, songA.id)
     }
+
+    // MARK: - 5. Mojibake Repair, APE/MP3 Parsers & Cache Persistence
+
+    func testMojibakeRepairAndAccentedLatinPreservation() {
+        XCTAssertEqual(
+            AudioTrackMetadataService.repairMojibakeIfNeeded("ÕÅ°¬¼Î - °®µÄ´ú¼Û"),
+            "张艾嘉 - 爱的代价"
+        )
+        XCTAssertEqual(
+            AudioTrackMetadataService.repairMojibakeIfNeeded("Ì·Ó½÷ë - °®ÔÚÉîÇï"),
+            "谭咏麟 - 爱在深秋"
+        )
+        XCTAssertEqual(
+            AudioTrackMetadataService.repairMojibakeIfNeeded("ÓÃÐÄÁ¼¿à"),
+            "用心良苦"
+        )
+
+        // Valid European accented Latin titles must remain intact
+        XCTAssertEqual(AudioTrackMetadataService.repairMojibakeIfNeeded("Beyoncé"), "Beyoncé")
+        XCTAssertEqual(AudioTrackMetadataService.repairMojibakeIfNeeded("Café del Mar"), "Café del Mar")
+        XCTAssertEqual(AudioTrackMetadataService.repairMojibakeIfNeeded("Tiësto"), "Tiësto")
+    }
+
+    @MainActor
+    func testApeAndMp3ParsersAndDiskCacheRoundTrip() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("silkplayer_meta_test_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        func appendLE16(_ v: UInt16, to buf: inout Data) {
+            var le = v.littleEndian
+            buf.append(Data(bytes: &le, count: 2))
+        }
+        func appendLE32(_ v: UInt32, to buf: inout Data) {
+            var le = v.littleEndian
+            buf.append(Data(bytes: &le, count: 4))
+        }
+
+        // 1. Legacy APE v3970 + APEv2 tag block -> exact 200.0s @ 44.1 kHz / 16-bit
+        let apeURL = tempDir.appendingPathComponent("01-sample.ape")
+        var apeData = Data("MAC ".utf8)
+        appendLE16(3970, to: &apeData)       // version
+        appendLE16(2000, to: &apeData)       // compression level
+        appendLE16(0, to: &apeData)          // flags (16-bit)
+        appendLE16(2, to: &apeData)          // channels
+        appendLE32(44100, to: &apeData)      // sample rate
+        appendLE32(0, to: &apeData)          // wavHeaderBytes
+        appendLE32(0, to: &apeData)          // terminatingDataBytes
+        appendLE32(30, to: &apeData)         // totalFrames (29 * 294912 + 267552 = 8820000 = 200s)
+        appendLE32(267552, to: &apeData)     // finalFrameBlocks
+        apeData.append(Data(repeating: 0, count: 16))
+
+        var apeItemsData = Data()
+        for (k, v) in [("Title", "爱在深秋"), ("Artist", "谭咏麟"), ("Album", "爱的根源")] {
+            let valBytes = Data(v.utf8)
+            appendLE32(UInt32(valBytes.count), to: &apeItemsData)
+            appendLE32(0, to: &apeItemsData) // UTF-8 text item
+            apeItemsData.append(Data(k.utf8))
+            apeItemsData.append(0)
+            apeItemsData.append(valBytes)
+        }
+        let apeTagSize = UInt32(apeItemsData.count + 32)
+        // APEv2 Header
+        apeData.append(Data("APETAGEX".utf8))
+        appendLE32(2000, to: &apeData)
+        appendLE32(apeTagSize, to: &apeData)
+        appendLE32(3, to: &apeData)
+        appendLE32(0xA000_0000, to: &apeData)
+        apeData.append(Data(repeating: 0, count: 8))
+        apeData.append(apeItemsData)
+        // APEv2 Footer
+        apeData.append(Data("APETAGEX".utf8))
+        appendLE32(2000, to: &apeData)
+        appendLE32(apeTagSize, to: &apeData)
+        appendLE32(3, to: &apeData)
+        appendLE32(0x8000_0000, to: &apeData)
+        apeData.append(Data(repeating: 0, count: 8))
+        try apeData.write(to: apeURL)
+
+        // 2. MP3 (MPEG-1 Layer III Xing header + ID3v1 GB18030 TAG)
+        let mp3URL = tempDir.appendingPathComponent("02-cost.mp3")
+        var frame = Data(repeating: 0, count: 417)
+        frame[0] = 0xFF
+        frame[1] = 0xFB
+        frame[2] = 0x90 // 128kbps, 44100Hz
+        frame[3] = 0x00 // Stereo -> side info = 32B, Xing at 36
+        frame.replaceSubrange(36..<40, with: Data("Xing".utf8))
+        frame[40..<44].withUnsafeMutableBytes { ptr in
+            var be = UInt32(1).bigEndian
+            memcpy(ptr.baseAddress!, &be, 4)
+        }
+        frame[44..<48].withUnsafeMutableBytes { ptr in
+            var be = UInt32(8250).bigEndian // 8250 * 1152 / 44100 = ~215.51s
+            memcpy(ptr.baseAddress!, &be, 4)
+        }
+        var mp3Data = frame
+        let gb18030 = String.Encoding(
+            rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue))
+        )
+        func paddedField(_ text: String, count: Int) -> Data {
+            var d = text.data(using: gb18030) ?? Data()
+            if d.count > count { d = d.prefix(count) }
+            if d.count < count { d.append(Data(repeating: 0, count: count - d.count)) }
+            return d
+        }
+        mp3Data.append(Data("TAG".utf8))
+        mp3Data.append(paddedField("爱的代价", count: 30))
+        mp3Data.append(paddedField("张艾嘉", count: 30))
+        mp3Data.append(paddedField("爱的代价专辑", count: 30))
+        mp3Data.append(Data(repeating: 0, count: 35))
+        try mp3Data.write(to: mp3URL)
+
+        let cacheURL = tempDir.appendingPathComponent("cache_v2.json")
+        let apeItem = PlaylistItem(path: apeURL.path, title: "01-sample", duration: 0)
+        let mp3Item = PlaylistItem(path: mp3URL.path, title: "02-cost", duration: 0)
+
+        let writerService = AudioTrackMetadataService(cacheURL: cacheURL)
+        writerService.ensureLoaded(for: [apeItem, mp3Item], priorityPath: apeURL.path)
+
+        for _ in 0..<40 {
+            let aDone = (writerService.cache[apeURL.path]?.duration ?? 0) > 0
+            let mDone = (writerService.cache[mp3URL.path]?.duration ?? 0) > 0
+            if aDone && mDone { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+
+        let apeMeta = writerService.metadata(for: apeItem)
+        XCTAssertEqual(apeMeta.formatLabel, "APE")
+        XCTAssertEqual(apeMeta.title, "爱在深秋")
+        XCTAssertEqual(apeMeta.artist, "谭咏麟")
+        XCTAssertEqual(apeMeta.album, "爱的根源")
+        XCTAssertEqual(apeMeta.sampleRateHz, 44100)
+        XCTAssertEqual(apeMeta.bitDepth, 16)
+        XCTAssertEqual(apeMeta.duration ?? 0, 200.0, accuracy: 0.05)
+
+        let mp3Meta = writerService.metadata(for: mp3Item)
+        XCTAssertEqual(mp3Meta.formatLabel, "MP3")
+        XCTAssertEqual(mp3Meta.title, "爱的代价")
+        XCTAssertEqual(mp3Meta.artist, "张艾嘉")
+        XCTAssertEqual(mp3Meta.album, "爱的代价专辑")
+        XCTAssertEqual(mp3Meta.sampleRateHz, 44100)
+        XCTAssertEqual(mp3Meta.duration ?? 0, 8250.0 * 1152.0 / 44100.0, accuracy: 0.2)
+
+        // Wait for debounced disk persistence (650ms) and verify synchronous reload
+        for _ in 0..<25 {
+            if FileManager.default.fileExists(atPath: cacheURL.path) { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        let reloadedService = AudioTrackMetadataService(cacheURL: cacheURL)
+        XCTAssertEqual(reloadedService.metadata(for: apeItem).title, "爱在深秋")
+        XCTAssertEqual(reloadedService.metadata(for: mp3Item).title, "爱的代价")
+        XCTAssertEqual(reloadedService.metadata(for: apeItem).duration ?? 0, 200.0, accuracy: 0.05)
+    }
+
+    // MARK: - 6. Duplicate Path Selection & Music Mode Volume HUD Suppression
+
+    @MainActor
+    func testDuplicatePathSelectionPreservesExactID() {
+        let manager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+        let first = PlaylistItem(path: "/music/吴克群 - 为你写诗.wav", title: "吴克群 - 为你写诗", duration: 285)
+        let duplicate = PlaylistItem(path: "/music/吴克群 - 为你写诗.wav", title: "吴克群 - 为你写诗", duration: 285)
+
+        manager.appendItems([first, duplicate])
+        XCTAssertEqual(manager.audioItems.count, 2)
+
+        // Selecting the second duplicate item must stay on index 1 instead of snapping to index 0
+        let picked = manager.selectItemInCategory(duplicate, category: .audio)
+        XCTAssertEqual(picked?.id, duplicate.id)
+        XCTAssertEqual(manager.audioCurrentIndex, 1)
+        XCTAssertEqual(manager.currentItem?.id, duplicate.id)
+    }
+
+    @MainActor
+    func testAudioOnlySuppressesVerticalVolumeHUD() {
+        let previousSavedVolume = AppSettings.shared.savedVolume
+        defer { AppSettings.shared.savedVolume = previousSavedVolume }
+
+        let player = PlayerCore()
+        player.isAudioOnly = true
+
+        player.setVolume(65.0, showOSD: true)
+        XCTAssertFalse(player.isVolumeHUDVisible)
+
+        player.toggleMute()
+        XCTAssertFalse(player.isVolumeHUDVisible)
+
+        player.showVolumeOSD()
+        XCTAssertFalse(player.isVolumeHUDVisible)
+    }
 }

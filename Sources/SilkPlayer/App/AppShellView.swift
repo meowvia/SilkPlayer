@@ -280,7 +280,8 @@ public struct AppShellView: View {
     }
 
     private func playPlaylistItem(_ item: PlaylistItem, forceStartFromBeginning: Bool = false) {
-        if let idx = playlistManager.items.firstIndex(where: { $0.id == item.id || $0.path == item.path }) {
+        if let idx = playlistManager.items.firstIndex(where: { $0.id == item.id })
+            ?? playlistManager.items.firstIndex(where: { $0.path == item.path }) {
             playlistManager.selectIndex(idx)
         }
         let resumeTime = forceStartFromBeginning ? 0.0 : AppSettings.shared.getSavedPosition(for: item.path)

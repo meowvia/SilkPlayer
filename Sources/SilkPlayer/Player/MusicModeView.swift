@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import Observation
 
 /// Unified three-tier Music Mode interface rendered inside PlayerContainerView when playing audio.
 @MainActor
@@ -23,6 +24,11 @@ public struct MusicModeView: View {
     @State private var isClearHovered: Bool = false
     @State private var isSortHovered: Bool = false
     @State private var isModeHovered: Bool = false
+    @State private var isHeroTitleHovered: Bool = false
+    @State private var locatePlayingTrigger: Int = 0
+    @State private var highlightedTrackID: UUID? = nil
+    @State private var locateHighlightTask: Task<Void, Never>? = nil
+    @State private var wheelController = MusicWheelController()
 
     public init(
         player: PlayerCore,
@@ -53,6 +59,13 @@ public struct MusicModeView: View {
 
     private var activePlayingAudioItem: PlaylistItem? {
         if let path = player.currentFilePath {
+            if playlist.audioCurrentIndex >= 0,
+               playlist.audioCurrentIndex < playlist.audioItems.count {
+                let indexed = playlist.audioItems[playlist.audioCurrentIndex]
+                if indexed.path == path {
+                    return indexed
+                }
+            }
             if let match = playlist.audioItems.first(where: { $0.path == path }) {
                 return match
             }
@@ -65,9 +78,15 @@ public struct MusicModeView: View {
     }
 
     private var activePlayingAudioIndex: Int? {
-        if let path = player.currentFilePath,
-           let idx = playlist.audioItems.firstIndex(where: { $0.path == path }) {
-            return idx
+        if let path = player.currentFilePath {
+            if playlist.audioCurrentIndex >= 0,
+               playlist.audioCurrentIndex < playlist.audioItems.count,
+               playlist.audioItems[playlist.audioCurrentIndex].path == path {
+                return playlist.audioCurrentIndex
+            }
+            if let idx = playlist.audioItems.firstIndex(where: { $0.path == path }) {
+                return idx
+            }
         }
         if playlist.activeCategory == .audio, playlist.audioCurrentIndex >= 0, playlist.audioCurrentIndex < playlist.audioItems.count {
             return playlist.audioCurrentIndex
@@ -124,21 +143,33 @@ public struct MusicModeView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             browsingCategory = .audio
-            metadataService.ensureLoaded(for: playlist.audioItems)
-            if let path = player.currentFilePath,
-               let currentItem = playlist.audioItems.first(where: { $0.path == path }) {
-                metadataService.ensureLoaded(for: [currentItem])
-            }
+            metadataService.ensureLoaded(for: playlist.audioItems, priorityPath: player.currentFilePath)
+            installMusicScrollWheelMonitor()
+        }
+        .onDisappear {
+            removeMusicScrollWheelMonitor()
+            locateHighlightTask?.cancel()
+            locateHighlightTask = nil
+            wheelController.cancelRevealTimer()
         }
         .onChange(of: playlist.audioItems) { _, items in
-            metadataService.ensureLoaded(for: items)
+            metadataService.ensureLoaded(for: items, priorityPath: player.currentFilePath)
+        }
+        .onChange(of: player.volume) { _, _ in
+            wheelController.revealVolumePercentage()
+        }
+        .onChange(of: player.isMuted) { _, _ in
+            wheelController.revealVolumePercentage()
         }
         .onChange(of: player.currentFilePath) { _, newPath in
             if let newPath = newPath {
                 if let match = playlist.audioItems.first(where: { $0.path == newPath }) {
-                    metadataService.ensureLoaded(for: [match])
+                    metadataService.ensureLoaded(for: [match], priorityPath: newPath)
                 } else {
-                    metadataService.ensureLoaded(for: [PlaylistItem(path: newPath, title: player.mediaTitle, duration: player.duration)])
+                    metadataService.ensureLoaded(
+                        for: [PlaylistItem(path: newPath, title: player.mediaTitle, duration: player.duration)],
+                        priorityPath: newPath
+                    )
                 }
             }
         }
@@ -320,7 +351,8 @@ public struct MusicModeView: View {
         let meta = currentItem.map { metadataService.metadata(for: $0) }
         let titleText: String = {
             if let m = meta, !m.title.isEmpty { return m.title }
-            let sanitized = MediaFilenameSanitizer.sanitize(player.mediaTitle).cleanTitle
+            let repaired = AudioTrackMetadataService.repairMojibakeIfNeeded(player.mediaTitle)
+            let sanitized = MediaFilenameSanitizer.sanitize(repaired).cleanTitle
             return sanitized.isEmpty ? L10n.tr("Unknown Track", "未知曲目") : sanitized
         }()
         let subtitleText: String = {
@@ -382,35 +414,62 @@ public struct MusicModeView: View {
                 }
             }
 
-            // Middle: Now Playing + Title + Artist/Album
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(player.isPlaying ? Color.cyan : Color.white.opacity(0.35))
-                        .frame(width: 6, height: 6)
-                    Text(player.isPlaying ? L10n.tr("NOW PLAYING", "正在播放") : L10n.tr("PAUSED", "已暂停"))
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(player.isPlaying ? .cyan.opacity(0.92) : .white.opacity(0.55))
-                        .tracking(0.6)
+            // Middle: Clickable Now Playing Title + Artist/Album -> locates active song in queue
+            Button(action: locatePlayingTrack) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(player.isPlaying ? Color.cyan : Color.white.opacity(0.35))
+                            .frame(width: 6, height: 6)
+                        Text(player.isPlaying ? L10n.tr("NOW PLAYING", "正在播放") : L10n.tr("PAUSED", "已暂停"))
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(player.isPlaying ? .cyan.opacity(0.92) : .white.opacity(0.55))
+                            .tracking(0.6)
+                        if isHeroTitleHovered && activePlayingAudioItem != nil {
+                            Image(systemName: "scope")
+                                .font(.system(size: 9.5, weight: .semibold))
+                                .foregroundColor(.cyan.opacity(0.88))
+                                .transition(.opacity)
+                        }
+                    }
+
+                    Text(titleText)
+                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                        .foregroundColor(isHeroTitleHovered && activePlayingAudioItem != nil ? .cyan : .white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Text(subtitleText)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.62))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
-
-                Text(titleText)
-                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .help(player.mediaTitle)
-
-                Text(subtitleText)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.62))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                .padding(.vertical, 2)
+                .padding(.horizontal, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isHeroTitleHovered && activePlayingAudioItem != nil ? Color.white.opacity(0.06) : Color.clear)
+                )
+                .contentShape(Rectangle())
+                .overlay(
+                    MusicPointingHandOverlay(enabled: activePlayingAudioItem != nil)
+                )
             }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .focusEffectDisabled()
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.14)) {
+                    isHeroTitleHovered = hovering
+                }
+            }
+            .help(L10n.tr("Locate playing song in playlist", "点击在播放列表中定位当前歌曲"))
             .frame(minWidth: 110, maxWidth: .infinity, alignment: .leading)
 
-            // Trailing: Audio Spec Pill + Spectrum Bars + Counter
-            VStack(alignment: .trailing, spacing: 7) {
+            // Trailing: Centered Audio Spec Pill + Symmetrical Spectrum Bars & Counter
+            VStack(alignment: .center, spacing: 11) {
                 Text(specText)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundColor(
@@ -440,18 +499,31 @@ public struct MusicModeView: View {
                     )
                     .fixedSize(horizontal: true, vertical: false)
 
-                HStack(spacing: 8) {
-                    MusicSpectrumMiniMeter(
-                        levels: player.audioRhythmLevels,
-                        isPlaying: player.isPlaying
+                Button(action: locatePlayingTrack) {
+                    HStack(spacing: 8) {
+                        MusicSpectrumMiniMeter(
+                            levels: player.audioRhythmLevels,
+                            isPlaying: player.isPlaying
+                        )
+                        Text(indexLabel)
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundColor(.white.opacity(0.68))
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .contentShape(Rectangle())
+                    .overlay(
+                        MusicPointingHandOverlay(enabled: activePlayingAudioItem != nil)
                     )
-                    Text(indexLabel)
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundColor(.white.opacity(0.62))
-                        .fixedSize(horizontal: true, vertical: false)
                 }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .focusEffectDisabled()
+                .help(L10n.tr("Locate playing song in playlist", "点击在播放列表中定位当前歌曲"))
             }
+            .padding(.top, 2)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
@@ -471,7 +543,7 @@ public struct MusicModeView: View {
         let entries = filteredEntries
         let upcomingId = (effectiveBrowsingCategory == .audio) ? playlist.upcomingItem?.id : nil
         let showExtendedColumns = MusicModeGeometry.showsExtendedQueueColumns(width: windowWidth)
-        let currentPlayingPath = player.currentFilePath
+        let activePlayingID = activePlayingAudioItem?.id
 
         return VStack(spacing: 0) {
             // Single-row Toolbar: + Add, Clear, Search, Custom Sort
@@ -593,7 +665,7 @@ public struct MusicModeView: View {
                     ScrollView(.vertical, showsIndicators: true) {
                         LazyVStack(spacing: 2) {
                             ForEach(entries, id: \.item.id) { entry in
-                                let isCurrent = (entry.item.path == currentPlayingPath)
+                                let isCurrent = (entry.item.id == activePlayingID)
                                 let isUpcoming = (!isCurrent && upcomingId == entry.item.id && effectiveBrowsingCategory == .audio)
                                 MusicQueueRowView(
                                     displayIndex: entry.index + 1,
@@ -603,6 +675,7 @@ public struct MusicModeView: View {
                                     isCurrent: isCurrent,
                                     isPlaying: isCurrent && player.isPlaying,
                                     isUpcoming: isUpcoming,
+                                    isPulseHighlighted: highlightedTrackID == entry.item.id,
                                     showExtendedColumns: showExtendedColumns,
                                     windowWidth: windowWidth,
                                     onSelect: {
@@ -626,12 +699,35 @@ public struct MusicModeView: View {
                     }
                     .onAppear {
                         if let active = activePlayingAudioItem {
-                            proxy.scrollTo(active.id, anchor: .center)
+                            Task { @MainActor in
+                                await Task.yield()
+                                proxy.scrollTo(active.id, anchor: .center)
+                            }
                         }
                     }
                     .onChange(of: player.currentFilePath) { _, _ in
-                        if let active = activePlayingAudioItem, searchQuery.isEmpty {
+                        if let active = activePlayingAudioItem, searchQuery.isEmpty, effectiveBrowsingCategory == .audio {
                             withAnimation(.easeInOut(duration: 0.25)) {
+                                proxy.scrollTo(active.id, anchor: .center)
+                            }
+                        }
+                    }
+                    .onChange(of: playlist.audioCurrentIndex) { _, _ in
+                        if let active = activePlayingAudioItem, searchQuery.isEmpty, effectiveBrowsingCategory == .audio {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                proxy.scrollTo(active.id, anchor: .center)
+                            }
+                        }
+                    }
+                    .onChange(of: locatePlayingTrigger) { _, _ in
+                        guard let active = activePlayingAudioItem else { return }
+                        Task { @MainActor in
+                            await Task.yield()
+                            withAnimation(.easeInOut(duration: 0.28)) {
+                                proxy.scrollTo(active.id, anchor: .center)
+                            }
+                            try? await Task.sleep(nanoseconds: 35_000_000)
+                            withAnimation(.easeInOut(duration: 0.20)) {
                                 proxy.scrollTo(active.id, anchor: .center)
                             }
                         }
@@ -759,8 +855,10 @@ public struct MusicModeView: View {
         let showVolPercent = MusicModeGeometry.showsVolumePercentage(forWindowWidth: windowWidth)
 
         return VStack(spacing: compact ? 8 : 10) {
-            // 1. Native Scrubber
+            // 1. Native Scrubber (also accepts mouse-wheel vertical scroll to adjust volume)
             PlayerProgressSection(player: player, clock: player.clock, playlist: playlist, tier: scrubberTier)
+                .contentShape(Rectangle())
+                .onHover { wheelController.isHoveringProgressSection = $0 }
 
             // 2. Centered Transport + Wings
             ZStack(alignment: .center) {
@@ -863,7 +961,9 @@ public struct MusicModeView: View {
                         MusicInlineVolumeSlider(
                             player: player,
                             trackWidth: volWidth,
-                            showPercentage: showVolPercent
+                            showPercentage: showVolPercent,
+                            recentVolumeChangeReveal: wheelController.isVolumePercentageRevealed,
+                            onHoverChanged: { wheelController.isHoveringVolumeSection = $0 }
                         )
 
                         HUDTransportButton(
@@ -884,6 +984,42 @@ public struct MusicModeView: View {
     }
 
     // MARK: - Actions
+
+    private func locatePlayingTrack() {
+        guard let active = activePlayingAudioItem else { return }
+        if effectiveBrowsingCategory != .audio {
+            browsingCategory = .audio
+        }
+        if !searchQuery.isEmpty {
+            searchQuery = ""
+        }
+        triggerLocatePulse(for: active.id)
+        locatePlayingTrigger &+= 1
+    }
+
+    private func triggerLocatePulse(for trackID: UUID) {
+        locateHighlightTask?.cancel()
+        withAnimation(.easeOut(duration: 0.16)) {
+            highlightedTrackID = trackID
+        }
+        locateHighlightTask = Task { @MainActor [trackID] in
+            try? await Task.sleep(nanoseconds: 1_050_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.35)) {
+                if highlightedTrackID == trackID {
+                    highlightedTrackID = nil
+                }
+            }
+        }
+    }
+
+    private func installMusicScrollWheelMonitor() {
+        wheelController.installMonitor(player: player, settings: settings)
+    }
+
+    private func removeMusicScrollWheelMonitor() {
+        wheelController.removeMonitor()
+    }
 
     private func handleSelectQueueItem(_ item: PlaylistItem, in category: MediaCategory) {
         if settings.dualPlaylistMode && playlist.activeCategory != category {
@@ -964,6 +1100,7 @@ private struct MusicQueueRowView: View {
     let isCurrent: Bool
     let isPlaying: Bool
     let isUpcoming: Bool
+    let isPulseHighlighted: Bool
     let showExtendedColumns: Bool
     let windowWidth: CGFloat
     let onSelect: () -> Void
@@ -1070,19 +1207,27 @@ private struct MusicQueueRowView: View {
             }
             .frame(width: 44, alignment: .trailing)
         }
+        .frame(minHeight: 34)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(
-                    isCurrent
-                        ? Color.cyan.opacity(0.14)
-                        : (isHovered ? Color.white.opacity(0.08) : Color.clear)
+                    isPulseHighlighted
+                        ? Color.cyan.opacity(0.24)
+                        : (isCurrent
+                            ? Color.cyan.opacity(0.14)
+                            : (isHovered ? Color.white.opacity(0.08) : Color.clear))
                 )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(isCurrent ? Color.cyan.opacity(0.30) : Color.clear, lineWidth: 0.6)
+                .strokeBorder(
+                    isPulseHighlighted
+                        ? Color.cyan.opacity(0.85)
+                        : (isCurrent ? Color.cyan.opacity(0.30) : Color.clear),
+                    lineWidth: isPulseHighlighted ? 1.2 : 0.6
+                )
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
@@ -1133,17 +1278,40 @@ private struct MusicSpectrumMiniMeter: View {
     let levels: [CGFloat]
     let isPlaying: Bool
 
+    private static let bandIndices: [Int] = [4, 2, 0, 1, 0, 2, 3, 5]
+    private static let archWeights: [CGFloat] = [0.58, 0.78, 0.94, 1.0, 1.0, 0.94, 0.78, 0.58]
+
     var body: some View {
-        HStack(alignment: .center, spacing: 2) {
-            ForEach(0..<6, id: \.self) { idx in
-                let raw = (idx < levels.count && isPlaying) ? levels[idx] : 0.08
-                let height = max(3.0, min(14.0, 3.0 + raw * 11.0))
+        HStack(alignment: .center, spacing: 3.0) {
+            ForEach(0..<8, id: \.self) { idx in
+                let bandIdx = Self.bandIndices[idx]
+                let weight = Self.archWeights[idx]
+                let raw: CGFloat = (isPlaying && bandIdx < levels.count) ? levels[bandIdx] : 0.14
+                let normalized = min(1.0, max(0.0, (0.20 + 0.80 * raw) * weight))
+                let height = isPlaying
+                    ? max(4.5, min(18.5, 4.5 + normalized * 14.0))
+                    : max(4.0, 4.0 + weight * 3.5)
+
                 Capsule()
-                    .fill(isPlaying ? Color.cyan.opacity(0.85) : Color.white.opacity(0.28))
-                    .frame(width: 2.2, height: height)
+                    .fill(
+                        isPlaying
+                            ? AnyShapeStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.25, green: 0.92, blue: 1.0),
+                                        Color(red: 0.18, green: 0.58, blue: 1.0)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            : AnyShapeStyle(Color.white.opacity(0.28))
+                    )
+                    .frame(width: 2.6, height: height)
+                    .shadow(color: isPlaying ? Color.cyan.opacity(0.38) : .clear, radius: 2, x: 0, y: 0)
             }
         }
-        .frame(height: 14)
+        .frame(height: 19, alignment: .center)
         .animation(.easeOut(duration: 0.08), value: levels)
     }
 }
@@ -1153,8 +1321,11 @@ private struct MusicInlineVolumeSlider: View {
     @ObservedObject var player: PlayerCore
     let trackWidth: CGFloat
     let showPercentage: Bool
+    var recentVolumeChangeReveal: Bool = false
+    var onHoverChanged: (Bool) -> Void = { _ in }
 
     @State private var isDragging: Bool = false
+    @State private var isHovered: Bool = false
 
     private var iconName: String {
         if player.isMuted || player.volume <= 0 {
@@ -1166,6 +1337,10 @@ private struct MusicInlineVolumeSlider: View {
         } else {
             return "speaker.wave.3.fill"
         }
+    }
+
+    private var shouldRevealPercentage: Bool {
+        showPercentage || isHovered || isDragging || recentVolumeChangeReveal
     }
 
     var body: some View {
@@ -1212,7 +1387,7 @@ private struct MusicInlineVolumeSlider: View {
                                 player.toggleMute()
                             }
                             let newFrac = max(0.0, min(1.0, value.location.x / max(1.0, geo.size.width)))
-                            player.setVolume(Double(newFrac) * maxLimit)
+                            player.setVolume(Double(newFrac) * maxLimit, maxLimit: maxLimit, showOSD: false)
                         }
                         .onEnded { _ in
                             isDragging = false
@@ -1221,13 +1396,128 @@ private struct MusicInlineVolumeSlider: View {
             }
             .frame(width: trackWidth, height: 18)
 
-            if showPercentage {
+            if shouldRevealPercentage {
                 Text("\(Int(round(currentVol)))%")
                     .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                     .monospacedDigit()
-                    .foregroundColor(.white.opacity(0.55))
+                    .foregroundColor(.white.opacity(0.62))
                     .frame(width: 34, alignment: .trailing)
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+            onHoverChanged(hovering)
+        }
+        .animation(.easeOut(duration: 0.16), value: shouldRevealPercentage)
+    }
+}
+
+/// Coordinates scoped mouse-wheel volume control over Music Mode bottom playback/volume controls
+/// and temporary volume percentage reveal on narrow windows without blocking queue scrolling.
+@MainActor
+@Observable
+private final class MusicWheelController {
+    var isHoveringProgressSection: Bool = false
+    var isHoveringVolumeSection: Bool = false
+    var isVolumePercentageRevealed: Bool = false
+
+    @ObservationIgnored
+    private var monitor: Any? = nil
+    @ObservationIgnored
+    private var revealTask: Task<Void, Never>? = nil
+
+    func revealVolumePercentage() {
+        isVolumePercentageRevealed = true
+        revealTask?.cancel()
+        revealTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.isVolumePercentageRevealed = false
+        }
+    }
+
+    func cancelRevealTimer() {
+        revealTask?.cancel()
+        revealTask = nil
+    }
+
+    func installMonitor(player: PlayerCore, settings: AppSettings) {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self, weak player] event in
+            guard let self, let player, player.isAudioOnly else { return event }
+            if let settingsWin = PlayerWindowManager.shared.settingsWindow, event.window === settingsWin {
+                return event
+            }
+            if let hostWin = player.hostWindow, let evWin = event.window, evWin !== hostWin {
+                return event
+            }
+            guard self.isHoveringProgressSection || self.isHoveringVolumeSection else {
+                return event
+            }
+
+            let rawDeltaY = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.deltaY
+            // Preserve horizontal trackpad swipes untouched
+            guard abs(rawDeltaY) >= abs(event.scrollingDeltaX), abs(rawDeltaY) > 0.001 else {
+                return event
+            }
+
+            let maxLimit = max(100.0, settings.maxVolumeLimit)
+            let step: Double
+            if event.hasPreciseScrollingDeltas {
+                step = max(-6.0, min(6.0, Double(rawDeltaY) * 0.22))
+            } else {
+                step = (rawDeltaY > 0 ? 1.0 : -1.0) * 3.0
+            }
+
+            if player.isMuted && step > 0 {
+                player.toggleMute()
+            }
+            let baseVol = player.isMuted ? 0.0 : player.volume
+            let nextVol = max(0.0, min(maxLimit, baseVol + step))
+            player.setVolume(nextVol, maxLimit: maxLimit, showOSD: false)
+            self.revealVolumePercentage()
+            return nil
+        }
+    }
+
+    func removeMonitor() {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+    }
+}
+
+/// Adds a non-blocking pointing-hand cursor rect without intercepting SwiftUI clicks or hover events.
+@MainActor
+private struct MusicPointingHandOverlay: NSViewRepresentable {
+    let enabled: Bool
+
+    func makeNSView(context: Context) -> MusicPointingHandNSView {
+        let view = MusicPointingHandNSView()
+        view.isCursorEnabled = enabled
+        return view
+    }
+
+    func updateNSView(_ nsView: MusicPointingHandNSView, context: Context) {
+        if nsView.isCursorEnabled != enabled {
+            nsView.isCursorEnabled = enabled
+            nsView.window?.invalidateCursorRects(for: nsView)
+        }
+    }
+
+    final class MusicPointingHandNSView: NSView {
+        var isCursorEnabled: Bool = true
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
+        }
+
+        override func resetCursorRects() {
+            guard isCursorEnabled else { return }
+            addCursorRect(bounds, cursor: .pointingHand)
         }
     }
 }

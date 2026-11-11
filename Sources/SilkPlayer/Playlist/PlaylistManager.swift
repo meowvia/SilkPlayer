@@ -88,10 +88,12 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
                     let cur = unifiedItems[newValue]
                     if Self.category(for: cur.url) == .audio {
                         activeCategory = .audio
-                        audioCurrentIndex = audioItems.firstIndex(where: { $0.id == cur.id || $0.path == cur.path }) ?? -1
+                        audioCurrentIndex = audioItems.firstIndex(where: { $0.id == cur.id })
+                            ?? audioItems.firstIndex(where: { $0.path == cur.path }) ?? -1
                     } else {
                         activeCategory = .video
-                        videoCurrentIndex = videoItems.firstIndex(where: { $0.id == cur.id || $0.path == cur.path }) ?? -1
+                        videoCurrentIndex = videoItems.firstIndex(where: { $0.id == cur.id })
+                            ?? videoItems.firstIndex(where: { $0.path == cur.path }) ?? -1
                     }
                 } else {
                     videoCurrentIndex = -1
@@ -127,9 +129,11 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
                 let cur = unifiedItems[unifiedCurrentIndex]
                 activeCategory = Self.category(for: cur.url)
                 if activeCategory == .video {
-                    videoCurrentIndex = videoItems.firstIndex(where: { $0.id == cur.id || $0.path == cur.path }) ?? -1
+                    videoCurrentIndex = videoItems.firstIndex(where: { $0.id == cur.id })
+                        ?? videoItems.firstIndex(where: { $0.path == cur.path }) ?? -1
                 } else {
-                    audioCurrentIndex = audioItems.firstIndex(where: { $0.id == cur.id || $0.path == cur.path }) ?? -1
+                    audioCurrentIndex = audioItems.firstIndex(where: { $0.id == cur.id })
+                        ?? audioItems.firstIndex(where: { $0.path == cur.path }) ?? -1
                 }
             }
             if playbackMode == .shuffle {
@@ -393,13 +397,15 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         self.nextShuffleIndex = nil
 
         if startingCategory == .video {
-            if let idx = videoItems.firstIndex(where: { $0.path == item.path || $0.id == item.id }) {
+            if let idx = videoItems.firstIndex(where: { $0.id == item.id })
+                ?? videoItems.firstIndex(where: { $0.path == item.path }) {
                 self.videoCurrentIndex = idx
             } else {
                 self.videoCurrentIndex = videoItems.isEmpty ? -1 : 0
             }
         } else {
-            if let idx = audioItems.firstIndex(where: { $0.path == item.path || $0.id == item.id }) {
+            if let idx = audioItems.firstIndex(where: { $0.id == item.id })
+                ?? audioItems.firstIndex(where: { $0.path == item.path }) {
                 self.audioCurrentIndex = idx
             } else {
                 self.audioCurrentIndex = audioItems.isEmpty ? -1 : 0
@@ -449,13 +455,15 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
 
         let targetItem = playlistItems[targetIndex]
         if targetCategory == .video {
-            if let idx = videoItems.firstIndex(where: { $0.id == targetItem.id || $0.path == targetItem.path }) {
+            if let idx = videoItems.firstIndex(where: { $0.id == targetItem.id })
+                ?? videoItems.firstIndex(where: { $0.path == targetItem.path }) {
                 self.videoCurrentIndex = idx
             } else {
                 self.videoCurrentIndex = videoItems.isEmpty ? -1 : 0
             }
         } else {
-            if let idx = audioItems.firstIndex(where: { $0.id == targetItem.id || $0.path == targetItem.path }) {
+            if let idx = audioItems.firstIndex(where: { $0.id == targetItem.id })
+                ?? audioItems.firstIndex(where: { $0.path == targetItem.path }) {
                 self.audioCurrentIndex = idx
             } else {
                 self.audioCurrentIndex = audioItems.isEmpty ? -1 : 0
@@ -950,7 +958,8 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         if activeCategory != category {
             switchCategory(category)
         }
-        if let idx = items.firstIndex(where: { $0.id == item.id || $0.path == item.path }) {
+        if let idx = items.firstIndex(where: { $0.id == item.id })
+            ?? items.firstIndex(where: { $0.path == item.path }) {
             return selectIndex(idx)
         }
         return nil
