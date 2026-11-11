@@ -708,9 +708,14 @@ public struct MusicModeView: View {
                     }
                     .onChange(of: player.currentFilePath) { _, _ in
                         if let active = activePlayingAudioItem, searchQuery.isEmpty, effectiveBrowsingCategory == .audio {
-                            if suppressedAutoScrollID == active.id && Date() < suppressedAutoScrollDeadline {
+                            if Self.shouldSuppressAutoScroll(
+                                suppressedID: suppressedAutoScrollID,
+                                deadline: suppressedAutoScrollDeadline,
+                                selectedID: playlist.currentItem?.id
+                            ) {
                                 return
                             }
+                            suppressedAutoScrollID = nil
                             withAnimation(.easeInOut(duration: 0.25)) {
                                 proxy.scrollTo(active.id, anchor: .center)
                             }
@@ -718,9 +723,14 @@ public struct MusicModeView: View {
                     }
                     .onChange(of: playlist.audioCurrentIndex) { _, _ in
                         if let active = activePlayingAudioItem, searchQuery.isEmpty, effectiveBrowsingCategory == .audio {
-                            if suppressedAutoScrollID == active.id && Date() < suppressedAutoScrollDeadline {
+                            if Self.shouldSuppressAutoScroll(
+                                suppressedID: suppressedAutoScrollID,
+                                deadline: suppressedAutoScrollDeadline,
+                                selectedID: playlist.currentItem?.id
+                            ) {
                                 return
                             }
+                            suppressedAutoScrollID = nil
                             withAnimation(.easeInOut(duration: 0.25)) {
                                 proxy.scrollTo(active.id, anchor: .center)
                             }
@@ -1127,10 +1137,23 @@ public struct MusicModeView: View {
         wheelController.removeMonitor()
     }
 
+    static func shouldSuppressAutoScroll(
+        suppressedID: UUID?,
+        deadline: Date,
+        selectedID: UUID?,
+        now: Date = Date()
+    ) -> Bool {
+        guard let suppressedID, now < deadline else { return false }
+        if let selectedID {
+            return selectedID == suppressedID
+        }
+        return true
+    }
+
     private func handleSelectQueueItem(_ item: PlaylistItem, in category: MediaCategory) {
         if category == .audio {
             suppressedAutoScrollID = item.id
-            suppressedAutoScrollDeadline = Date().addingTimeInterval(1.5)
+            suppressedAutoScrollDeadline = Date().addingTimeInterval(3.5)
         } else {
             suppressedAutoScrollID = nil
         }
@@ -1237,97 +1260,98 @@ private struct MusicQueueRowView: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Leading Track Index / Playing Bars
-            Group {
-                if isCurrent {
-                    MusicMiniPlayingBars(isPlaying: isPlaying)
-                } else {
-                    Text("\(displayIndex)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundColor(isHovered ? .white.opacity(0.75) : .white.opacity(0.40))
+        Button(action: onSelect) {
+            HStack(spacing: 8) {
+                // Leading Track Index / Playing Bars
+                Group {
+                    if isCurrent {
+                        MusicMiniPlayingBars(isPlaying: isPlaying)
+                    } else {
+                        Text("\(displayIndex)")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundColor(isHovered ? .white.opacity(0.75) : .white.opacity(0.40))
+                    }
                 }
-            }
-            .frame(width: 26, alignment: .trailing)
+                .frame(width: 26, alignment: .trailing)
 
-            // Song / Video Title
-            HStack(spacing: 6) {
-                Text(rowTitleText)
-                    .font(.system(size: 12.5, weight: isCurrent ? .semibold : .medium))
-                    .foregroundColor(isCurrent ? .cyan : .white.opacity(isHovered ? 0.96 : 0.88))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Extended Columns on Large Screens (>= 680 pt): Left-Aligned Album + Format
-            if showExtendedColumns {
-                if category == .audio {
-                    Text(metadata.album.isEmpty ? "—" : metadata.album)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(metadata.album.isEmpty ? .white.opacity(0.22) : .white.opacity(0.48))
+                // Song / Video Title
+                HStack(spacing: 6) {
+                    Text(rowTitleText)
+                        .font(.system(size: 12.5, weight: isCurrent ? .semibold : .medium))
+                        .foregroundColor(isCurrent ? .cyan : .white.opacity(isHovered ? 0.96 : 0.88))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(width: min(156, max(110, windowWidth * 0.21)), alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Extended Columns on Large Screens (>= 680 pt): Left-Aligned Album + Format
+                if showExtendedColumns {
+                    if category == .audio {
+                        Text(metadata.album.isEmpty ? "—" : metadata.album)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundColor(metadata.album.isEmpty ? .white.opacity(0.22) : .white.opacity(0.48))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(width: min(156, max(110, windowWidth * 0.21)), alignment: .leading)
+                    }
+
+                    Text(metadata.formatLabel)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.46))
+                        .lineLimit(1)
+                        .frame(width: 44, alignment: .leading)
                 }
 
-                Text(metadata.formatLabel)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.46))
-                    .lineLimit(1)
-                    .frame(width: 44, alignment: .leading)
-            }
-
-            // Trailing Duration or Remove Button on Hover
-            ZStack(alignment: .trailing) {
+                // Trailing Duration (hidden while hover remove button is visible)
                 Text(resolvedDuration > 0 ? formatPlaybackTime(resolvedDuration) : "--:--")
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundColor(.white.opacity(0.48))
                     .opacity(isHovered ? 0.0 : 1.0)
-
-                if isHovered {
-                    Button(action: onRemove) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 9.5, weight: .bold))
-                            .foregroundColor(.white.opacity(0.65))
-                            .frame(width: 22, height: 22)
-                            .background(Circle().fill(Color.white.opacity(0.12)))
-                    }
-                    .buttonStyle(.plain)
-                    .help(L10n.tr("Remove from Playlist", "从列表移除"))
-                }
+                    .frame(width: 44, alignment: .trailing)
             }
-            .frame(width: 44, alignment: .trailing)
+            .frame(maxWidth: .infinity, minHeight: 31, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4.5)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(
+                        isPulseHighlighted
+                            ? Color.cyan.opacity(0.24)
+                            : (isCurrent
+                                ? Color.cyan.opacity(0.14)
+                                : (isHovered ? Color.white.opacity(0.08) : Color.clear))
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(
+                        isPulseHighlighted
+                            ? Color.cyan.opacity(0.85)
+                            : (isCurrent ? Color.cyan.opacity(0.30) : Color.clear),
+                        lineWidth: isPulseHighlighted ? 1.2 : 0.6
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
-        .frame(minHeight: 31)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4.5)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(
-                    isPulseHighlighted
-                        ? Color.cyan.opacity(0.24)
-                        : (isCurrent
-                            ? Color.cyan.opacity(0.14)
-                            : (isHovered ? Color.white.opacity(0.08) : Color.clear))
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(
-                    isPulseHighlighted
-                        ? Color.cyan.opacity(0.85)
-                        : (isCurrent ? Color.cyan.opacity(0.30) : Color.clear),
-                    lineWidth: isPulseHighlighted ? 1.2 : 0.6
-                )
-        )
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .overlay(alignment: .trailing) {
+            if isHovered {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundColor(.white.opacity(0.65))
+                        .frame(width: 22, height: 22)
+                        .background(Circle().fill(Color.white.opacity(0.12)))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 8)
+                .help(L10n.tr("Remove from Playlist", "从列表移除"))
+            }
+        }
         .onHover { isHovered = $0 }
-        .onTapGesture {
-            onSelect()
-        }
         .contextMenu {
             Button(L10n.play) {
                 onSelect()

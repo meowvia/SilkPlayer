@@ -285,7 +285,7 @@ public struct AppShellView: View {
             playlistManager.selectIndex(idx)
         }
         let resumeTime = forceStartFromBeginning ? 0.0 : AppSettings.shared.getSavedPosition(for: item.path)
-        startPlayback(path: item.path, startTime: resumeTime)
+        startPlayback(path: item.path, startTime: resumeTime, autoPlay: true)
     }
 
     private func playNext() {

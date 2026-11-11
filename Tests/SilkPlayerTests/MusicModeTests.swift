@@ -627,6 +627,60 @@ final class MusicModeTests: XCTestCase {
         XCTAssertEqual(meta.duration ?? 0, 1.0, accuracy: 0.02)
     }
 
+    @MainActor
+    func testQueueManualSelectionScrollSuppressionAcrossCrossfadeAndNavigation() {
+        let clickedID = UUID()
+        let nextTrackID = UUID()
+        let now = Date()
+        let deadline = now.addingTimeInterval(3.5)
+
+        // During crossfade or after file load completes, playlist.currentItem matches clickedID -> stay suppressed
+        XCTAssertTrue(
+            MusicModeView.shouldSuppressAutoScroll(
+                suppressedID: clickedID,
+                deadline: deadline,
+                selectedID: clickedID,
+                now: now.addingTimeInterval(0.05)
+            )
+        )
+        XCTAssertTrue(
+            MusicModeView.shouldSuppressAutoScroll(
+                suppressedID: clickedID,
+                deadline: deadline,
+                selectedID: clickedID,
+                now: now.addingTimeInterval(1.0)
+            )
+        )
+
+        // Subsequent Next/Prev/EOF selecting a different track must immediately allow auto-scroll
+        XCTAssertFalse(
+            MusicModeView.shouldSuppressAutoScroll(
+                suppressedID: clickedID,
+                deadline: deadline,
+                selectedID: nextTrackID,
+                now: now.addingTimeInterval(0.2)
+            )
+        )
+
+        // Once suppression deadline expires or ID cleared, auto-scroll is active again
+        XCTAssertFalse(
+            MusicModeView.shouldSuppressAutoScroll(
+                suppressedID: clickedID,
+                deadline: deadline,
+                selectedID: clickedID,
+                now: now.addingTimeInterval(4.0)
+            )
+        )
+        XCTAssertFalse(
+            MusicModeView.shouldSuppressAutoScroll(
+                suppressedID: nil,
+                deadline: deadline,
+                selectedID: clickedID,
+                now: now
+            )
+        )
+    }
+
     // MARK: - Binary Fixture Helpers
 
     private func makeOggPage(headerType: UInt8, granule: UInt64, seq: UInt32, payload: Data) -> Data {

@@ -330,7 +330,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         if shouldCrossfade {
             fadeTask = Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                await self.performFadeOut(duration: 0.28)
+                await self.performFadeOut(duration: 0.08)
                 guard !Task.isCancelled else { return }
                 self.loadFile(path: path, startTime: startTime, autoPlay: autoPlay, fadeInOnStart: true)
             }
@@ -418,7 +418,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 self.isPlaying = true
                 self.playbackState = .playing
                 if fadeInOnStart {
-                    self.performFadeIn(targetVolume: targetVolume, duration: 0.38)
+                    self.performFadeIn(targetVolume: targetVolume, duration: 0.22)
                 }
 
                 // Format association prompt (first time opening this format, video only, once per format)
