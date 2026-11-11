@@ -42,29 +42,13 @@ extension PlayerCore {
             screenVisibleSize: screenFrame.size
         )
 
-        let targetContentW = targetSize.width
-        let targetContentH = targetSize.height
-
-        let currentCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
-        let newX = max(screenFrame.minX, min(screenFrame.maxX - targetContentW, currentCenter.x - targetContentW / 2.0))
-        let newY = max(screenFrame.minY, min(screenFrame.maxY - targetContentH, currentCenter.y - targetContentH / 2.0))
-        let newFrame = NSRect(x: newX, y: newY, width: targetContentW, height: targetContentH)
-
-        window.minSize = NSSize(width: 100, height: 100)
-        window.contentMinSize = window.minSize
-
-        window.setFrame(newFrame, display: true, animate: false)
-
-        window.minSize = minContentSz
-        window.contentMinSize = minContentSz
-
-        if isVertical {
-            lastPortraitContentSize = targetSize
-        } else {
-            lastLandscapeContentSize = targetSize
-        }
-
-        applyContentAspectRatioLock()
+        applyVideoWindowContentSize(
+            targetSize,
+            on: window,
+            screenFrame: screenFrame,
+            minContentSize: minContentSz,
+            animated: false
+        )
     }
 
     public func setAspectRatio(_ ratio: String) {
@@ -120,78 +104,136 @@ extension PlayerCore {
     }
 
     public func applyAdaptiveWindowGeometry(animated: Bool = true) {
-        guard let window = self.hostWindow ?? NSApp.keyWindow,
+        applyAdaptiveWindowGeometry(animated: animated, force: false)
+    }
+
+    public func resetWindowSize() {
+        guard let targetSize = applyAdaptiveWindowGeometry(animated: true, force: true) else { return }
+        showOSD(.pictureAdjustment(
+            name: L10n.windowSizeMenu,
+            value: "\(L10n.windowSizeDefaultShort) (\(Int(targetSize.width)) × \(Int(targetSize.height)))"
+        ))
+    }
+
+    public func fitWindow(scale: Double) {
+        guard !isAudioOnly,
+              let window = hostWindow ?? NSApp.keyWindow,
               !isFullscreen,
-              !window.styleMask.contains(.fullScreen) else { return }
+              !window.styleMask.contains(.fullScreen),
+              videoWidth > 0, videoHeight > 0,
+              scale > 0 else { return }
+
+        let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let aspect = effectiveAspectRatio
+        let rawW = CGFloat(displayVideoWidth > 0 ? displayVideoWidth : videoWidth)
+        let rawH = CGFloat(displayVideoHeight > 0 ? displayVideoHeight : videoHeight)
+        let baseW = transform.isPerpendicular ? rawH : rawW
+
+        let targetSize = PlayerGeometry.scaledVideoContentSize(
+            scale: CGFloat(scale),
+            aspect: aspect,
+            rawBaseWidth: baseW,
+            screenVisibleSize: screenFrame.size
+        )
+        let minSz = PlayerGeometry.minimumContentSize(for: aspect, screenVisibleHeight: screenFrame.height)
+
+        applyVideoWindowContentSize(
+            targetSize,
+            on: window,
+            screenFrame: screenFrame,
+            minContentSize: minSz,
+            animated: true
+        )
+
+        let scaleLabel = Self.formattedWindowScaleLabel(scale)
+        showOSD(.pictureAdjustment(
+            name: L10n.windowSizeMenu,
+            value: "\(scaleLabel) (\(Int(targetSize.width)) × \(Int(targetSize.height)))"
+        ))
+    }
+
+    @discardableResult
+    private func applyAdaptiveWindowGeometry(animated: Bool, force: Bool) -> NSSize? {
+        guard !isAudioOnly,
+              let window = self.hostWindow ?? NSApp.keyWindow,
+              !isFullscreen,
+              !window.styleMask.contains(.fullScreen) else { return nil }
 
         let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         window.maxSize = screenFrame.size
         window.contentMaxSize = screenFrame.size
 
-        guard AppSettings.shared.autoResizeWindow,
-              self.videoWidth > 0, self.videoHeight > 0 else { return }
+        guard (force || AppSettings.shared.autoResizeWindow),
+              self.videoWidth > 0, self.videoHeight > 0 else { return nil }
+
         let aspect = effectiveAspectRatio
-        let isVertical = isEffectiveVertical
-
         let minSz = PlayerGeometry.minimumContentSize(for: aspect, screenVisibleHeight: screenFrame.height)
-        let maxSafeContentSz = PlayerGeometry.maximumSafeContentSize(for: aspect, screenVisibleSize: screenFrame.size)
+        let rawW = CGFloat(displayVideoWidth > 0 ? displayVideoWidth : videoWidth)
+        let rawH = CGFloat(displayVideoHeight > 0 ? displayVideoHeight : videoHeight)
+        let baseW = transform.isPerpendicular ? rawH : rawW
+        let targetSize = PlayerGeometry.adaptiveVideoContentSize(
+            for: aspect,
+            isVertical: isEffectiveVertical,
+            rawVideoWidth: baseW,
+            screenVisibleSize: screenFrame.size
+        )
 
-        var targetContentW: CGFloat
-        var targetContentH: CGFloat
+        applyVideoWindowContentSize(
+            targetSize,
+            on: window,
+            screenFrame: screenFrame,
+            minContentSize: minSz,
+            animated: animated
+        )
+        return targetSize
+    }
 
-        if isVertical {
-            let idealH = round(screenFrame.height * 0.60)
-            targetContentH = min(max(idealH, minSz.height), maxSafeContentSz.height)
-            targetContentW = round(targetContentH * aspect)
-            if targetContentW > maxSafeContentSz.width {
-                targetContentW = maxSafeContentSz.width
-                targetContentH = round(targetContentW / aspect)
-            }
-            if targetContentW < minSz.width {
-                targetContentW = minSz.width
-                targetContentH = round(targetContentW / aspect)
-            }
-        } else {
-            let vW = CGFloat(displayVideoWidth > 0 ? displayVideoWidth : videoWidth)
-            let idealW = min(vW, screenFrame.width * 0.55)
-            targetContentW = max(minSz.width, min(maxSafeContentSz.width, idealW))
-            targetContentH = round(targetContentW / aspect)
+    /// Temporarily releases `minSize`, exits any maximized tracking state, applies a centered frame
+    /// inside `screenFrame`, restores `[minContentSize, screenFrame.size]` bounds, and re-locks aspect rules.
+    private func applyVideoWindowContentSize(
+        _ targetSize: NSSize,
+        on window: NSWindow,
+        screenFrame: NSRect,
+        minContentSize: NSSize,
+        animated: Bool
+    ) {
+        (window.delegate as? PlayerWindowDelegate)?.resetInteractiveModeToNormal()
 
-            if targetContentH > maxSafeContentSz.height {
-                targetContentH = maxSafeContentSz.height
-                targetContentW = round(targetContentH * aspect)
-            }
-            if targetContentW < minSz.width {
-                targetContentW = minSz.width
-                targetContentH = minSz.height
-            }
-        }
-
-        let frameW = targetContentW
-        let frameH = targetContentH
-
+        let frameW = min(screenFrame.width, targetSize.width)
+        let frameH = min(screenFrame.height, targetSize.height)
         let currentCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
-        let newX = max(screenFrame.minX, min(screenFrame.maxX - frameW, currentCenter.x - frameW / 2))
-        let newY = max(screenFrame.minY, min(screenFrame.maxY - frameH, currentCenter.y - frameH / 2))
+        let newX = max(screenFrame.minX, min(screenFrame.maxX - frameW, round(currentCenter.x - frameW / 2.0)))
+        let newY = max(screenFrame.minY, min(screenFrame.maxY - frameH, round(currentCenter.y - frameH / 2.0)))
         let newFrame = NSRect(x: newX, y: newY, width: frameW, height: frameH)
 
         window.minSize = NSSize(width: 100, height: 100)
         window.contentMinSize = window.minSize
 
-        window.setFrame(newFrame, display: true, animate: animated)
+        let shouldAnimate = animated && !PlayerWindowManager.isRunningTests
+        window.setFrame(newFrame, display: true, animate: shouldAnimate)
 
-        window.minSize = minSz
-        window.contentMinSize = minSz
+        window.minSize = minContentSize
+        window.contentMinSize = minContentSize
         window.maxSize = screenFrame.size
         window.contentMaxSize = screenFrame.size
 
-        let finalContentSize = NSSize(width: targetContentW, height: targetContentH)
-        if isVertical {
+        let finalContentSize = NSSize(width: frameW, height: frameH)
+        if isEffectiveVertical {
             lastPortraitContentSize = finalContentSize
         } else {
             lastLandscapeContentSize = finalContentSize
         }
 
         applyContentAspectRatioLock()
+    }
+
+    private static func formattedWindowScaleLabel(_ scale: Double) -> String {
+        let rounded = Int((scale * 100.0).rounded())
+        if rounded % 100 == 0 {
+            return "\(rounded / 100)x"
+        } else if rounded % 10 == 0 {
+            return String(format: "%.1fx", scale)
+        }
+        return String(format: "%.2fx", scale)
     }
 }

@@ -1837,8 +1837,11 @@ final class PlaylistRegressionTests: XCTestCase {
         XCTAssert(tier.retainsPrevNextButtons == true, "Music mode retains prev/next buttons in \(tier)")
     }
 
-    // Video mode remains completely unaffected across every tier
-    XCTAssert(HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == true, "Video minimal shows volume slider")
+    // Video mode remains completely unaffected across non-minimal tiers; minimal hides inline volume slider (ISSUE-019)
+    XCTAssert(HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false, "Video minimal hides inline volume slider")
+    XCTAssert(HUDLayoutTier.compact.showsVolumeSlider(isAudioOnly: false) == true, "Video compact shows volume slider")
+    XCTAssert(HUDLayoutTier.standard.showsVolumeSlider(isAudioOnly: false) == true, "Video standard shows volume slider")
+    XCTAssert(HUDLayoutTier.expanded.showsVolumeSlider(isAudioOnly: false) == true, "Video expanded shows volume slider")
     XCTAssert(HUDLayoutTier.minimal.showsSpeedButton(isAudioOnly: false) == false, "Video minimal hides speed button")
     XCTAssert(HUDLayoutTier.minimal.showsSubtitleTrackButton(isAudioOnly: false) == false, "Video minimal hides subtitle button")
     XCTAssert(HUDLayoutTier.minimal.showsMoreMenuButton(isAudioOnly: false) == true, "Video minimal shows more menu")

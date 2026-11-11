@@ -31,7 +31,7 @@
   - 原设置窗口尺寸过大（540x680），依赖纵向滚动条，包含底层基础能力开关与冗余快捷键列表，存在非标准术语。
 - **技术实现路径**:
   - 彻底收拢为 3 大标准顶级 Tab：通用（General）、播放（Playback）、关于（About）；
-  - 视窗尺寸精准定格为标准 520 × 400 pt，采用标准表单两列键值排布，全 Tab 零纵向滚动条；
+  - 视窗尺寸精准定格为标准 520 × 490 pt，采用标准表单两列键值排布，全 Tab 零纵向滚动条；
   - 100% 采用 macOS 官方标准界面术语，硬解、防爆音与外挂字幕同名加载全局默认启用；
   - 关于页面嵌入官方真实 AppIcon 矢量资产 `AboutAppIconView`，版本标识规范化为 `1.6.0 (Build 2026.11) · Universal Binary`。
 - **交付资产**:
@@ -104,16 +104,24 @@
   - `PlayerWindowManager.swift`、`PlayerCore.swift`、`AppShellView.swift`
   - `Tests/SilkPlayerTests/PlaylistTests.swift` 新增 Test 62 格式化与画幅判定断言。
 
+### 1.8 窗口倍率菜单与 HUD/菜单栏问题收敛 (Proposal 027 · ISSUE-019 · ISSUE-020)
+- **右键窗口倍率子菜单 (Proposal 027 / GitHub Issue #6)**：
+  - `VideoView.swift` (`MetalPlayerContainerView.buildContextMenu(for:)`) 新增「窗口尺寸 / Window Size」子菜单，支持 `0.5x`、`1x`、`1.5x`、`2x` 与「恢复默认自适应大小 (`resetWindowSize()`)」，在全屏或无已加载媒体时自动禁用；
+  - `PlayerModels.swift` (`PlayerGeometry.adaptiveVideoContentSize` / `scaledVideoContentSize`) 与 `Player/PlayerCore+WindowGeometry.swift` 统一收敛旋转与倍率开窗尺寸逻辑，修复 `fitWindow(scale:)` 的 `window.minSize` 临时释放/恢复、`.maximized` 状态经 `PlayerWindowDelegate.resetInteractiveModeToNormal()` 复位、全屏拦截及 OSD 反馈。
+- **竖屏/极窄窗口底栏音量按钮重叠修复 (ISSUE-019)**：
+  - `PlayerHUDView.swift` 在 `.minimal` 档位下隐藏底栏内联音量滑块，收紧边距与右侧间距，并在溢出菜单 (`moreMenuContent`) 补充静音开关；`PlaylistTests.swift` Test 63 同步更新断言 `HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false`。
+- **顶栏重名「窗口」菜单合并与冗余入口清理 (ISSUE-020)**：
+  - `PlayerCommands.swift` 将独立 `CommandMenu(L10n.menuWindow)` 替换为 `CommandGroup(before: .windowList)` 归入系统标准窗口菜单，并移除冗余 `Menu(L10n.fitToVideo)` 及其废弃本地化字段。
+
 ---
 
 ## 2. 自动化测试验证基准
 - **测试框架**: XCTest + Swift Testing 双引擎；
-- **测试套件**: 全量 62 项回归测试套件全量通过（100% PASS）；
+- **测试套件**: 全量回归测试通过（100% PASS，编译零告警）；
 - **基准固化**:
-  - Test 1-60：几何约束、播放列表、双轨分流、自然排序、Metal 容错等全部绿灯；
-  - Test 61：UpdateService 语义版本对比与 7 天静默频控测试绿灯；
-  - Test 62：窗口实时拉伸尺寸指示器与多画幅判定测试绿灯；
-  - SwiftTestingSanityTests：基准测试绿灯。
+  - `GeometryAndTransformTests`（7/7 通过）：几何边界约束、画幅自适应及右键倍率缩放与全屏门控测试；
+  - `PlaylistRegressionTests`（Test 1-63 全部断言通过）：播放列表、双轨分流、自然排序、Metal 容错、`UpdateService` 校验、HUD 实时尺寸及 `.minimal` 音量隐藏断言；
+  - `SwiftTestingSanityTests`（1/1 通过）：基础断言测试通过。
 
 ---
 

@@ -287,6 +287,7 @@ public protocol PlayerControllable: AnyObject {
     func startFastForward2x()
     func stopFastForward2x()
     func fitWindow(scale: Double)
+    func resetWindowSize()
     func toggleInspector()
     func togglePlaylistDrawer()
     func applyContentAspectRatioLock()
@@ -312,6 +313,8 @@ public extension PlayerControllable {
         set {}
     }
     func renderCurrentFrameImmediately() {}
+    func fitWindow(scale: Double) {}
+    func resetWindowSize() {}
     func applyContentAspectRatioLock() {}
     func setFullscreenState(_ fullscreen: Bool) {}
     func setExactRotation(_ angle: Int) {}
@@ -455,6 +458,88 @@ public enum PlayerGeometry: Sendable {
             targetH = minSafe.height
             targetW = round(targetH * safeAspect)
         }
+
+        return NSSize(width: targetW, height: targetH)
+    }
+
+    /// Computes initial adaptive video window content size within desktop safe bounds.
+    public static func adaptiveVideoContentSize(
+        for aspect: CGFloat,
+        isVertical: Bool,
+        rawVideoWidth: CGFloat,
+        screenVisibleSize: NSSize
+    ) -> NSSize {
+        let safeAspect = max(0.001, aspect)
+        let minSz = minimumContentSize(for: safeAspect, screenVisibleHeight: screenVisibleSize.height)
+        let maxSafe = maximumSafeContentSize(for: safeAspect, screenVisibleSize: screenVisibleSize)
+
+        var targetContentW: CGFloat
+        var targetContentH: CGFloat
+
+        if isVertical {
+            let idealH = round(screenVisibleSize.height * 0.60)
+            targetContentH = min(max(idealH, minSz.height), maxSafe.height)
+            targetContentW = round(targetContentH * safeAspect)
+            if targetContentW > maxSafe.width {
+                targetContentW = maxSafe.width
+                targetContentH = round(targetContentW / safeAspect)
+            }
+            if targetContentW < minSz.width {
+                targetContentW = minSz.width
+                targetContentH = round(targetContentW / safeAspect)
+            }
+        } else {
+            let idealW = min(rawVideoWidth, screenVisibleSize.width * 0.55)
+            targetContentW = max(minSz.width, min(maxSafe.width, idealW))
+            targetContentH = round(targetContentW / safeAspect)
+
+            if targetContentH > maxSafe.height {
+                targetContentH = maxSafe.height
+                targetContentW = round(targetContentH * safeAspect)
+            }
+            if targetContentW < minSz.width {
+                targetContentW = minSz.width
+                targetContentH = minSz.height
+            }
+        }
+
+        return NSSize(width: targetContentW, height: targetContentH)
+    }
+
+    /// Computes proportional window content size for a scale multiplier (`0.5x`, `1x`, `1.5x`, `2x`),
+    /// bounded between `minimumContentSize` and visible desktop `maximizedContentSize`.
+    public static func scaledVideoContentSize(
+        scale: CGFloat,
+        aspect: CGFloat,
+        rawBaseWidth: CGFloat,
+        screenVisibleSize: NSSize
+    ) -> NSSize {
+        let safeAspect = max(0.001, aspect)
+        let safeScale = max(0.1, scale)
+        let minSz = minimumContentSize(for: safeAspect, screenVisibleHeight: screenVisibleSize.height)
+        let maxSz = maximizedContentSize(for: safeAspect, screenVisibleSize: screenVisibleSize)
+
+        var targetW = round(rawBaseWidth * safeScale)
+        var targetH = round(targetW / safeAspect)
+
+        if targetW > maxSz.width {
+            targetW = maxSz.width
+            targetH = round(targetW / safeAspect)
+        }
+        if targetH > maxSz.height {
+            targetH = maxSz.height
+            targetW = round(targetH * safeAspect)
+        }
+        if targetW < minSz.width {
+            targetW = minSz.width
+            targetH = round(targetW / safeAspect)
+        }
+        if targetH < minSz.height {
+            targetH = minSz.height
+            targetW = round(targetH * safeAspect)
+        }
+        if targetW > maxSz.width { targetW = maxSz.width }
+        if targetH > maxSz.height { targetH = maxSz.height }
 
         return NSSize(width: targetW, height: targetH)
     }

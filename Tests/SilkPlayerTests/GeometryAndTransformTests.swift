@@ -271,4 +271,114 @@ final class GeometryAndTransformTests: XCTestCase {
         player.toggleFullscreen()
         XCTAssertTrue(player.isFullscreenTransitioning)
     }
+
+    // MARK: - 6. Window Scale Presets & Right-Click Context Menu Gating (Proposal 027)
+    func testScaledVideoContentSizeBoundsAndPresets() {
+        let ultrawideScreen = NSSize(width: 2752, height: 1122)
+
+        // 1080p video on 2752x1122 display reaches exact 1:1 (1920x1080) and 0.5x (960x540)
+        let s05 = PlayerGeometry.scaledVideoContentSize(scale: 0.5, aspect: 16.0 / 9.0, rawBaseWidth: 1920, screenVisibleSize: ultrawideScreen)
+        let s10 = PlayerGeometry.scaledVideoContentSize(scale: 1.0, aspect: 16.0 / 9.0, rawBaseWidth: 1920, screenVisibleSize: ultrawideScreen)
+        let s15 = PlayerGeometry.scaledVideoContentSize(scale: 1.5, aspect: 16.0 / 9.0, rawBaseWidth: 1920, screenVisibleSize: ultrawideScreen)
+        XCTAssertEqual(s05, NSSize(width: 960, height: 540))
+        XCTAssertEqual(s10, NSSize(width: 1920, height: 1080))
+        XCTAssertEqual(s15, NSSize(width: 1995, height: 1122))
+
+        // 720p video on 2752x1122 produces four distinct steps across 0.5x / 1x / 1.5x / 2x
+        let h05 = PlayerGeometry.scaledVideoContentSize(scale: 0.5, aspect: 16.0 / 9.0, rawBaseWidth: 1280, screenVisibleSize: ultrawideScreen)
+        let h10 = PlayerGeometry.scaledVideoContentSize(scale: 1.0, aspect: 16.0 / 9.0, rawBaseWidth: 1280, screenVisibleSize: ultrawideScreen)
+        let h15 = PlayerGeometry.scaledVideoContentSize(scale: 1.5, aspect: 16.0 / 9.0, rawBaseWidth: 1280, screenVisibleSize: ultrawideScreen)
+        let h20 = PlayerGeometry.scaledVideoContentSize(scale: 2.0, aspect: 16.0 / 9.0, rawBaseWidth: 1280, screenVisibleSize: ultrawideScreen)
+        XCTAssertEqual(h05, NSSize(width: 640, height: 360))
+        XCTAssertEqual(h10, NSSize(width: 1280, height: 720))
+        XCTAssertEqual(h15, NSSize(width: 1920, height: 1080))
+        XCTAssertEqual(h20, NSSize(width: 1995, height: 1122))
+
+        // Portrait 1080x1920 scales cleanly up to desktop visible height without 0.85x truncation
+        let p05 = PlayerGeometry.scaledVideoContentSize(scale: 0.5, aspect: 9.0 / 16.0, rawBaseWidth: 1080, screenVisibleSize: ultrawideScreen)
+        let p10 = PlayerGeometry.scaledVideoContentSize(scale: 1.0, aspect: 9.0 / 16.0, rawBaseWidth: 1080, screenVisibleSize: ultrawideScreen)
+        XCTAssertEqual(p05, NSSize(width: 540, height: 960))
+        XCTAssertEqual(p10, NSSize(width: 631, height: 1122))
+    }
+
+    @MainActor
+    func testFitWindowScaleAndContextMenuFullscreenGating() {
+        let player = PlayerCore()
+        let session = PlayerWindowSession(id: UUID(), player: player)
+        let window = NSWindow(
+            contentRect: NSRect(x: 200, y: 150, width: 1400, height: 788),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        let delegate = PlayerWindowDelegate(session: session, player: player)
+        session.window = window
+        session.windowDelegate = delegate
+        window.delegate = delegate
+        player.hostWindow = window
+        PlayerWindowManager.shared.registerSession(session)
+        defer { PlayerWindowManager.shared.unregisterSession(id: session.id) }
+
+        player.isLoaded = true
+        player.isAudioOnly = false
+        player.videoWidth = 1280
+        player.videoHeight = 720
+        player.displayVideoWidth = 1280
+        player.displayVideoHeight = 720
+
+        let screenVisible = (window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)).size
+
+        // Simulate locked large minSize + maximized mode before scaling down to 0.5x
+        window.minSize = NSSize(width: 900, height: 506)
+        window.contentMinSize = window.minSize
+        delegate.toggleMaximize(window: window)
+        XCTAssertEqual(delegate.currentInteractiveMode, .maximized)
+
+        player.fitWindow(scale: 0.5)
+        let expected05 = PlayerGeometry.scaledVideoContentSize(
+            scale: 0.5,
+            aspect: player.effectiveAspectRatio,
+            rawBaseWidth: 1280,
+            screenVisibleSize: screenVisible
+        )
+        XCTAssertEqual(delegate.currentInteractiveMode, .normal)
+        XCTAssertEqual(round(window.frame.width), expected05.width)
+        XCTAssertEqual(round(window.frame.height), expected05.height)
+
+        // Reset to adaptive default even if autoResizeWindow is turned off
+        let previousAutoResize = AppSettings.shared.autoResizeWindow
+        AppSettings.shared.autoResizeWindow = false
+        defer { AppSettings.shared.autoResizeWindow = previousAutoResize }
+
+        player.resetWindowSize()
+        let expectedAdaptive = PlayerGeometry.adaptiveVideoContentSize(
+            for: player.effectiveAspectRatio,
+            isVertical: false,
+            rawVideoWidth: 1280,
+            screenVisibleSize: screenVisible
+        )
+        XCTAssertEqual(round(window.frame.width), expectedAdaptive.width)
+        XCTAssertEqual(round(window.frame.height), expectedAdaptive.height)
+
+        // Fullscreen mode blocks fitWindow and disables context menu scale submenu
+        let containerView = MetalPlayerContainerView(playerCore: player)
+        let windowedMenu = containerView.buildContextMenu(for: player)
+        let windowedSizeItem = windowedMenu.items.first { $0.title == L10n.windowSizeMenu }
+        XCTAssertNotNil(windowedSizeItem)
+        XCTAssertTrue(windowedSizeItem?.isEnabled ?? false)
+        XCTAssertEqual(windowedSizeItem?.submenu?.items.count, 6) // 0.5x, 1x, 1.5x, 2x, separator, reset
+
+        player.isFullscreen = true
+        let frameBeforeFullscreenFit = window.frame
+        player.fitWindow(scale: 0.5)
+        XCTAssertEqual(window.frame, frameBeforeFullscreenFit)
+
+        let fullscreenMenu = containerView.buildContextMenu(for: player)
+        let fullscreenSizeItem = fullscreenMenu.items.first { $0.title == L10n.windowSizeMenu }
+        XCTAssertNotNil(fullscreenSizeItem)
+        XCTAssertFalse(fullscreenSizeItem?.isEnabled ?? true)
+        for subItem in fullscreenSizeItem?.submenu?.items ?? [] where !subItem.isSeparatorItem {
+            XCTAssertFalse(subItem.isEnabled)
+        }
+    }
 }

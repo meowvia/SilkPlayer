@@ -753,6 +753,12 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     private var lastToggleMaximizeTime: TimeInterval = 0
     public private(set) var resizeHUDView: WindowResizeHUDView?
 
+    /// Clears maximized tracking state before programmatic window resizing (e.g., scale presets or adaptive reset).
+    public func resetInteractiveModeToNormal() {
+        currentInteractiveMode = .normal
+        savedPreZoomFrame = nil
+    }
+
     @MainActor
     public func ensureHUDAttached(to window: NSWindow) -> WindowResizeHUDView? {
         if let existing = resizeHUDView, existing.window == window {

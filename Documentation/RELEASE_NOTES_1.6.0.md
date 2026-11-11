@@ -23,6 +23,11 @@ SilkPlayer 1.6.0 introduces a redesigned Settings panel, live window resize dime
 - **检查更新 / Check for Updates**:
   - 在「关于」面板中支持手动检查新版本，并支持在后台低频检测 GitHub 发布状态。
   - Added manual update checking in the About tab and quiet periodic background release checks.
+- **视频右键窗口倍率与界面修复 / Context Menu Window Scale Presets & UI Fixes**:
+  - 视频画面右键菜单新增「窗口尺寸」子菜单，支持 `0.5x`、`1x`、`1.5x`、`2x` 与「恢复默认自适应大小」（全屏或无媒体时自动禁用）。
+  - 合并顶部菜单栏重复「窗口」条目并移除失效尺寸菜单；修复竖屏/极窄窗口下底栏音量滑块与「下一首」按钮重叠的问题。
+  - Added a `Window Size` submenu (`0.5x`, `1x`, `1.5x`, `2x`, and `Default Adaptive Size`) to the video right-click menu (disabled in fullscreen or when no media is loaded).
+  - Consolidated duplicate top Window menu items and fixed the bottom volume control overlap with the Next button in narrow/portrait windows.
 
 ---
 

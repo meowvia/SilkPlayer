@@ -37,7 +37,7 @@
 | 提案 024 | 音乐模式可折叠两段式视图与磁吸切换机制 (Collapsible Two-Stage Music Mode & Magnetic Snap) | 预览实现 (待 2.0.0 评估收口) | **2.0.0 音乐模式规划** |
 | 提案 025 | 音乐模式状态栏常驻入口与轻量播控形态 (Music Mode Persistent Status Bar Entry) | 灵感归档 (待后续决策方案) | **2.0.0 音乐模式规划** |
 | 提案 026 | 黑边动态高斯模糊环境光填充 (Dynamic Ambient Letterbox Blur Fill) | 需求定稿 (方案就绪 · 规划归属 2.0.0) | **2.0.0 视觉体验规划** |
-| 提案 027 | 右键菜单窗口倍率缩放入口 (Context Menu Window Scale Presets · GitHub Issue #6) | 决策定稿 (不改默认自适应策略 · 仅在右键增加倍率缩放) | **1.7.0 候选排期** |
+| ~~提案 027~~ | ~~右键菜单窗口倍率缩放入口 (Context Menu Window Scale Presets · GitHub Issue #6)~~ | ~~决策定稿~~ **已落地销项** | **1.6.0** |
 
 
 ---
@@ -965,20 +965,25 @@
 ## 提案 027: 右键菜单窗口倍率缩放入口 (Context Menu Window Scale Presets · GitHub Issue #6)
 
 ### 1. 来源与明确决策口径
-对应 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6) 的 4 项建议，经实机评估后最终定调如下：
-1. **打开视频默认原始尺寸**：**不采纳**。保持当前基于视频比例与桌面安全可用区（`minimumContentSize` / `maximumSafeContentSize`）的自适应开窗策略，避免高分片源在常见笔记本屏上撑出可用区，或低分片源挤压底栏控件。
-2. **新增 `0.5x / 1x / 1.5x / 2x` 倍率快捷调整 & 3. 竖屏视频快速调大**：**合并以右键菜单方案解决**。为保持播控界面极简，不在视频 HUD 上增加实体按键，也不一刀切放大竖屏默认比例（大屏/40 寸带鱼屏下现有 `screenFrame.height * 0.60` 比例已适中）；统一在视频画面右键菜单中提供窗口倍率切换入口，由用户按需一键缩放。
-4. **上方标题显示时长（1~2 秒隐藏）**：**保持现状不变**。当前空闲自动隐藏默认即为 `1.8` 秒，仅在鼠标停留在控制区保护带、暂停或窗口失焦时保持显示。
+对应 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6) 的 4 项建议，经评估后最终定调并在 `1.6.0` 提前并入交付（已从 `1.7.0` 候选排期核销）：
+1. **打开视频默认原始尺寸**：**不采纳**。保持当前基于视频比例与桌面安全可用区（`minimumContentSize` / `maximizedContentSize`）的自适应开窗策略，避免高分片源超出桌面可用区或低分片源挤压底栏控件。
+2. **新增 `0.5x / 1x / 1.5x / 2x` 倍率快捷调整 & 3. 竖屏视频快速调大**：**合并以右键菜单方案解决**。不在视频 HUD 上增加实体按键，也不改变竖屏默认开窗比例；统一在视频画面右键菜单中提供窗口倍率切换入口，由用户按需缩放。
+4. **上方标题显示时长（1~2 秒隐藏）**：**保持现状不变**。空闲自动隐藏默认保持 `1.8` 秒，仅在鼠标停留在控制区保护带、暂停或窗口失焦时保持显示。
 
-### 2. 技术落地路径
-1. **仅通过右键菜单扩充倍率入口 (`VideoView.swift`)**：
-   - 在 [`MetalPlayerContainerView.menu(for:)`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/VideoView.swift#L440-L489) 新增「窗口尺寸 / 缩放倍率」子菜单，提供 `0.5x`、`1x`、`1.5x`、`2x` 及「恢复默认自适应大小」选项，不在 HUD 与顶栏左侧菜单铺设冗余入口；
-   - 修复 [`PlayerCore.fitWindow(scale:)`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerCore.swift#L1374-L1415) 中设帧前未临时放宽 `window.minSize`、缺少全屏拦截（`!isFullscreen && !window.styleMask.contains(.fullScreen)`）与缺失 OSD 提示的问题，且在全屏模式下禁用右键倍率菜单项。
-2. **顶栏冗余入口清理归口 (`ISSUE-020`)**：
-   - 顶栏原有未闭环可用且少人使用的「窗口 -> 贴合画面尺寸 (`100% / 200%`)」按 `ISSUE-020` 在 `1.6.0` 清理移除，后续倍率功能全部聚焦视频画布右键菜单（可按需搭配快捷方式）。
+### 2. 已落地实现路径 (`1.6.0`)
+1. **右键菜单扩充倍率入口 (`VideoView.swift` / `L10n.swift`)**：
+   - 在 `MetalPlayerContainerView.buildContextMenu(for:)` 新增「窗口尺寸 / Window Size」子菜单，提供 `0.5x`、`1x`、`1.5x`、`2x` 与「恢复默认自适应大小 (`resetWindowSize()`)」菜单项（对应动作 `handleFitWindowScale` / `handleResetWindowSize`）；全屏模式下或无已加载媒体时自动禁用缩放子菜单。
+2. **窗口几何与倍率计算重构 (`PlayerModels.swift` / `PlayerCore+WindowGeometry.swift` / `PlayerWindowManager.swift`)**：
+   - 在 `PlayerGeometry` 新增 `adaptiveVideoContentSize(...)` 与 `scaledVideoContentSize(...)`，将倍率计算上限对齐桌面可见区 `maximizedContentSize`；
+   - 提取共享辅助方法 `applyVideoWindowContentSize(...)` 统一承载 `applyRotationWindowAdaptation`、`applyAdaptiveWindowGeometry`、`fitWindow(scale:)` 与 `resetWindowSize()`；
+   - 为 `fitWindow(scale:)` 与 `resetWindowSize()` 补全全屏/纯音频拦截、`.maximized` 状态经 `PlayerWindowDelegate.resetInteractiveModeToNormal()` 复位、设帧前临时放宽并恢复 `window.minSize`，以及倍率/默认大小 OSD 反馈。
+3. **顶栏冗余入口同步清理 (`ISSUE-020`)**：
+   - 顶栏「窗口 -> 贴合画面尺寸 (`100% / 200%`)」已在 `1.6.0` 从 `PlayerCommands.swift` 移除，窗口倍率调节统一收拢至视频画布右键菜单。
+4. **单元测试覆盖 (`GeometryAndTransformTests.swift`)**：
+   - 新增 `testScaledVideoContentSizeBoundsAndPresets` 与 `testFitWindowScaleAndContextMenuFullscreenGating`，覆盖倍率边界裁剪、默认尺寸一致性与全屏菜单禁用门控。
 
 ### 3. 当前状态
-- 方案口径已拍板定稿并归档登记，暂不在当前冻结中的 `feature/music-mode-revamp` 预览分支改动视频菜单代码，后续随主线迭代评估合入。
+- **已落地销项 (`1.6.0`)**：已合入 `feature/v1.6.0` 主线版本，从 `1.7.0` 候选排期中核销，待 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6) 随 `1.6.0` 正式发版关闭。
 
 
 

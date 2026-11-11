@@ -36,7 +36,7 @@ public enum HUDLayoutTier: Equatable {
 
     /// Whether the inline volume slider is shown on the bottom control bar.
     public func showsVolumeSlider(isAudioOnly: Bool) -> Bool {
-        !isAudioOnly
+        !isAudioOnly && self != .minimal
     }
 
     /// Whether the audio track selector menu is directly visible on the bottom bar.
@@ -418,7 +418,7 @@ public struct PlayerHUDView: View {
                     Spacer()
                     rightWingControls(tier: tier)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, tier == .minimal ? 0 : 16)
             }
         }
         .padding(.horizontal, 16)
@@ -605,7 +605,7 @@ public struct PlayerHUDView: View {
     @ViewBuilder
     private func rightWingControls(tier: HUDLayoutTier) -> some View {
         let isAudio = player.isAudioOnly
-        HStack(spacing: tier == .minimal ? 10 : 12) {
+        HStack(spacing: tier == .minimal ? 8 : 12) {
             // 0. 音量微调滑块 (纯音频模式下隐藏，统一走滚轮/触控板手势与键盘上下键调节)
             if tier.showsVolumeSlider(isAudioOnly: isAudio) {
                 HUDVolumeSlider(player: player)
@@ -713,13 +713,19 @@ public struct PlayerHUDView: View {
 
     @ViewBuilder
     private func moreMenuContent(tier: HUDLayoutTier) -> some View {
-        // 1. 如果在 minimal 模式下，包含倍速选择
+        // 1. 如果在 minimal 模式下，包含倍速与静音切换
         if tier == .minimal {
             Menu(L10n.playbackSpeed + " (\(String(format: "%.2fx", player.speed)))") {
                 ForEach([0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
                     Button(abs(player.speed - rate) < 0.04 ? "✓ \(String(format: "%.2fx", rate))\(rate == 1.0 ? " (" + L10n.speedNormal + ")" : "")" : "\(String(format: "%.2fx", rate))\(rate == 1.0 ? " (" + L10n.speedNormal + ")" : "")") {
                         player.setSpeed(rate)
                     }
+                }
+            }
+
+            if !player.isAudioOnly {
+                Button((player.isMuted ? L10n.unmuteAudio : L10n.muteAudio) + " (M)") {
+                    player.toggleMute()
                 }
             }
         }

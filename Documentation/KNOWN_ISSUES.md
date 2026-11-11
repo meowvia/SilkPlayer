@@ -26,8 +26,8 @@
 | ISSUE-016 | 音乐模式收起态退出后保存 `228pt` 高度（设计目标 `224pt`）及锁屏期实机复测缺口 | 窗口几何与生命周期 / SilkPlayer (AppDelegate & PlayerWindowManager) | Low | 已修复并实机验证 (1.7.0-music-preview) | 1.7.0-music-preview |
 | ISSUE-017 | 音乐模式快速拖拽窗口与光标分离（及视频模式/主界面起手快甩偏移待合入 1.7.0 优化） | 窗口拖拽与几何协调 / SilkPlayer (MusicModeView, PlayerCore+WindowGeometry, VideoView, EmptyPlaybackView) | High | 预览版已修复；视频/主界面优化登记待合入 1.7.0 正式版 | 1.7.0-music-preview |
 | ISSUE-018 | 冷启动被 `WindowGroup` 桌面平铺状态 (`tilingPosition: 9`) 恢复为铺满屏尺寸 | 窗口生命周期与冷启动几何 / SilkPlayer (SilkPlayerApp, AppShellView, AppDelegate, PlayerCore+WindowGeometry) | High | 预览版已修复；冷启动防平铺隔离登记待合入 1.7.0 正式版 | 1.7.0-music-preview |
-| ISSUE-019 | 竖屏/极窄窗口（`.minimal` 档）底栏音量按钮未隐藏导致与“下一首”按钮重叠冲突 | 视频 HUD 底栏 / SilkPlayer (PlayerHUDView, HUDVolumeSlider) | Medium | 已登记待修复（计划 `1.6.0` 解决并同步各活跃分支） | 1.6.0 / 1.7.0-music-preview |
-| ISSUE-020 | 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题 | 顶部菜单栏 / SilkPlayer (PlayerCommands, PlayerCore) | Low | 已登记待清理（计划 `1.6.0` 移除该菜单入口） | 1.6.0 / 1.7.0-music-preview |
+| ISSUE-019 | 竖屏/极窄窗口（`.minimal` 档）底栏音量按钮未隐藏导致与“下一首”按钮重叠冲突 | 视频 HUD 底栏 / SilkPlayer (PlayerHUDView, HUDVolumeSlider) | Medium | **已修复**（`1.6.0` 已落地） | 1.6.0 |
+| ISSUE-020 | 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题 | 顶部菜单栏 / SilkPlayer (PlayerCommands, PlayerCore) | Low | **已解决**（`1.6.0` 已移除并由右键菜单方案替代） | 1.6.0 |
 
 ---
 
@@ -860,9 +860,9 @@ public enum WindowPresentationState: Equatable {
    - [`bottomControls`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift#L409-L428) 使用 `ZStack` 将绝对居中的 `centerControls` 与 `HStack { leftWingControls; Spacer(); rightWingControls }` 叠加排版，叠加多层水平内边距（`16 + 16 + 8 = 40 pt` 单侧）。
    - 在 `< 480 pt` 的竖屏窗口宽度下，右翼同时渲染 `HUDVolumeSlider`（折叠态 `28 pt`、悬停展开 `> 100 pt`）、更多按钮与全屏按钮，总宽超出右侧可用余量，向左侵入并遮挡 `centerControls` 最右侧的“下一首”按钮。
 
-### 3. 修复规划（目标版本：`1.6.0`）
-- **核心改动**：在 `feature/v1.6.0` / `main`（发版 `1.6.0` 前）及后续预览分支中修改 [`HUDLayoutTier.showsVolumeSlider(isAudioOnly:)`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift#L37-L41)，在 `.minimal`（竖屏/极窄窗口）下隐藏底栏内联音量控件（保留滚轮/触控板、方向键及 `M` 键静音调节）；
-- **测试补全**：新增断言校验 `HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false`，并实机验证竖屏窗口底栏左右两翼与中心播控组零重叠。
+### 3. 修复落地（解决版本：`1.6.0`）
+- **核心改动**：在 `feature/v1.6.0` 修改 `PlayerHUDView.swift` 中的 `HUDLayoutTier.showsVolumeSlider(isAudioOnly:)` 为 `!isAudioOnly && self != .minimal`，收紧 `.minimal` 档底栏横向边距与右侧间距，并在溢出菜单 (`moreMenuContent`) 保留静音/取消静音入口（同时保留滚轮、方向键及 `M` 键静音控制）；
+- **测试补全**：更新 `Tests/SilkPlayerTests/PlaylistTests.swift` Test 63 断言 `HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false`，已通过回归测试。
 
 ---
 
@@ -877,9 +877,9 @@ public enum WindowPresentationState: Equatable {
    - `PlayerCommands` 为普通 `struct`（仅在 `body` 顶部读取 `windowManager.commandSyncToken`），SwiftUI `Commands` 下 `.disabled(!isLoaded)` 存在状态刷新滞后/灰显问题；
    - [`PlayerCore.fitWindow(scale:)`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerCore.swift#L1374-L1415) 未在设帧前临时释放 `window.minSize`（缩小或切换方向易被现有 `minSize` 锁死）、缺少全屏拦截与 OSD 提示，且 1080p/4K 片源下 `100%` 与 `200%` 均被 [`maximumSafeContentSize`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerModels.swift#L392-L409) 钳制到同一桌面安全上限，切换时窗口尺寸无任何变化。
 
-### 3. 处理规划（目标版本：`1.6.0`）
-- **在 `1.6.0` 直接移除顶栏「贴合画面尺寸」子菜单**：从 [`PlayerCommands.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerCommands.swift#L391-L399) 移除 `Menu(L10n.fitToVideo)` 入口（并按需清理冗余重名菜单或保留常用快捷键命令），停止用顶部菜单栏承载低频窗口尺寸调节；
-- 后续若需提供窗口倍率缩放（对应 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6)），按 [`提案 027`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Documentation/FEATURE_PROPOSALS.md#L964-L980) 统一做进视频画布右键菜单并先修复 `fitWindow(scale:)` 的 `minSize` 释放与全屏保护。
+### 3. 解决落地（解决版本：`1.6.0`）
+- **合并顶栏重名菜单并移除冗余入口**：在 `PlayerCommands.swift` 将自定义 `CommandMenu(L10n.menuWindow)` 替换为 `CommandGroup(before: .windowList)` 归入系统「窗口」菜单（保留媒体详情、播放列表、窗口置顶及分隔线），并移除 `Menu(L10n.fitToVideo)` 及其废弃本地化键值；
+- **窗口倍率能力收拢至右键菜单**：按 [`提案 027`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Documentation/FEATURE_PROPOSALS.md) 在 `1.6.0` 于视频画布右键菜单提供 `0.5x / 1x / 1.5x / 2x` 与「恢复默认自适应大小」入口，并完善 `fitWindow(scale:)` 的 `minSize` 释放、`.maximized` 复位、OSD 提示及全屏禁用保护。
 
 
 

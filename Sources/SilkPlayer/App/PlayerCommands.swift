@@ -354,8 +354,8 @@ public struct PlayerCommands: Commands {
             .disabled(!isLoaded || activePlayer?.isAudioOnly == true)
         }
 
-        // MARK: - Window Menu
-        CommandMenu(L10n.menuWindow) {
+        // MARK: - Window Menu (injected into native system Window menu to avoid duplicate "Window" menus)
+        CommandGroup(before: .windowList) {
             Button(L10n.mediaInspectorTitle + (activePlayer?.isInspectorVisible == true ? " ✓" : "")) {
                 activePlayer?.toggleInspector()
             }
@@ -375,16 +375,6 @@ public struct PlayerCommands: Commands {
             }
 
             Divider()
-
-            Menu(L10n.fitToVideo) {
-                Button(L10n.fitToVideo100) {
-                    windowManager.fitActiveWindow(scale: 1.0)
-                }
-                Button(L10n.fitToVideo200) {
-                    windowManager.fitActiveWindow(scale: 2.0)
-                }
-            }
-            .disabled(!isLoaded)
         }
 
         // MARK: - Help Menu

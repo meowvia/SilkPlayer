@@ -5,9 +5,12 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.6.0] - 2026-11-09
+## [1.6.0] - 2026-11-12
 
 ### Added
+- **Context Menu Window Scale Presets (Proposal 027 / GitHub Issue #6)**:
+  - Added a `Window Size` submenu (`0.5x`, `1x`, `1.5x`, `2x`, and `Default Adaptive Size`) to the video canvas context menu (`MetalPlayerContainerView`), automatically disabled in fullscreen or when no media is loaded.
+  - Refactored window geometry helpers (`PlayerGeometry.adaptiveVideoContentSize` / `scaledVideoContentSize`) and `PlayerCore.fitWindow(scale:)` / `resetWindowSize()` with temporary `minSize` relaxation, desktop visible-area bounding, maximized-state reset, and OSD feedback.
 - **Window Live-Resize Precision Dimension HUD (Proposal 023)**:
   - Dynamically floats a translucent, monospaced dimension badge near the cursor during manual window edge resizing.
   - Reports exact physical pixel dimensions (`width × height`) and standard aspect ratios (`16:9`, `16:10`, `4:3`, `21:9`, `2.39:1`, `1:1`).
@@ -40,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Replaced all non-standard configuration switches with fully automated system defaults.
 - **Policy & Architecture Narrative Alignment**:
   - Removed obsolete absolute claims across codebase and documentation, standardizing on: "Native, lightweight, and minimal design with zero built-in ads and no redundant background processes."
+
+### Fixed
+- **HUD Narrow Window Volume Control Overlap (ISSUE-019)**:
+  - Hid the inline bottom volume slider in `.minimal` layout tier (`< 480 pt` narrow/portrait windows) while keeping a mute/unmute toggle inside the overflow menu, eliminating overlap with the Next button.
+- **Top Menu Bar Duplicate Window Menu & Fit-to-Video Cleanup (ISSUE-020)**:
+  - Replaced the duplicate `Window` `CommandMenu` with `CommandGroup(before: .windowList)` so Media Inspector, Playlist, and Float on Top integrate into the standard macOS Window menu, and removed the redundant `Fit to Video (100% / 200%)` menu item.
 
 ---
 
