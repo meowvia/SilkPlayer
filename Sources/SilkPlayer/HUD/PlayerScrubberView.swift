@@ -101,6 +101,19 @@ public struct PlayerScrubberView: View {
     @State private var lastHoverRequestedTime: Double = -1.0
     @State private var hoverDebounceTask: Task<Void, Never>? = nil
 
+    private static let bufferGradient = Gradient(colors: [
+        Color.white.opacity(0.22),
+        Color.cyan.opacity(0.16)
+    ])
+    private static let hoverGradient = Gradient(colors: [
+        Color.white.opacity(0.26),
+        Color.white.opacity(0.14)
+    ])
+    private static let playedGradient = Gradient(colors: [
+        Color.cyan.opacity(0.95),
+        Color.blue.opacity(0.80)
+    ])
+
     public init(player: PlayerCore, clock: PlayerClock) {
         self.player = player
         self.clock = clock
@@ -117,93 +130,105 @@ public struct PlayerScrubberView: View {
             let currentTravelSpan = travelSpan(totalWidth: totalWidth, isExpanded: isExpanded)
             let currentKnobX = knobCenterX(progress: progress, totalWidth: totalWidth, isExpanded: isExpanded)
 
+            let bufferWidth: CGFloat = {
+                guard clock.duration > 0, player.cachedDuration > 2.0 else { return 0 }
+                let current = player.isScrubbing ? player.scrubTime : clock.currentTime
+                let bufferedEnd = min(clock.duration, current + player.cachedDuration)
+                let bufferFraction = CGFloat(max(0.0, min(1.0, bufferedEnd / clock.duration)))
+                return max(0, min(totalWidth, currentKnobRadius + bufferFraction * currentTravelSpan))
+            }()
+            let hoverX = (!player.isScrubbing && clock.duration > 0) ? hoverLocationX : nil
+            let isSpeedAltered = (player.speed != 1.0 || player.isFastForwarding2x)
+            let chapterPositions: [CGFloat] = {
+                guard clock.duration > 0, !player.chapters.isEmpty else { return [] }
+                return player.chapters.compactMap { chapter in
+                    let fraction = CGFloat(max(0.0, min(1.0, chapter.time / clock.duration)))
+                    guard fraction > 0.01 && fraction < 0.99 else { return nil }
+                    return currentKnobRadius + fraction * currentTravelSpan
+                }
+            }()
+            let playedWidth = max(0, min(totalWidth, currentKnobX))
+
             ZStack(alignment: .leading) {
-                // 1. Base Track Background
-                Capsule()
-                    .fill(Color.black.opacity(0.20))
-                    .frame(height: trackHeight)
+                // 1-5. Track background, buffer, hover span, chapter markers, and played fill in one Canvas
+                Canvas(opaque: false, rendersAsynchronously: false) { graphics, size in
+                    let trackY = (size.height - trackHeight) * 0.5
+                    let baseRect = CGRect(x: 0, y: trackY, width: size.width, height: trackHeight)
+                    let basePath = Path(roundedRect: baseRect, cornerRadius: trackHeight * 0.5)
+                    graphics.fill(basePath, with: .color(Color.black.opacity(0.20)))
+                    graphics.fill(basePath, with: .color(Color.white.opacity(0.12)))
 
-                Capsule()
-                    .fill(Color.white.opacity(0.12))
-                    .frame(height: trackHeight)
-
-                // 2. Buffer Progress Track
-                if clock.duration > 0 && player.cachedDuration > 2.0 {
-                    let current = player.isScrubbing ? player.scrubTime : clock.currentTime
-                    let bufferedEnd = min(clock.duration, current + player.cachedDuration)
-                    let bufferFraction = CGFloat(max(0.0, min(1.0, bufferedEnd / clock.duration)))
-                    let bufferWidth = currentKnobRadius + bufferFraction * currentTravelSpan
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.22),
-                                    Color.cyan.opacity(0.16)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
+                    if bufferWidth > 0 {
+                        let rect = CGRect(x: 0, y: trackY, width: bufferWidth, height: trackHeight)
+                        graphics.fill(
+                            Path(roundedRect: rect, cornerRadius: min(trackHeight, bufferWidth) * 0.5),
+                            with: .linearGradient(
+                                Self.bufferGradient,
+                                startPoint: CGPoint(x: rect.minX, y: rect.midY),
+                                endPoint: CGPoint(x: rect.maxX, y: rect.midY)
                             )
                         )
-                        .frame(width: max(0, min(totalWidth, bufferWidth)), height: trackHeight)
-                }
-
-                // 3. Hover Preview Track (Anchored precisely to knob center & hover point)
-                if let hoverX = hoverLocationX, !player.isScrubbing, clock.duration > 0 {
-                    let clampedHoverX = max(currentKnobRadius, min(totalWidth - currentKnobRadius, hoverX))
-                    let isSpeedAltered = (player.speed != 1.0 || player.isFastForwarding2x)
-                    if isSpeedAltered {
-                        Capsule()
-                            .fill(Color.white.opacity(0.32))
-                            .frame(width: max(10, currentKnobRadius * 2.2), height: trackHeight)
-                            .position(x: clampedHoverX, y: geometry.size.height / 2.0)
-                    } else {
-                        let spanStart = min(currentKnobX, clampedHoverX)
-                        let spanWidth = max(0, abs(clampedHoverX - currentKnobX))
-
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.26),
-                                        Color.white.opacity(0.14)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: spanWidth, height: trackHeight)
-                            .offset(x: spanStart)
                     }
-                }
 
-                // 4. Chapter Markers
-                if clock.duration > 0 && !player.chapters.isEmpty {
-                    ForEach(player.chapters) { chapter in
-                        let fraction = CGFloat(max(0.0, min(1.0, chapter.time / clock.duration)))
-                        let markX = currentKnobRadius + fraction * currentTravelSpan
-                        if fraction > 0.01 && fraction < 0.99 {
-                            Rectangle()
-                                .fill(Color.white.opacity(0.60))
-                                .frame(width: 1.5, height: trackHeight + 2.0)
-                                .shadow(color: Color.black.opacity(0.5), radius: 1, x: 0, y: 0)
-                                .position(x: markX, y: geometry.size.height / 2.0)
+                    if let rawHoverX = hoverX {
+                        let clampedHoverX = max(currentKnobRadius, min(size.width - currentKnobRadius, rawHoverX))
+                        if isSpeedAltered {
+                            let pillWidth = max(10, currentKnobRadius * 2.2)
+                            let rect = CGRect(
+                                x: clampedHoverX - pillWidth * 0.5,
+                                y: trackY,
+                                width: pillWidth,
+                                height: trackHeight
+                            )
+                            graphics.fill(
+                                Path(roundedRect: rect, cornerRadius: trackHeight * 0.5),
+                                with: .color(Color.white.opacity(0.32))
+                            )
+                        } else {
+                            let spanStart = min(currentKnobX, clampedHoverX)
+                            let spanWidth = max(0, abs(clampedHoverX - currentKnobX))
+                            if spanWidth > 0 {
+                                let rect = CGRect(x: spanStart, y: trackY, width: spanWidth, height: trackHeight)
+                                graphics.fill(
+                                    Path(roundedRect: rect, cornerRadius: min(trackHeight, spanWidth) * 0.5),
+                                    with: .linearGradient(
+                                        Self.hoverGradient,
+                                        startPoint: CGPoint(x: rect.minX, y: rect.midY),
+                                        endPoint: CGPoint(x: rect.maxX, y: rect.midY)
+                                    )
+                                )
+                            }
                         }
                     }
-                }
 
-                // 5. Played Fill Track
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.cyan.opacity(0.95),
-                                Color.blue.opacity(0.80)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
+                    if !chapterPositions.isEmpty {
+                        let markerHeight = trackHeight + 2.0
+                        let markerY = (size.height - markerHeight) * 0.5
+                        for markX in chapterPositions {
+                            graphics.fill(
+                                Path(CGRect(x: markX - 1.25, y: markerY, width: 2.5, height: markerHeight)),
+                                with: .color(Color.black.opacity(0.35))
+                            )
+                            graphics.fill(
+                                Path(CGRect(x: markX - 0.75, y: markerY, width: 1.5, height: markerHeight)),
+                                with: .color(Color.white.opacity(0.60))
+                            )
+                        }
+                    }
+
+                    if playedWidth > 0 {
+                        let rect = CGRect(x: 0, y: trackY, width: playedWidth, height: trackHeight)
+                        graphics.fill(
+                            Path(roundedRect: rect, cornerRadius: min(trackHeight, playedWidth) * 0.5),
+                            with: .linearGradient(
+                                Self.playedGradient,
+                                startPoint: CGPoint(x: rect.minX, y: rect.midY),
+                                endPoint: CGPoint(x: rect.maxX, y: rect.midY)
+                            )
                         )
-                    )
-                    .frame(width: max(0, min(totalWidth, currentKnobX)), height: trackHeight)
+                    }
+                }
+                .frame(width: totalWidth, height: geometry.size.height)
 
                 // 6. Scrub Knob (Centered at knobCenterX)
                 Circle()

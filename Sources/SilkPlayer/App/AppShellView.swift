@@ -47,7 +47,8 @@ public struct AppShellView: View {
 
     private var rootMinHeight: CGFloat {
         if player.isAudioOnly {
-            return MusicModeGeometry.minHeight
+            // Keep below collapsed frame height minus SwiftUI titlebar safe-area inset so AppKit window.minSize (290/300) governs cleanly
+            return max(200, MusicModeGeometry.collapsedStandardHeight - 40.0)
         } else if isPlaying || player.isLoaded {
             return 200
         } else {
@@ -253,7 +254,13 @@ public struct AppShellView: View {
     // MARK: - Playback Controls & Routing
     private func stopPlayback() {
         if let currentPath = player.currentFilePath, player.currentTime > 0 {
-            AppSettings.shared.savePosition(for: currentPath, position: player.currentTime, duration: player.duration)
+            AppSettings.shared.recordPlaybackProgress(
+                path: currentPath,
+                current: player.currentTime,
+                duration: player.duration,
+                isPlaying: false,
+                force: true
+            )
         }
         PlayerWindowManager.shared.closeSettings()
         player.isPlaylistDrawerVisible = false
@@ -321,13 +328,13 @@ public struct AppShellView: View {
 
     // MARK: - Session & Player Hooks
     private func setupHooks() {
-        player.onProgressUpdate = { path, current, duration in
-            if AppSettings.shared.keepRecentHistory {
-                UserDefaults.standard.set(path, forKey: "lastPlayedFilePath")
-                UserDefaults.standard.set(current, forKey: "lastPlayedPosition")
-                UserDefaults.standard.set(duration, forKey: "lastPlayedDuration")
-                AppSettings.shared.savePosition(for: path, position: current, duration: duration)
-            }
+        player.onProgressUpdate = { [weak player] path, current, duration in
+            AppSettings.shared.recordPlaybackProgress(
+                path: path,
+                current: current,
+                duration: duration,
+                isPlaying: player?.isPlaying ?? false
+            )
         }
         player.onEscapePressed = {
             stopPlayback()

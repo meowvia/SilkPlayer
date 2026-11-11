@@ -101,7 +101,7 @@ extension PlayerCore {
     }
 
     public func applyAudioWindowGeometry(animated: Bool = false) {
-        guard let window = self.hostWindow ?? NSApp.keyWindow else { return }
+        guard let window = self.hostWindow ?? NSApp?.keyWindow else { return }
 
         if isFullscreen || window.styleMask.contains(.fullScreen) {
             if !pendingAudioGeometryAfterExitFullScreen && !isFullscreenTransitioning && !PlayerWindowManager.isRunningTests {
@@ -117,26 +117,48 @@ extension PlayerCore {
 
         let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
-        let minH = MusicModeGeometry.effectiveMinHeight(forScreenHeight: screenFrame.height)
-        let maxH = max(minH, floor(screenFrame.height))
+        let expandedMinH = MusicModeGeometry.effectiveMinHeight(forScreenHeight: screenFrame.height)
+        let collapsedH = MusicModeGeometry.collapsedHeight(forWindowWidth: lockedW, screenVisibleHeight: screenFrame.height)
+        let maxH = max(expandedMinH, floor(screenFrame.height))
 
-        let minAudioSize = NSSize(width: lockedW, height: minH)
+        let minAudioSize = NSSize(width: lockedW, height: min(collapsedH, expandedMinH))
         let maxAudioSize = NSSize(width: lockedW, height: maxH)
 
+        let isCollapsed = AppSettings.shared.isMusicQueueCollapsed
         let storedHeight = UserDefaults.standard.object(forKey: PlayerCore.musicModeHeightDefaultsKey) as? Double
         let rememberedHeight = storedHeight.map { CGFloat($0) }
 
         let currentFrame = window.frame
-        let isAlreadyMusicWidth = abs(currentFrame.width - lockedW) <= 1.0 &&
-            currentFrame.height >= minH && currentFrame.height <= maxH
-        let targetHeight: CGFloat? = isAlreadyMusicWidth ? currentFrame.height : nil
+        let newFrame: NSRect
+        if isCollapsed {
+            if abs(currentFrame.width - lockedW) <= 1.0 && !currentFrame.isEmpty {
+                newFrame = MusicModeGeometry.toggledCollapseFrame(
+                    around: currentFrame,
+                    targetCollapsed: true,
+                    rememberedExpandedHeight: rememberedHeight,
+                    screenVisibleFrame: screenFrame
+                )
+            } else {
+                newFrame = MusicModeGeometry.clampedFrame(
+                    around: currentFrame,
+                    targetHeight: collapsedH,
+                    rememberedHeight: rememberedHeight,
+                    clampToExpandedMin: false,
+                    screenVisibleFrame: screenFrame
+                )
+            }
+        } else {
+            let isAlreadyMusicWidth = abs(currentFrame.width - lockedW) <= 1.0 &&
+                currentFrame.height >= expandedMinH && currentFrame.height <= maxH
+            let targetHeight: CGFloat? = isAlreadyMusicWidth ? currentFrame.height : nil
 
-        let newFrame = MusicModeGeometry.clampedFrame(
-            around: currentFrame,
-            targetHeight: targetHeight,
-            rememberedHeight: rememberedHeight,
-            screenVisibleFrame: screenFrame
-        )
+            newFrame = MusicModeGeometry.clampedFrame(
+                around: currentFrame,
+                targetHeight: targetHeight,
+                rememberedHeight: rememberedHeight,
+                screenVisibleFrame: screenFrame
+            )
+        }
 
         // Release constraints temporarily so AppKit accepts both shrink and expand smoothly
         window.minSize = NSSize(width: 100, height: 100)
@@ -156,6 +178,60 @@ extension PlayerCore {
         window.maxSize = maxAudioSize
         window.contentMaxSize = maxAudioSize
         configureMusicModeChrome(on: window)
+    }
+
+    public func setMusicQueueCollapsed(_ collapsed: Bool, animated: Bool = true) {
+        guard isAudioOnly else {
+            AppSettings.shared.isMusicQueueCollapsed = collapsed
+            return
+        }
+
+        guard let window = self.hostWindow ?? NSApp?.keyWindow else {
+            AppSettings.shared.isMusicQueueCollapsed = collapsed
+            return
+        }
+
+        let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
+        let expandedMinH = MusicModeGeometry.effectiveMinHeight(forScreenHeight: screenFrame.height)
+        let collapsedH = MusicModeGeometry.collapsedHeight(forWindowWidth: lockedW, screenVisibleHeight: screenFrame.height)
+        let maxH = max(expandedMinH, floor(screenFrame.height))
+
+        let wasCollapsed = AppSettings.shared.isMusicQueueCollapsed
+        if collapsed && !wasCollapsed && window.frame.height >= expandedMinH - 1.0 {
+            UserDefaults.standard.set(Double(window.frame.height), forKey: PlayerCore.musicModeHeightDefaultsKey)
+        }
+
+        let storedHeight = UserDefaults.standard.object(forKey: PlayerCore.musicModeHeightDefaultsKey) as? Double
+        let targetFrame = MusicModeGeometry.toggledCollapseFrame(
+            around: window.frame,
+            targetCollapsed: collapsed,
+            rememberedExpandedHeight: storedHeight.map { CGFloat($0) },
+            screenVisibleFrame: screenFrame
+        )
+
+        AppSettings.shared.isMusicQueueCollapsed = collapsed
+        let minAudioSize = NSSize(width: lockedW, height: min(collapsedH, expandedMinH))
+        let maxAudioSize = NSSize(width: lockedW, height: maxH)
+        window.minSize = NSSize(width: 100, height: 100)
+        window.contentMinSize = NSSize(width: 100, height: 100)
+        window.maxSize = NSSize(width: max(lockedW, window.frame.width), height: max(maxH, window.frame.height))
+        window.contentMaxSize = window.maxSize
+
+        if PlayerWindowManager.isRunningTests {
+            window.setFrame(targetFrame, display: false, animate: false)
+        } else {
+            window.setFrame(targetFrame, display: true, animate: animated)
+        }
+
+        window.minSize = minAudioSize
+        window.contentMinSize = minAudioSize
+        window.maxSize = maxAudioSize
+        window.contentMaxSize = maxAudioSize
+    }
+
+    public func toggleMusicQueueCollapsed() {
+        setMusicQueueCollapsed(!AppSettings.shared.isMusicQueueCollapsed, animated: true)
     }
 
     public func applyAdaptiveWindowGeometry(animated: Bool = true) {

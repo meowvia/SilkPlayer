@@ -76,6 +76,7 @@ public struct ShortcutsCheatsheetView: View {
             // Window & App
             ShortcutRowItem(title: L10n.mediaInspectorTitle, keys: ["⌘", "I"], category: .window),
             ShortcutRowItem(title: L10n.playlist, keys: ["⌘", "P"], category: .window),
+            ShortcutRowItem(title: L10n.tr("Collapse / Expand Music Queue", "收起 / 展开音乐列表"), keys: ["⌘", "L"], category: .window),
             ShortcutRowItem(title: L10n.openFile, keys: ["⌘", "O"], category: .window),
             ShortcutRowItem(title: L10n.settings, keys: ["⌘", ","], category: .window),
             ShortcutRowItem(title: L10n.keyboardShortcuts, keys: ["⌘", "/"], category: .window)

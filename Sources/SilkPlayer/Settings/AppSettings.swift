@@ -125,6 +125,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
     public var appLanguage: AppLanguage {
         didSet {
             UserDefaults.standard.set(appLanguage.rawValue, forKey: "appLanguage")
+            L10n.invalidateLanguageCache()
             NotificationCenter.default.post(name: .silkLanguageDidChange, object: nil)
         }
     }
@@ -235,6 +236,18 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             UserDefaults.standard.set(keepRecentHistory, forKey: "keepRecentHistory")
         }
     }
+
+    public var isMusicQueueCollapsed: Bool = UserDefaults.standard.bool(forKey: "musicModeQueueCollapsed") {
+        didSet {
+            guard isMusicQueueCollapsed != oldValue else { return }
+            UserDefaults.standard.set(isMusicQueueCollapsed, forKey: "musicModeQueueCollapsed")
+        }
+    }
+
+    @ObservationIgnored private var lastPersistedProgressTime: CFAbsoluteTime = 0
+    @ObservationIgnored private var lastPersistedProgressPath: String = ""
+    @ObservationIgnored private var lastPersistedProgressPosition: Double = -1
+    @ObservationIgnored private var lastPersistedProgressPlaying: Bool = false
 
     // MARK: - 3. Audio & Subtitles (音频与字幕)
     public var maxVolumeLimit: Double {
@@ -394,10 +407,42 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             progressHistory[norm] = position
         }
         UserDefaults.standard.set(progressHistory, forKey: "playbackProgressHistory")
+        lastPersistedProgressTime = CFAbsoluteTimeGetCurrent()
+        lastPersistedProgressPath = path
+        lastPersistedProgressPosition = position
+    }
+
+    /// Persists continuous playback progress at a throttled cadence (~3s) while flushing immediately on track changes, seeks, pause, or explicit force.
+    public func recordPlaybackProgress(path: String, current: Double, duration: Double, isPlaying: Bool, force: Bool = false) {
+        guard keepRecentHistory, !path.isEmpty else { return }
+        let now = CFAbsoluteTimeGetCurrent()
+        let pathChanged = (path != lastPersistedProgressPath)
+        let pausedFromPlaying = (!isPlaying && lastPersistedProgressPlaying)
+        let seekJumped = (lastPersistedProgressPosition >= 0 && abs(current - lastPersistedProgressPosition) >= 4.0 && (now - lastPersistedProgressTime) >= 0.5)
+        let intervalElapsed = ((now - lastPersistedProgressTime) >= 3.0) && (abs(current - lastPersistedProgressPosition) >= 0.25 || pathChanged || isPlaying != lastPersistedProgressPlaying)
+
+        guard force || pathChanged || pausedFromPlaying || seekJumped || intervalElapsed else {
+            return
+        }
+
+        if pathChanged || force {
+            UserDefaults.standard.set(path, forKey: "lastPlayedFilePath")
+        }
+        UserDefaults.standard.set(current, forKey: "lastPlayedPosition")
+        UserDefaults.standard.set(duration, forKey: "lastPlayedDuration")
+        savePosition(for: path, position: current, duration: duration)
+        lastPersistedProgressTime = now
+        lastPersistedProgressPath = path
+        lastPersistedProgressPosition = current
+        lastPersistedProgressPlaying = isPlaying
     }
 
     public func clearAllHistory() {
         progressHistory.removeAll()
+        lastPersistedProgressTime = 0
+        lastPersistedProgressPath = ""
+        lastPersistedProgressPosition = -1
+        lastPersistedProgressPlaying = false
         UserDefaults.standard.removeObject(forKey: "playbackProgressHistory")
         UserDefaults.standard.removeObject(forKey: "lastPlayedFilePath")
         UserDefaults.standard.removeObject(forKey: "lastPlayedPosition")

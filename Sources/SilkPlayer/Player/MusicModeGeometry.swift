@@ -7,6 +7,10 @@ public enum MusicModeGeometry: Sendable {
     public static let minWidth: CGFloat = 520.0
     public static let maxWidth: CGFloat = 768.0
     public static let minHeight: CGFloat = 500.0
+    public static let collapsedStandardHeight: CGFloat = 290.0
+    public static let collapsedExtendedHeight: CGFloat = 300.0
+    public static let collapseDragThreshold: CGFloat = 410.0
+    public static let expandDragThreshold: CGFloat = 370.0
     public static let extendedQueueWidthThreshold: CGFloat = 680.0
     public static let compactBottomHUDWidthThreshold: CGFloat = 640.0
     public static let contentHorizontalPadding: CGFloat = 20.0
@@ -46,11 +50,14 @@ public enum MusicModeGeometry: Sendable {
         around currentFrame: NSRect?,
         targetHeight: CGFloat? = nil,
         rememberedHeight: CGFloat? = nil,
+        clampToExpandedMin: Bool = true,
         screenVisibleFrame: NSRect
     ) -> NSRect {
         let lockedW = lockedWidth(forScreenWidth: screenVisibleFrame.width)
-        let minH = effectiveMinHeight(forScreenHeight: screenVisibleFrame.height)
-        let maxH = max(minH, floor(screenVisibleFrame.height))
+        let expandedMinH = effectiveMinHeight(forScreenHeight: screenVisibleFrame.height)
+        let collapsedH = collapsedHeight(forWindowWidth: lockedW, screenVisibleHeight: screenVisibleFrame.height)
+        let minH = clampToExpandedMin ? expandedMinH : min(collapsedH, expandedMinH)
+        let maxH = max(expandedMinH, floor(screenVisibleFrame.height))
 
         let resolvedH: CGFloat
         if let explicitH = targetHeight, explicitH.isFinite, explicitH > 0 {
@@ -74,6 +81,15 @@ public enum MusicModeGeometry: Sendable {
         return NSRect(x: x, y: y, width: lockedW, height: resolvedH)
     }
 
+    /// Returns the compact two-stage window height when the playlist queue is collapsed.
+    public static func collapsedHeight(forWindowWidth width: CGFloat, screenVisibleHeight: CGFloat? = nil) -> CGFloat {
+        let base = width >= extendedQueueWidthThreshold ? collapsedExtendedHeight : collapsedStandardHeight
+        if let sH = screenVisibleHeight, sH.isFinite, sH > 0 {
+            return min(base, floor(sH))
+        }
+        return base
+    }
+
     /// Clamps interactive resize proposals so horizontal width remains locked and vertical height stays within bounds.
     public static func clampedResizeProposal(_ proposedSize: NSSize, screenVisibleFrame: NSRect) -> NSSize {
         let lockedW = lockedWidth(forScreenWidth: screenVisibleFrame.width)
@@ -81,6 +97,67 @@ public enum MusicModeGeometry: Sendable {
         let maxH = max(minH, floor(screenVisibleFrame.height))
         let h = proposedSize.height.isFinite ? proposedSize.height : minH
         return NSSize(width: lockedW, height: round(max(minH, min(maxH, h))))
+    }
+
+    /// Resolves vertical drag proposals with magnetic hysteresis snapping between collapsed two-stage mode and expanded queue mode.
+    public static func magneticResizeProposal(
+        _ proposedSize: NSSize,
+        isCollapsed: Bool,
+        collapseThreshold: CGFloat = collapseDragThreshold,
+        expandThreshold: CGFloat = expandDragThreshold,
+        screenVisibleFrame: NSRect
+    ) -> (size: NSSize, isCollapsed: Bool) {
+        let lockedW = lockedWidth(forScreenWidth: screenVisibleFrame.width)
+        let expandedMinH = effectiveMinHeight(forScreenHeight: screenVisibleFrame.height)
+        let collapsedH = collapsedHeight(forWindowWidth: lockedW, screenVisibleHeight: screenVisibleFrame.height)
+        let maxH = max(expandedMinH, floor(screenVisibleFrame.height))
+
+        guard expandedMinH > collapsedH + 20.0 else {
+            return (clampedResizeProposal(proposedSize, screenVisibleFrame: screenVisibleFrame), false)
+        }
+
+        let minThreshold = collapsedH + 12.0
+        let maxThreshold = expandedMinH - 12.0
+        let effectiveCollapse = max(minThreshold, min(maxThreshold, collapseThreshold))
+        let effectiveExpand = max(minThreshold, min(maxThreshold, expandThreshold))
+        let proposedH = proposedSize.height.isFinite ? proposedSize.height : (isCollapsed ? collapsedH : expandedMinH)
+
+        if isCollapsed {
+            if proposedH >= effectiveExpand {
+                let targetH = round(max(expandedMinH, min(maxH, proposedH)))
+                return (NSSize(width: lockedW, height: targetH), false)
+            }
+            return (NSSize(width: lockedW, height: collapsedH), true)
+        } else {
+            if proposedH <= effectiveCollapse {
+                return (NSSize(width: lockedW, height: collapsedH), true)
+            }
+            let targetH = round(max(expandedMinH, min(maxH, proposedH)))
+            return (NSSize(width: lockedW, height: targetH), false)
+        }
+    }
+
+    /// Computes a top-edge anchored frame when toggling between expanded and collapsed states,
+    /// falling back cleanly inside the visible screen work area when near the bottom edge.
+    public static func toggledCollapseFrame(
+        around currentFrame: NSRect,
+        targetCollapsed: Bool,
+        rememberedExpandedHeight: CGFloat?,
+        screenVisibleFrame: NSRect
+    ) -> NSRect {
+        let lockedW = lockedWidth(forScreenWidth: screenVisibleFrame.width)
+        let targetH: CGFloat = targetCollapsed
+            ? collapsedHeight(forWindowWidth: lockedW, screenVisibleHeight: screenVisibleFrame.height)
+            : resolvedHeight(forScreenHeight: screenVisibleFrame.height, rememberedHeight: rememberedExpandedHeight)
+
+        let maxX = max(screenVisibleFrame.minX, screenVisibleFrame.maxX - lockedW)
+        let x = round(max(screenVisibleFrame.minX, min(maxX, currentFrame.midX - lockedW / 2.0)))
+
+        let maxOriginY = max(screenVisibleFrame.minY, screenVisibleFrame.maxY - targetH)
+        let topAnchoredY = round(currentFrame.maxY - targetH)
+        let y = round(max(screenVisibleFrame.minY, min(maxOriginY, topAnchoredY)))
+
+        return NSRect(x: x, y: y, width: lockedW, height: targetH)
     }
 
     /// Shows centered-right Album & Format columns when window width is 680 pt or wider.

@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+import Combine
 @testable import SilkPlayer
 
 final class MusicModeTests: XCTestCase {
@@ -91,6 +92,170 @@ final class MusicModeTests: XCTestCase {
         XCTAssertFalse(window.collectionBehavior.contains(.fullScreenNone))
         XCTAssertEqual(window.standardWindowButton(.zoomButton)?.isEnabled, true)
         XCTAssertGreaterThan(window.maxSize.width, expectedWidth)
+    }
+
+    func testTwoStageCollapseGeometryAndMagneticHysteresis() {
+        let laptopFrame = NSRect(x: 0, y: 40, width: 1440, height: 820)
+        let ultrawideFrame = NSRect(x: 0, y: 40, width: 3440, height: 1314)
+
+        XCTAssertEqual(MusicModeGeometry.collapsedHeight(forWindowWidth: 520), 290)
+        XCTAssertEqual(MusicModeGeometry.collapsedHeight(forWindowWidth: 672), 290)
+        XCTAssertEqual(MusicModeGeometry.collapsedHeight(forWindowWidth: 768), 300)
+
+        // Expanded -> drag gently above threshold holds expanded min height (500)
+        let holdExpanded = MusicModeGeometry.magneticResizeProposal(
+            NSSize(width: 768, height: 450),
+            isCollapsed: false,
+            screenVisibleFrame: ultrawideFrame
+        )
+        XCTAssertFalse(holdExpanded.isCollapsed)
+        XCTAssertEqual(holdExpanded.size, NSSize(width: 768, height: 500))
+
+        // Expanded -> drag past 410 snaps directly to collapsed height (300)
+        let snapCollapse = MusicModeGeometry.magneticResizeProposal(
+            NSSize(width: 768, height: 405),
+            isCollapsed: false,
+            screenVisibleFrame: ultrawideFrame
+        )
+        XCTAssertTrue(snapCollapse.isCollapsed)
+        XCTAssertEqual(snapCollapse.size, NSSize(width: 768, height: 300))
+
+        // Collapsed -> small downward pull (< 370) remains collapsed
+        let holdCollapsed = MusicModeGeometry.magneticResizeProposal(
+            NSSize(width: 520, height: 350),
+            isCollapsed: true,
+            screenVisibleFrame: laptopFrame
+        )
+        XCTAssertTrue(holdCollapsed.isCollapsed)
+        XCTAssertEqual(holdCollapsed.size, NSSize(width: 520, height: 290))
+
+        // Collapsed -> pull past 370 snaps back open to minHeight (500)
+        let snapExpand = MusicModeGeometry.magneticResizeProposal(
+            NSSize(width: 520, height: 375),
+            isCollapsed: true,
+            screenVisibleFrame: laptopFrame
+        )
+        XCTAssertFalse(snapExpand.isCollapsed)
+        XCTAssertEqual(snapExpand.size, NSSize(width: 520, height: 500))
+
+        // Top-anchored toggle keeps Hero Card maxY stationary when space below is sufficient
+        let expandedMid = NSRect(x: 400, y: 180, width: 768, height: 640)
+        let collapsedMid = MusicModeGeometry.toggledCollapseFrame(
+            around: expandedMid,
+            targetCollapsed: true,
+            rememberedExpandedHeight: 640,
+            screenVisibleFrame: ultrawideFrame
+        )
+        XCTAssertEqual(collapsedMid.height, 300)
+        XCTAssertEqual(collapsedMid.maxY, expandedMid.maxY)
+
+        let reExpandedMid = MusicModeGeometry.toggledCollapseFrame(
+            around: collapsedMid,
+            targetCollapsed: false,
+            rememberedExpandedHeight: 640,
+            screenVisibleFrame: ultrawideFrame
+        )
+        XCTAssertEqual(reExpandedMid.height, 640)
+        XCTAssertEqual(reExpandedMid.maxY, expandedMid.maxY)
+
+        // Expanding near bottom screen edge pushes frame upward instead of clipping below Dock
+        let collapsedNearBottom = NSRect(x: 400, y: 50, width: 768, height: 300)
+        let expandedClampedBottom = MusicModeGeometry.toggledCollapseFrame(
+            around: collapsedNearBottom,
+            targetCollapsed: false,
+            rememberedExpandedHeight: 640,
+            screenVisibleFrame: ultrawideFrame
+        )
+        XCTAssertEqual(expandedClampedBottom.height, 640)
+        XCTAssertGreaterThanOrEqual(expandedClampedBottom.minY, ultrawideFrame.minY)
+    }
+
+    @MainActor
+    func testCollapsePreservesExpandedHeightMemory() {
+        let defaults = UserDefaults.standard
+        let priorCollapsed = AppSettings.shared.isMusicQueueCollapsed
+        let priorStoredHeight = defaults.object(forKey: PlayerCore.musicModeHeightDefaultsKey)
+        defer {
+            AppSettings.shared.isMusicQueueCollapsed = priorCollapsed
+            if let priorStoredHeight {
+                defaults.set(priorStoredHeight, forKey: PlayerCore.musicModeHeightDefaultsKey)
+            } else {
+                defaults.removeObject(forKey: PlayerCore.musicModeHeightDefaultsKey)
+            }
+        }
+
+        AppSettings.shared.isMusicQueueCollapsed = false
+        defaults.removeObject(forKey: PlayerCore.musicModeHeightDefaultsKey)
+
+        let player = PlayerCore()
+        let window = NSWindow(
+            contentRect: NSRect(x: 120, y: 120, width: 768, height: 640),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        player.hostWindow = window
+        player.isAudioOnly = true
+
+        let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
+        let collapsedH = MusicModeGeometry.collapsedHeight(forWindowWidth: lockedW, screenVisibleHeight: screenFrame.height)
+
+        window.setFrame(NSRect(x: screenFrame.minX + 100, y: screenFrame.minY + 120, width: lockedW, height: 640), display: false)
+        player.setMusicQueueCollapsed(true, animated: false)
+
+        XCTAssertTrue(AppSettings.shared.isMusicQueueCollapsed)
+        XCTAssertEqual(window.frame.height, collapsedH, accuracy: 1.0)
+        XCTAssertEqual(defaults.double(forKey: PlayerCore.musicModeHeightDefaultsKey), 640.0, accuracy: 1.0)
+
+        player.setMusicQueueCollapsed(false, animated: false)
+        XCTAssertFalse(AppSettings.shared.isMusicQueueCollapsed)
+        XCTAssertEqual(window.frame.height, 640.0, accuracy: 1.0)
+    }
+
+    @MainActor
+    func testAudioRhythmAndLocalizationCacheDecoupling() {
+        let player = PlayerCore()
+        var publishCount = 0
+        let cancellable = player.objectWillChange.sink { _ in
+            publishCount += 1
+        }
+        defer { cancellable.cancel() }
+
+        player.audioRhythm.levels = [0.2, 0.5, 0.7, 0.4, 0.3, 0.2, 0.1]
+        player.audioRhythmLevels = [0.6, 0.8, 0.5, 0.6, 0.7, 0.4, 0.3]
+        XCTAssertEqual(publishCount, 0, "Rhythm updates must flow through @Observable leaf state without firing PlayerCore objectWillChange")
+
+        let priorLang = AppSettings.shared.appLanguage
+        defer { AppSettings.shared.appLanguage = priorLang }
+
+        AppSettings.shared.appLanguage = .en
+        XCTAssertFalse(L10n.isChinese)
+        AppSettings.shared.appLanguage = .zhHans
+        XCTAssertTrue(L10n.isChinese)
+
+        UserDefaults.standard.set(AppLanguage.en.rawValue, forKey: "appLanguage")
+        XCTAssertFalse(L10n.isChinese)
+        UserDefaults.standard.set(priorLang.rawValue, forKey: "appLanguage")
+    }
+
+    @MainActor
+    func testCommandSyncTokenInvalidatesOnPlayerStateTransitions() {
+        let player = PlayerCore()
+        let windowManager = PlayerWindowManager.shared
+        let initialToken = windowManager.commandSyncToken
+
+        player.isLoaded = true
+        let afterLoadedToken = windowManager.commandSyncToken
+        XCTAssertGreaterThan(afterLoadedToken, initialToken)
+
+        player.isAudioOnly = true
+        let afterAudioToken = windowManager.commandSyncToken
+        XCTAssertGreaterThan(afterAudioToken, afterLoadedToken)
+
+        player.isPlaying = true
+        let afterPlayingToken = windowManager.commandSyncToken
+        XCTAssertGreaterThan(afterPlayingToken, afterAudioToken)
     }
 
     // MARK: - 3. Audio Metadata Extraction & FLAC Header Parsing

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import QuartzCore
 import UniformTypeIdentifiers
 import Observation
 
@@ -99,15 +100,21 @@ public struct MusicModeView: View {
 
     private var filteredEntries: [(index: Int, item: PlaylistItem, metadata: AudioTrackMetadata)] {
         let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if trimmed.isEmpty {
+            return sourceQueueItems.enumerated().map { idx, item in
+                (index: idx, item: item, metadata: metadataService.metadata(for: item))
+            }
+        }
         return sourceQueueItems.enumerated().compactMap { idx, item in
             let meta = metadataService.metadata(for: item)
-            if !trimmed.isEmpty {
-                let haystack = "\(item.title) \(meta.title) \(meta.artist) \(meta.album) \(meta.formatLabel)".lowercased()
-                if !haystack.contains(trimmed) {
-                    return nil
-                }
+            if item.title.localizedStandardContains(trimmed) ||
+               meta.title.localizedStandardContains(trimmed) ||
+               meta.artist.localizedStandardContains(trimmed) ||
+               meta.album.localizedStandardContains(trimmed) ||
+               meta.formatLabel.localizedStandardContains(trimmed) {
+                return (index: idx, item: item, metadata: meta)
             }
-            return (index: idx, item: item, metadata: meta)
+            return nil
         }
     }
 
@@ -115,32 +122,51 @@ public struct MusicModeView: View {
         GeometryReader { geometry in
             let windowWidth = geometry.size.width
             let sidePadding = MusicModeGeometry.contentHorizontalPadding
+            let isCollapsed = settings.isMusicQueueCollapsed
 
             ZStack {
                 // Background Smoked Glass Canvas
                 musicBackgroundLayer
 
-                VStack(spacing: 12) {
+                VStack(spacing: 0) {
                     // Top Chrome Titlebar
                     topChromeBar(windowWidth: windowWidth)
                         .padding(.horizontal, sidePadding)
-                        .padding(.top, 10)
+                        .padding(.top, isCollapsed ? 8 : 10)
+                        .padding(.bottom, isCollapsed ? 8 : 10)
 
                     // Tier 1: Compact Hero Card
-                    heroCard(windowWidth: windowWidth)
+                    heroCard(windowWidth: windowWidth, isDropHighlighted: isCollapsed && isDropTargeted)
                         .padding(.horizontal, sidePadding)
 
+                    // Centered Collapse/Expand Triangle Toggle
+                    QueueCollapseToggleStrip(isCollapsed: isCollapsed) {
+                        player.toggleMusicQueueCollapsed()
+                    }
+                    .padding(.horizontal, sidePadding)
+                    .padding(.top, 3)
+                    .padding(.bottom, isCollapsed ? 3 : 5)
+
                     // Tier 2: Single-Row Toolbar + Headerless Queue
-                    queueSectionCard(windowWidth: windowWidth)
-                        .padding(.horizontal, sidePadding)
-                        .frame(maxHeight: .infinity)
+                    if !isCollapsed {
+                        queueSectionCard(windowWidth: windowWidth)
+                            .padding(.horizontal, sidePadding)
+                            .frame(maxHeight: .infinity)
+                            .padding(.bottom, 10)
+                            .transition(.opacity)
+                    } else {
+                        Spacer(minLength: 0)
+                    }
 
                     // Tier 3: Unified Bottom Playback HUD
                     bottomControlSection(windowWidth: windowWidth)
                         .padding(.horizontal, sidePadding)
-                        .padding(.bottom, 14)
+                        .padding(.bottom, isCollapsed ? 12 : 14)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
+                .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+                    handleDrop(providers: providers)
+                }
             }
         }
         .preferredColorScheme(.dark)
@@ -310,6 +336,9 @@ public struct MusicModeView: View {
     private func titlebarCategoryTab(category: MediaCategory, count: Int) -> some View {
         let isSelected = browsingCategory == category
         return Button {
+            if settings.isMusicQueueCollapsed {
+                player.setMusicQueueCollapsed(false, animated: true)
+            }
             withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
                 browsingCategory = category
                 searchQuery = ""
@@ -349,7 +378,7 @@ public struct MusicModeView: View {
 
     // MARK: - Tier 1: Hero Card
 
-    private func heroCard(windowWidth: CGFloat) -> some View {
+    private func heroCard(windowWidth: CGFloat, isDropHighlighted: Bool = false) -> some View {
         let artSize = MusicModeGeometry.heroArtworkSize(forWindowWidth: windowWidth)
         let currentItem = activePlayingAudioItem
         let meta = currentItem.map { metadataService.metadata(for: $0) }
@@ -412,7 +441,7 @@ public struct MusicModeView: View {
                     FloatingVinylDiscView(
                         diameter: artSize * 0.82,
                         isPlaying: player.isPlaying,
-                        levels: player.audioRhythmLevels
+                        rhythm: player.audioRhythm
                     )
                     .frame(width: artSize, height: artSize)
                 }
@@ -506,7 +535,7 @@ public struct MusicModeView: View {
                 Button(action: locatePlayingTrack) {
                     HStack(spacing: 8) {
                         MusicSpectrumMiniMeter(
-                            levels: player.audioRhythmLevels,
+                            rhythm: player.audioRhythm,
                             isPlaying: player.isPlaying
                         )
                         Text(indexLabel)
@@ -537,7 +566,10 @@ public struct MusicModeView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.11), lineWidth: 0.75)
+                .strokeBorder(
+                    isDropHighlighted ? Color.cyan.opacity(0.65) : Color.white.opacity(0.11),
+                    lineWidth: isDropHighlighted ? 1.5 : 0.75
+                )
         )
     }
 
@@ -692,6 +724,7 @@ public struct MusicModeView: View {
                                         }
                                     }
                                 )
+                                .equatable()
                                 .id(entry.item.id)
                             }
                         }
@@ -764,9 +797,6 @@ public struct MusicModeView: View {
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
-            handleDrop(providers: providers)
-        }
     }
 
     private var sortMenuButton: some View {
@@ -1103,6 +1133,9 @@ public struct MusicModeView: View {
     private func locatePlayingTrack() {
         guard let active = activePlayingAudioItem else { return }
         suppressedAutoScrollID = nil
+        if settings.isMusicQueueCollapsed {
+            player.setMusicQueueCollapsed(false, animated: true)
+        }
         if effectiveBrowsingCategory != .audio {
             browsingCategory = .audio
         }
@@ -1227,7 +1260,58 @@ public struct MusicModeView: View {
 // MARK: - Helper Subviews
 
 @MainActor
-private struct MusicQueueRowView: View {
+private struct QueueCollapseToggleStrip: View {
+    let isCollapsed: Bool
+    let action: () -> Void
+
+    @State private var isHovered: Bool = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 18)
+                    .contentShape(Rectangle())
+
+                HStack(spacing: 0) {
+                    Image(systemName: isCollapsed ? "arrowtriangle.down.fill" : "arrowtriangle.up.fill")
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundColor(.white.opacity(isHovered ? 0.92 : 0.56))
+                }
+                .frame(width: 52, height: 16)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(isHovered ? 0.14 : 0.055))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.white.opacity(isHovered ? 0.24 : 0.10), lineWidth: 0.6)
+                )
+            }
+            .overlay(
+                MusicPointingHandOverlay(enabled: true)
+            )
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .focusEffectDisabled()
+        .onHover { isHovered = $0 }
+        .accessibilityLabel(
+            isCollapsed
+                ? L10n.tr("Expand Playlist Queue", "展开播放列表")
+                : L10n.tr("Collapse Playlist Queue", "收起播放列表")
+        )
+        .help(
+            isCollapsed
+                ? L10n.tr("Expand Playlist Queue (Cmd+L)", "展开播放列表 (Cmd+L)")
+                : L10n.tr("Collapse Playlist Queue (Cmd+L)", "收起播放列表 (Cmd+L)")
+        )
+    }
+}
+
+@MainActor
+private struct MusicQueueRowView: View, @preconcurrency Equatable {
     let displayIndex: Int
     let item: PlaylistItem
     let metadata: AudioTrackMetadata
@@ -1239,6 +1323,18 @@ private struct MusicQueueRowView: View {
     let windowWidth: CGFloat
     let onSelect: () -> Void
     let onRemove: () -> Void
+
+    static func == (lhs: MusicQueueRowView, rhs: MusicQueueRowView) -> Bool {
+        lhs.displayIndex == rhs.displayIndex &&
+        lhs.item == rhs.item &&
+        lhs.metadata == rhs.metadata &&
+        lhs.category == rhs.category &&
+        lhs.isCurrent == rhs.isCurrent &&
+        lhs.isPlaying == rhs.isPlaying &&
+        lhs.isPulseHighlighted == rhs.isPulseHighlighted &&
+        lhs.showExtendedColumns == rhs.showExtendedColumns &&
+        lhs.windowWidth == rhs.windowWidth
+    }
 
     @State private var isHovered: Bool = false
 
@@ -1356,7 +1452,7 @@ private struct MusicQueueRowView: View {
             Button(L10n.play) {
                 onSelect()
             }
-            if !item.path.contains("://") {
+            if item.path.range(of: "://", options: .literal) == nil {
                 Button(L10n.tr("Show in Finder", "在访达中显示")) {
                     NSWorkspace.shared.activateFileViewerSelecting([item.url])
                 }
@@ -1374,34 +1470,148 @@ private struct MusicMiniPlayingBars: View {
     let isPlaying: Bool
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.14, paused: !isPlaying)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .bottom, spacing: 2) {
-                ForEach(0..<3, id: \.self) { idx in
-                    let factor = isPlaying
-                        ? (0.35 + 0.65 * abs(sin(t * 5.2 + Double(idx) * 1.35)))
-                        : 0.35
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.cyan)
-                        .frame(width: 2.4, height: CGFloat(11.0 * factor))
+        MiniPlayingBarsLayerView(isPlaying: isPlaying)
+            .frame(width: 12, height: 12)
+    }
+}
+
+@MainActor
+private struct MiniPlayingBarsLayerView: NSViewRepresentable {
+    let isPlaying: Bool
+
+    func makeNSView(context: Context) -> MiniPlayingBarsHostView {
+        let view = MiniPlayingBarsHostView()
+        view.update(isPlaying: isPlaying)
+        return view
+    }
+
+    func updateNSView(_ nsView: MiniPlayingBarsHostView, context: Context) {
+        nsView.update(isPlaying: isPlaying)
+    }
+}
+
+@MainActor
+private final class MiniPlayingBarsHostView: NSView {
+    private static let animationKey = "silk.mini.bars.scaleY"
+    private let barLayers: [CALayer] = (0..<3).map { _ in CALayer() }
+    private var desiredPlaying = false
+    private var isAnimating = false
+
+    override var isFlipped: Bool { false }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        let barColor = NSColor(Color.cyan).cgColor
+        for bar in barLayers {
+            bar.backgroundColor = barColor
+            bar.cornerRadius = 1.0
+            bar.anchorPoint = CGPoint(x: 0.5, y: 0.0)
+            bar.bounds = CGRect(x: 0, y: 0, width: 2.4, height: 11.0)
+            bar.transform = CATransform3DMakeScale(1.0, 0.35, 1.0)
+            layer?.addSublayer(bar)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let barWidth: CGFloat = 2.4
+        let spacing: CGFloat = 2.0
+        let totalWidth = barWidth * 3.0 + spacing * 2.0
+        let startX = (bounds.width - totalWidth) * 0.5
+        for (idx, bar) in barLayers.enumerated() {
+            if bar.superlayer !== layer {
+                layer?.addSublayer(bar)
+            }
+            bar.position = CGPoint(
+                x: startX + CGFloat(idx) * (barWidth + spacing) + barWidth * 0.5,
+                y: 0.5
+            )
+        }
+        CATransaction.commit()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        syncAnimationState(force: true)
+    }
+
+    func update(isPlaying: Bool) {
+        desiredPlaying = isPlaying
+        syncAnimationState(force: false)
+    }
+
+    private func syncAnimationState(force: Bool) {
+        guard window != nil else {
+            if isAnimating {
+                for bar in barLayers {
+                    bar.removeAnimation(forKey: Self.animationKey)
+                }
+                isAnimating = false
+            }
+            return
+        }
+        guard force || desiredPlaying != isAnimating else { return }
+
+        if desiredPlaying {
+            let fromValues: [Double] = [0.32, 0.92, 0.42]
+            let toValues: [Double] = [0.95, 0.30, 0.88]
+            let durations: [CFTimeInterval] = [0.42, 0.54, 0.46]
+            for (idx, bar) in barLayers.enumerated() {
+                if bar.animation(forKey: Self.animationKey) == nil {
+                    let anim = CABasicAnimation(keyPath: "transform.scale.y")
+                    anim.fromValue = fromValues[idx]
+                    anim.toValue = toValues[idx]
+                    anim.duration = durations[idx]
+                    anim.autoreverses = true
+                    anim.repeatCount = .infinity
+                    anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    anim.isRemovedOnCompletion = false
+                    bar.add(anim, forKey: Self.animationKey)
                 }
             }
-            .frame(height: 12, alignment: .center)
+            isAnimating = true
+        } else {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            for bar in barLayers {
+                bar.removeAnimation(forKey: Self.animationKey)
+                bar.transform = CATransform3DMakeScale(1.0, 0.35, 1.0)
+            }
+            CATransaction.commit()
+            isAnimating = false
         }
     }
 }
 
 @MainActor
 private struct MusicSpectrumMiniMeter: View {
-    let levels: [CGFloat]
+    let rhythm: PlayerAudioRhythm
     let isPlaying: Bool
 
     private static let bandIndices: [Int] = [4, 2, 0, 1, 0, 2, 3, 5]
     private static let archWeights: [CGFloat] = [0.58, 0.78, 0.94, 1.0, 1.0, 0.94, 0.78, 0.58]
+    private static let activeGradient = Gradient(colors: [
+        Color(red: 0.25, green: 0.92, blue: 1.0),
+        Color(red: 0.18, green: 0.58, blue: 1.0)
+    ])
 
     var body: some View {
-        HStack(alignment: .center, spacing: 3.0) {
-            ForEach(0..<8, id: \.self) { idx in
+        let levels = rhythm.levels
+        Canvas(opaque: false, rendersAsynchronously: false) { graphics, size in
+            let barWidth: CGFloat = 2.6
+            let spacing: CGFloat = 3.0
+            let totalWidth = barWidth * 8.0 + spacing * 7.0
+            let startX = (size.width - totalWidth) * 0.5
+
+            for idx in 0..<8 {
                 let bandIdx = Self.bandIndices[idx]
                 let weight = Self.archWeights[idx]
                 let raw: CGFloat = (isPlaying && bandIdx < levels.count) ? levels[bandIdx] : 0.14
@@ -1410,27 +1620,29 @@ private struct MusicSpectrumMiniMeter: View {
                     ? max(4.5, min(18.5, 4.5 + normalized * 14.0))
                     : max(4.0, 4.0 + weight * 3.5)
 
-                Capsule()
-                    .fill(
-                        isPlaying
-                            ? AnyShapeStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.25, green: 0.92, blue: 1.0),
-                                        Color(red: 0.18, green: 0.58, blue: 1.0)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            : AnyShapeStyle(Color.white.opacity(0.28))
+                let rect = CGRect(
+                    x: startX + CGFloat(idx) * (barWidth + spacing),
+                    y: (size.height - height) * 0.5,
+                    width: barWidth,
+                    height: height
+                )
+                let path = Path(roundedRect: rect, cornerRadius: barWidth * 0.5)
+
+                if isPlaying {
+                    graphics.fill(
+                        path,
+                        with: .linearGradient(
+                            Self.activeGradient,
+                            startPoint: CGPoint(x: rect.midX, y: rect.minY),
+                            endPoint: CGPoint(x: rect.midX, y: rect.maxY)
+                        )
                     )
-                    .frame(width: 2.6, height: height)
-                    .shadow(color: isPlaying ? Color.cyan.opacity(0.38) : .clear, radius: 2, x: 0, y: 0)
+                } else {
+                    graphics.fill(path, with: .color(Color.white.opacity(0.28)))
+                }
             }
         }
-        .frame(height: 19, alignment: .center)
-        .animation(.easeOut(duration: 0.08), value: levels)
+        .frame(width: 42, height: 19)
     }
 }
 

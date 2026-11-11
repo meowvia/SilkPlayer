@@ -19,6 +19,14 @@ import SilkCoreKit
     public init() {}
 }
 
+// MARK: - Decoupled Audio Rhythm Metering
+@MainActor
+@Observable public final class PlayerAudioRhythm {
+    public var levels: [CGFloat] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    public init() {}
+}
+
 @MainActor
 public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, SilkPlayerLayerDelegate {
     // MARK: - Singleton & Key Bindings
@@ -43,15 +51,34 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         didSet { clock.duration = duration }
     }
     @Published public var cachedDuration: Double = 0.0
-    @Published public var isLoaded: Bool = false
-    @Published public var isPlaying: Bool = false
+    @Published public var isLoaded: Bool = false {
+        didSet {
+            if isLoaded != oldValue {
+                PlayerWindowManager.shared.syncCommandState()
+            }
+        }
+    }
+    @Published public var isPlaying: Bool = false {
+        didSet {
+            if isPlaying != oldValue {
+                PlayerWindowManager.shared.syncCommandState()
+            }
+        }
+    }
     @Published public var playbackState: PlaybackState = .idle
     @Published public var mediaTitle: String = ""
     @Published public var currentFilePath: String? = nil
     private var pendingResumeTime: Double? = nil
+    private var lastClockPublishTime: CFAbsoluteTime = 0.0
 
     // MARK: - Audio Only & Artwork Metadata
-    @Published public var isAudioOnly: Bool = false
+    @Published public var isAudioOnly: Bool = false {
+        didSet {
+            if isAudioOnly != oldValue {
+                PlayerWindowManager.shared.syncCommandState()
+            }
+        }
+    }
     @Published public var artworkImage: NSImage? = nil
 
     // MARK: - Video & Codec Metadata
@@ -101,8 +128,20 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var isScrubbing: Bool = false
     @Published public var scrubTime: Double = 0.0
     private var wasPlayingBeforeScrub: Bool = false
-    @Published public var isInspectorVisible: Bool = false
-    @Published public var isPlaylistDrawerVisible: Bool = false
+    @Published public var isInspectorVisible: Bool = false {
+        didSet {
+            if isInspectorVisible != oldValue {
+                PlayerWindowManager.shared.syncCommandState()
+            }
+        }
+    }
+    @Published public var isPlaylistDrawerVisible: Bool = false {
+        didSet {
+            if isPlaylistDrawerVisible != oldValue {
+                PlayerWindowManager.shared.syncCommandState()
+            }
+        }
+    }
     @Published public var activeOSD: OSDNotification? = nil
     public var hasAppliedInitialWindowSize: Bool = false
     public var pendingAudioGeometryAfterExitFullScreen: Bool = false
@@ -167,8 +206,16 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     private var hasHandledNaturalEOF: Bool = false
     private var shouldAutoPlayOnReady: Bool = true
 
-    // MARK: - Real-time Audio Rhythm Metering
-    @Published public var audioRhythmLevels: [CGFloat] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    // MARK: - Decoupled Real-time Audio Rhythm Metering
+    public let audioRhythm = PlayerAudioRhythm()
+    public var audioRhythmLevels: [CGFloat] {
+        get { audioRhythm.levels }
+        set {
+            if audioRhythm.levels != newValue {
+                audioRhythm.levels = newValue
+            }
+        }
+    }
     private var audioRhythmTimer: Timer?
 
     // MARK: - Power Assertion & Sleep Management
@@ -552,7 +599,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             PlayerCore.trimMemoryFootprint()
         }
 
-        if resetUI, let window = hostWindow ?? NSApp.keyWindow {
+        if resetUI, let window = hostWindow ?? NSApp?.keyWindow {
             window.title = "SilkPlayer"
             restoreStandardWindowChrome(on: window)
             window.contentAspectRatio = .zero
@@ -1432,7 +1479,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     public func startAudioRhythmMonitoring() {
         guard isAudioOnly && isPlaying else { return }
         guard audioRhythmTimer == nil else { return }
-        audioRhythmTimer = Timer.scheduledTimer(withTimeInterval: 0.050, repeats: true) { [weak self] _ in
+        audioRhythmTimer = Timer.scheduledTimer(withTimeInterval: 0.10, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, self.isPlaying, self.isAudioOnly else {
                     self?.stopAudioRhythmMonitoring()
@@ -1440,15 +1487,16 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 }
                 if let bands = self.playerLayer?.audioRhythmBands, bands.count == 7 {
                     let mapped = bands.map { CGFloat($0) }
+                    let current = self.audioRhythm.levels
                     var changed = false
                     for (i, val) in mapped.enumerated() {
-                        if abs(val - self.audioRhythmLevels[i]) > 0.03 {
+                        if abs(val - current[i]) > 0.035 {
                             changed = true
                             break
                         }
                     }
                     if changed {
-                        self.audioRhythmLevels = mapped
+                        self.audioRhythm.levels = mapped
                     }
                 }
             }
@@ -1757,15 +1805,27 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             if let pending = self.pendingSeekTarget {
                 if abs(currentTime - pending) <= 0.6 {
                     self.pendingSeekTarget = nil
+                    self.lastClockPublishTime = CFAbsoluteTimeGetCurrent()
                     self.currentTime = currentTime
                 }
             } else {
-                self.currentTime = currentTime
+                let now = CFAbsoluteTimeGetCurrent()
+                let cadence: CFTimeInterval = self.isAudioOnly ? 0.20 : 0.08
+                let delta = abs(currentTime - self.clock.currentTime)
+                let crossedRewind = (currentTime > 3.0) != self.canRewindToStart
+                if delta >= 0.45 || crossedRewind || (now - self.lastClockPublishTime) >= cadence {
+                    self.lastClockPublishTime = now
+                    self.currentTime = currentTime
+                }
             }
         }
         let becameValidDuration = (self.duration <= 0 && totalTime > 0)
-        self.duration = totalTime
-        self.cachedDuration = totalTime
+        if totalTime.isFinite && abs(self.duration - totalTime) > 0.001 {
+            self.duration = totalTime
+        }
+        if totalTime.isFinite && abs(self.cachedDuration - totalTime) > 0.001 {
+            self.cachedDuration = totalTime
+        }
         if becameValidDuration, self.isAudioOnly, let path = self.currentFilePath {
             AudioTrackMetadataService.shared.mergeLiveStreamInfo(
                 path: path,
@@ -1777,7 +1837,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 tags: nil
             )
         }
-        _ = self.subtitleModel.subtitle(currentTime: currentTime)
+        if !self.isAudioOnly {
+            _ = self.subtitleModel.subtitle(currentTime: currentTime)
+        }
         self.onProgressUpdate?(self.currentFilePath ?? "", currentTime, totalTime)
     }
 

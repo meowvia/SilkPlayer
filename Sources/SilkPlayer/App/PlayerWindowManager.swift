@@ -89,6 +89,11 @@ extension Notification.Name {
     }
 
     public private(set) var sessions: [PlayerWindowSession] = []
+    public private(set) var commandSyncToken: Int = 0
+
+    public func syncCommandState() {
+        commandSyncToken &+= 1
+    }
 
     /// Queue for pending files to be consumed by newly spawned windows
     private var pendingQueue: [String] = []
@@ -159,6 +164,7 @@ extension Notification.Name {
             let notifWindow = notification.object as? NSWindow
             MainActor.assumeIsolated {
                 guard let self = self, let notifWindow = notifWindow else { return }
+                self.syncCommandState()
                 // Only insert .fullScreenPrimary into non-audio player session windows, never settingsWindow
                 if notifWindow !== self.settingsWindow,
                    let session = self.sessions.first(where: { $0.window === notifWindow }) {
@@ -367,11 +373,13 @@ extension Notification.Name {
         if !sessions.contains(where: { $0.id == session.id }) {
             sessions.append(session)
             session.window?.level = isAlwaysOnTop ? .floating : .normal
+            syncCommandState()
         }
     }
 
     public func unregisterSession(id: UUID) {
         sessions.removeAll(where: { $0.id == id })
+        syncCommandState()
         if sessions.isEmpty {
             closeSettings()
         }
@@ -796,6 +804,9 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     private var isAdjustingWindowFrame: Bool = false
     public private(set) var isFullscreenTransitioning: Bool = false
     private var savedPreZoomFrame: NSRect? = nil
+    private var savedPreZoomMusicCollapsed: Bool = false
+    private var musicLiveResizeStartedCollapsed: Bool = false
+    private var musicLiveResizeDidToggleCollapse: Bool = false
     private var preFullScreenState: PreFullScreenState? = nil
     private var lastToggleMaximizeTime: TimeInterval = 0
     public private(set) var resizeHUDView: WindowResizeHUDView?
@@ -938,6 +949,8 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         guard let window = notification.object as? NSWindow,
               !window.styleMask.contains(.fullScreen),
               !isFullscreenTransitioning else { return }
+        musicLiveResizeStartedCollapsed = AppSettings.shared.isMusicQueueCollapsed
+        musicLiveResizeDidToggleCollapse = false
         let hud = ensureHUDAttached(to: window)
         hud?.show(
             size: window.frame.size,
@@ -980,13 +993,41 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return frameSize
         }
 
-        // Dedicated Music Mode branch: locked responsive width per screen with vertical-only resizing
+        // Dedicated Music Mode branch: locked responsive width per screen with vertical-only resizing & magnetic queue collapse snap
         if player?.isAudioOnly == true {
-            let res = MusicModeGeometry.clampedResizeProposal(frameSize, screenVisibleFrame: screenFrame)
-            if window.inLiveResize {
-                updateResizeHUD(window: window, resolvedSize: res)
+            if !window.inLiveResize {
+                if AppSettings.shared.isMusicQueueCollapsed {
+                    let collapsedSize = MusicModeGeometry.clampedFrame(
+                        around: window.frame,
+                        targetHeight: frameSize.height,
+                        clampToExpandedMin: false,
+                        screenVisibleFrame: screenFrame
+                    ).size
+                    return collapsedSize
+                }
+                return MusicModeGeometry.clampedResizeProposal(frameSize, screenVisibleFrame: screenFrame)
             }
-            return res
+            let currentCollapsed = AppSettings.shared.isMusicQueueCollapsed
+            let collapseThreshold: CGFloat = (musicLiveResizeDidToggleCollapse && musicLiveResizeStartedCollapsed)
+                ? 330.0
+                : MusicModeGeometry.collapseDragThreshold
+            let expandThreshold: CGFloat = (musicLiveResizeDidToggleCollapse && !musicLiveResizeStartedCollapsed)
+                ? 455.0
+                : MusicModeGeometry.expandDragThreshold
+
+            let proposal = MusicModeGeometry.magneticResizeProposal(
+                frameSize,
+                isCollapsed: currentCollapsed,
+                collapseThreshold: collapseThreshold,
+                expandThreshold: expandThreshold,
+                screenVisibleFrame: screenFrame
+            )
+            if proposal.isCollapsed != currentCollapsed {
+                musicLiveResizeDidToggleCollapse = true
+                AppSettings.shared.isMusicQueueCollapsed = proposal.isCollapsed
+            }
+            updateResizeHUD(window: window, resolvedSize: proposal.size)
+            return proposal.size
         }
 
         // Allow Shift-key freeform resizing without aspect ratio constraints during interactive dragging
@@ -1187,9 +1228,13 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         capturePreFullScreenFrameIfNeeded(window: window)
 
         let contentSize = window.contentRect(forFrameRect: window.frame).size
+        musicLiveResizeDidToggleCollapse = false
         if let p = self.player {
             if p.isAudioOnly {
-                UserDefaults.standard.set(Double(window.frame.height), forKey: PlayerCore.musicModeHeightDefaultsKey)
+                let expandedMinH = MusicModeGeometry.effectiveMinHeight(forScreenHeight: screenFrame.height)
+                if !AppSettings.shared.isMusicQueueCollapsed && window.frame.height >= expandedMinH - 1.0 {
+                    UserDefaults.standard.set(Double(window.frame.height), forKey: PlayerCore.musicModeHeightDefaultsKey)
+                }
             } else if p.videoWidth > 0 || p.videoHeight > 0 {
                 p.updateRememberedWindowSize(contentSize)
             }
@@ -1274,6 +1319,19 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
         if player.isAudioOnly {
             let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame ?? defaultFrame
+            let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
+            if AppSettings.shared.isMusicQueueCollapsed {
+                let collapsedH = MusicModeGeometry.collapsedHeight(
+                    forWindowWidth: lockedW,
+                    screenVisibleHeight: screenFrame.height
+                )
+                return MusicModeGeometry.clampedFrame(
+                    around: window.frame,
+                    targetHeight: collapsedH,
+                    clampToExpandedMin: false,
+                    screenVisibleFrame: screenFrame
+                )
+            }
             return MusicModeGeometry.clampedFrame(around: window.frame, screenVisibleFrame: screenFrame)
         }
 
@@ -1321,35 +1379,45 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
                                  abs(window.frame.width - lockedW) <= 2.0
             let targetFrame: NSRect
             if isFullVertical {
-                let restoreH = savedPreZoomFrame?.height ?? MusicModeGeometry.resolvedHeight(forScreenHeight: screenFrame.height)
+                let restoreCollapsed = savedPreZoomMusicCollapsed
+                savedPreZoomMusicCollapsed = false
+                if restoreCollapsed {
+                    let collapsedH = MusicModeGeometry.collapsedHeight(
+                        forWindowWidth: lockedW,
+                        screenVisibleHeight: screenFrame.height
+                    )
+                    AppSettings.shared.isMusicQueueCollapsed = true
+                    targetFrame = MusicModeGeometry.clampedFrame(
+                        around: savedPreZoomFrame ?? window.frame,
+                        targetHeight: collapsedH,
+                        clampToExpandedMin: false,
+                        screenVisibleFrame: screenFrame
+                    )
+                } else {
+                    let restoreH = savedPreZoomFrame?.height ?? MusicModeGeometry.resolvedHeight(forScreenHeight: screenFrame.height)
+                    AppSettings.shared.isMusicQueueCollapsed = false
+                    targetFrame = MusicModeGeometry.clampedFrame(
+                        around: window.frame,
+                        targetHeight: restoreH,
+                        screenVisibleFrame: screenFrame
+                    )
+                }
                 savedPreZoomFrame = nil
-                targetFrame = MusicModeGeometry.clampedFrame(
-                    around: window.frame,
-                    targetHeight: restoreH,
-                    screenVisibleFrame: screenFrame
-                )
             } else {
                 savedPreZoomFrame = window.frame
+                savedPreZoomMusicCollapsed = AppSettings.shared.isMusicQueueCollapsed
+                AppSettings.shared.isMusicQueueCollapsed = false
                 let clampedX = max(screenFrame.minX, min(screenFrame.maxX - lockedW, round(window.frame.midX - lockedW / 2.0)))
                 targetFrame = NSRect(x: clampedX, y: screenFrame.minY, width: lockedW, height: floor(screenFrame.height))
             }
 
             if isTesting {
                 window.setFrame(targetFrame, display: false, animate: false)
-                isAdjustingWindowFrame = false
-                isMaximizingOrRestoring = false
-                return
+            } else {
+                window.setFrame(targetFrame, display: true, animate: true)
             }
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.22
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                window.animator().setFrame(targetFrame, display: true)
-            }, completionHandler: { [weak self] in
-                MainActor.assumeIsolated {
-                    self?.isAdjustingWindowFrame = false
-                    self?.isMaximizingOrRestoring = false
-                }
-            })
+            isAdjustingWindowFrame = false
+            isMaximizingOrRestoring = false
             return
         }
 
@@ -1385,21 +1453,11 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
         if isTesting {
             window.setFrame(targetFrame, display: false, animate: false)
-            isAdjustingWindowFrame = false
-            isMaximizingOrRestoring = false
-            return
+        } else {
+            window.setFrame(targetFrame, display: true, animate: true)
         }
-
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.22
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            window.animator().setFrame(targetFrame, display: true)
-        }, completionHandler: { [weak self] in
-            MainActor.assumeIsolated {
-                self?.isAdjustingWindowFrame = false
-                self?.isMaximizingOrRestoring = false
-            }
-        })
+        isAdjustingWindowFrame = false
+        isMaximizingOrRestoring = false
     }
 
     public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
@@ -1469,12 +1527,26 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
             let targetFrame: NSRect
             if player?.isAudioOnly == true {
-                let storedH = UserDefaults.standard.object(forKey: PlayerCore.musicModeHeightDefaultsKey) as? Double
-                targetFrame = MusicModeGeometry.clampedFrame(
-                    around: nil,
-                    rememberedHeight: storedH.map { CGFloat($0) },
-                    screenVisibleFrame: screenFrame
-                )
+                let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
+                if AppSettings.shared.isMusicQueueCollapsed {
+                    let collapsedH = MusicModeGeometry.collapsedHeight(
+                        forWindowWidth: lockedW,
+                        screenVisibleHeight: screenFrame.height
+                    )
+                    targetFrame = MusicModeGeometry.clampedFrame(
+                        around: nil,
+                        targetHeight: collapsedH,
+                        clampToExpandedMin: false,
+                        screenVisibleFrame: screenFrame
+                    )
+                } else {
+                    let storedH = UserDefaults.standard.object(forKey: PlayerCore.musicModeHeightDefaultsKey) as? Double
+                    targetFrame = MusicModeGeometry.clampedFrame(
+                        around: nil,
+                        rememberedHeight: storedH.map { CGFloat($0) },
+                        screenVisibleFrame: screenFrame
+                    )
+                }
                 preFullScreenState = nil
                 currentInteractiveMode = .normal
             } else if let preState = preFullScreenState {

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 extension Notification.Name {
     public static let silkLanguageDidChange = Notification.Name("silkLanguageDidChange")
@@ -6,8 +7,30 @@ extension Notification.Name {
 
 /// Centralized Bilingual Localization Manager (Chinese & English)
 public enum L10n {
-    /// Detects whether current preferred language is Chinese
-    public static var isChinese: Bool {
+    private static let cachedChineseLock = OSAllocatedUnfairLock<Bool?>(initialState: nil)
+    private static let languageObserverSetup: Void = {
+        NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: nil
+        ) { _ in
+            invalidateLanguageCache()
+        }
+        NotificationCenter.default.addObserver(
+            forName: .silkLanguageDidChange,
+            object: nil,
+            queue: nil
+        ) { _ in
+            invalidateLanguageCache()
+        }
+    }()
+
+    /// Invalidates cached language preference so next lookup reads current UserDefaults.
+    public static func invalidateLanguageCache() {
+        cachedChineseLock.withLock { $0 = nil }
+    }
+
+    private static func computeIsChinese() -> Bool {
         if let lang = UserDefaults.standard.string(forKey: "appLanguage") {
             return lang == AppLanguage.zhHans.rawValue
         }
@@ -15,6 +38,17 @@ public enum L10n {
             return preferred.hasPrefix("zh")
         }
         return true
+    }
+
+    /// Detects whether current preferred language is Chinese
+    public static var isChinese: Bool {
+        _ = languageObserverSetup
+        if let cached = cachedChineseLock.withLock({ $0 }) {
+            return cached
+        }
+        let resolved = computeIsChinese()
+        cachedChineseLock.withLock { $0 = resolved }
+        return resolved
     }
 
     /// Returns localized string based on current environment

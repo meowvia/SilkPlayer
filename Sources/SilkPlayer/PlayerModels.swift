@@ -289,6 +289,7 @@ public protocol PlayerControllable: AnyObject {
     func fitWindow(scale: Double)
     func toggleInspector()
     func togglePlaylistDrawer()
+    func toggleMusicQueueCollapsed()
     func applyContentAspectRatioLock()
     func setFullscreenState(_ fullscreen: Bool)
     var isFullscreenTransitioning: Bool { get set }
@@ -312,6 +313,7 @@ public extension PlayerControllable {
         set {}
     }
     func renderCurrentFrameImmediately() {}
+    func toggleMusicQueueCollapsed() {}
     func applyContentAspectRatioLock() {}
     func setFullscreenState(_ fullscreen: Bool) {}
     func setExactRotation(_ angle: Int) {}
