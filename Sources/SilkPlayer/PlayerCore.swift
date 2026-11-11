@@ -349,7 +349,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         }
 
         let isIncomingAudio = MediaFileClassifier.classify(url: resolvedURL) == .audio
-        stop(resetUI: false)
+        stop(resetUI: false, preserveAudioMode: isIncomingAudio)
 
         self.currentFilePath = path
         SilkThumbnailEngine.shared.prepare(for: path)
@@ -487,7 +487,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         stop(resetUI: true)
     }
 
-    public func stop(resetUI: Bool) {
+    public func stop(resetUI: Bool, preserveAudioMode: Bool = false) {
         releasePlaybackActivity()
         stopAudioRhythmMonitoring()
         if let path = currentFilePath, currentTime > 0 {
@@ -509,7 +509,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         isPlaying = false
         isLoaded = false
         playbackState = .idle
-        isAudioOnly = false
+        if !preserveAudioMode {
+            isAudioOnly = false
+        }
         artworkImage = nil
         mediaTitle = ""
         audioRhythmLevels = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]

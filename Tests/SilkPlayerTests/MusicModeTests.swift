@@ -399,4 +399,359 @@ final class MusicModeTests: XCTestCase {
         player.showVolumeOSD()
         XCTAssertFalse(player.isVolumeHUDVisible)
     }
+
+    func testCorruptQuestionMarkTagFilteringAndDoubleMojibakeRepair() {
+        XCTAssertTrue(AudioTrackMetadataService.isCorruptPlaceholderTag("???"))
+        XCTAssertTrue(AudioTrackMetadataService.isCorruptPlaceholderTag("??-??????"))
+        XCTAssertTrue(AudioTrackMetadataService.isCorruptPlaceholderTag("????2:???"))
+        XCTAssertTrue(AudioTrackMetadataService.isCorruptPlaceholderTag("???'s"))
+        XCTAssertTrue(AudioTrackMetadataService.isCorruptPlaceholderTag("？？？"))
+
+        XCTAssertFalse(AudioTrackMetadataService.isCorruptPlaceholderTag("Why?"))
+        XCTAssertFalse(AudioTrackMetadataService.isCorruptPlaceholderTag("为什么?"))
+        XCTAssertFalse(AudioTrackMetadataService.isCorruptPlaceholderTag("Mr. Question?"))
+
+        XCTAssertEqual(AudioTrackMetadataService.sanitizeTagValue("???"), "")
+        XCTAssertEqual(AudioTrackMetadataService.sanitizeTagValue("? ?"), "")
+        XCTAssertEqual(AudioTrackMetadataService.sanitizeTagValue("Why?"), "Why?")
+        XCTAssertEqual(AudioTrackMetadataService.sanitizeTagValue("Café Müller"), "Café Müller")
+
+        // Single-pass UTF-8 -> Latin-1 mojibake
+        let utf8Bytes = Data("大海".utf8)
+        let onceMisdecoded = String(data: utf8Bytes, encoding: .isoLatin1)!
+        XCTAssertEqual(AudioTrackMetadataService.repairMojibakeIfNeeded(onceMisdecoded), "大海")
+
+        // Double-pass UTF-8 -> Latin-1 -> UTF-8 -> Latin-1 mojibake
+        let twiceMisdecoded = String(data: Data(onceMisdecoded.utf8), encoding: .isoLatin1)!
+        XCTAssertEqual(AudioTrackMetadataService.repairMojibakeIfNeeded(twiceMisdecoded), "大海")
+    }
+
+    func testWAVWithCorruptLISTInfoUsesEmbeddedID3v2Unicode() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SilkMetaTest_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let wavURL = dir.appendingPathComponent("unknown.wav")
+        let id3ChunkPayload = makeID3v23Tag([
+            ("TIT2", utf16LEFramePayload("大海")),
+            ("TPE1", utf16LEFramePayload("张雨生")),
+            ("TALB", utf16LEFramePayload("大海 (1992)"))
+        ])
+        let listInfoPayload = makeRIFFInfoPayload([
+            ("INAM", "??"),
+            ("IART", "???"),
+            ("IPRD", "????")
+        ])
+        let wavData = makeSyntheticWAV(listInfoPayload: listInfoPayload, id3ChunkPayload: id3ChunkPayload)
+        try wavData.write(to: wavURL)
+
+        let item = PlaylistItem(path: wavURL.path, title: "unknown")
+        let meta = await AudioTrackMetadataService.extractMetadataFromDisk(item: item)
+
+        XCTAssertEqual(meta.title, "大海")
+        XCTAssertEqual(meta.artist, "张雨生")
+        XCTAssertEqual(meta.album, "大海 (1992)")
+        XCTAssertEqual(meta.formatLabel, "WAV")
+        XCTAssertEqual(meta.sampleRateHz, 44_100)
+        XCTAssertEqual(meta.bitDepth, 16)
+        XCTAssertEqual(meta.duration ?? 0, 1.0, accuracy: 0.02)
+    }
+
+    func testWAVWithOnlyQuestionMarkLISTInfoFallsBackToFilename() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SilkMetaTest_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let wavURL = dir.appendingPathComponent("梁咏琪 - 胆小鬼.wav")
+        let listInfoPayload = makeRIFFInfoPayload([
+            ("INAM", "???"),
+            ("IART", "????"),
+            ("IPRD", "???")
+        ])
+        let wavData = makeSyntheticWAV(listInfoPayload: listInfoPayload, id3ChunkPayload: nil)
+        try wavData.write(to: wavURL)
+
+        let item = PlaylistItem(path: wavURL.path, title: "梁咏琪 - 胆小鬼")
+        let meta = await AudioTrackMetadataService.extractMetadataFromDisk(item: item)
+
+        XCTAssertEqual(meta.artist, "梁咏琪")
+        XCTAssertEqual(meta.title, "胆小鬼")
+        XCTAssertEqual(meta.album, "")
+        XCTAssertFalse(meta.title.contains("?"))
+        XCTAssertFalse(meta.artist.contains("?"))
+        XCTAssertEqual(meta.formatLabel, "WAV")
+    }
+
+    func testAIFFNativeHeaderAndID3Extraction() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SilkMetaTest_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let aiffURL = dir.appendingPathComponent("sample.aiff")
+        var comm = Data()
+        appendBE16(&comm, 2) // channels
+        appendBE32(&comm, 44_100) // sampleFrames -> 1.0s
+        appendBE16(&comm, 16) // sampleSize
+        comm.append(contentsOf: [0x40, 0x0E, 0xAC, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]) // 44100 Hz IEEE-80
+
+        let id3Payload = makeID3v23Tag([
+            ("TIT2", utf8FramePayload("风继续吹")),
+            ("TPE1", utf8FramePayload("张国荣")),
+            ("TALB", utf8FramePayload("Salute"))
+        ])
+
+        var chunks = Data()
+        appendIFFChunk(&chunks, id: "COMM", payload: comm, bigEndian: true)
+        appendIFFChunk(&chunks, id: "NAME", payload: Data("???".utf8), bigEndian: true)
+        appendIFFChunk(&chunks, id: "ID3 ", payload: id3Payload, bigEndian: true)
+
+        var form = Data("FORM".utf8)
+        appendBE32(&form, UInt32(4 + chunks.count))
+        form.append(contentsOf: "AIFF".utf8)
+        form.append(chunks)
+        try form.write(to: aiffURL)
+
+        let item = PlaylistItem(path: aiffURL.path, title: "sample")
+        let meta = await AudioTrackMetadataService.extractMetadataFromDisk(item: item)
+
+        XCTAssertEqual(meta.title, "风继续吹")
+        XCTAssertEqual(meta.artist, "张国荣")
+        XCTAssertEqual(meta.album, "Salute")
+        XCTAssertEqual(meta.formatLabel, "AIFF")
+        XCTAssertEqual(meta.sampleRateHz, 44_100)
+        XCTAssertEqual(meta.bitDepth, 16)
+        XCTAssertEqual(meta.duration ?? 0, 1.0, accuracy: 0.02)
+    }
+
+    func testDSFNativeHeaderAndTrailingID3v2Extraction() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SilkMetaTest_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let dsfURL = dir.appendingPathComponent("track.dsf")
+        let id3Payload = makeID3v23Tag([
+            ("TIT2", utf8FramePayload("夜来香")),
+            ("TPE1", utf8FramePayload("邓丽君")),
+            ("TALB", utf8FramePayload("经典精选"))
+        ])
+        let metadataOffset: UInt64 = 28 + 52
+
+        var dsd = Data("DSD ".utf8)
+        appendLE64(&dsd, 28) // chunkSize
+        appendLE64(&dsd, metadataOffset + UInt64(id3Payload.count))
+        appendLE64(&dsd, metadataOffset)
+
+        var fmt = Data("fmt ".utf8)
+        appendLE64(&fmt, 52) // chunkSize
+        appendLE32(&fmt, 1) // formatVersion
+        appendLE32(&fmt, 0) // formatID
+        appendLE32(&fmt, 2) // channelType
+        appendLE32(&fmt, 2) // channelNum
+        appendLE32(&fmt, 2_822_400) // sampleFreq (DSD64)
+        appendLE32(&fmt, 1) // bitsPerSample
+        appendLE64(&fmt, 5_644_800) // sampleCount -> 2.0s
+        appendLE32(&fmt, 4096) // blockSizePerChannel
+        appendLE32(&fmt, 0) // reserved
+
+        var fileData = Data()
+        fileData.append(dsd)
+        fileData.append(fmt)
+        fileData.append(id3Payload)
+        try fileData.write(to: dsfURL)
+
+        let item = PlaylistItem(path: dsfURL.path, title: "track")
+        let meta = await AudioTrackMetadataService.extractMetadataFromDisk(item: item)
+
+        XCTAssertEqual(meta.title, "夜来香")
+        XCTAssertEqual(meta.artist, "邓丽君")
+        XCTAssertEqual(meta.album, "经典精选")
+        XCTAssertEqual(meta.formatLabel, "DSD")
+        XCTAssertEqual(meta.sampleRateHz, 2_822_400)
+        XCTAssertEqual(meta.bitDepth, 1)
+        XCTAssertEqual(meta.duration ?? 0, 2.0, accuracy: 0.02)
+    }
+
+    @MainActor
+    func testStopWithPreserveAudioModePreventsTransientChromeDrop() {
+        let player = PlayerCore()
+        player.isAudioOnly = true
+
+        player.stop(resetUI: false, preserveAudioMode: true)
+        XCTAssertTrue(player.isAudioOnly)
+
+        player.stop(resetUI: true)
+        XCTAssertFalse(player.isAudioOnly)
+    }
+
+    func testOggOpusHeaderAndVorbisCommentExtraction() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SilkMetaTest_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let opusURL = dir.appendingPathComponent("track.opus")
+
+        var opusHead = Data("OpusHead".utf8)
+        opusHead.append(1) // version
+        opusHead.append(2) // channels
+        appendLE16(&opusHead, 312) // pre-skip
+        appendLE32(&opusHead, 48_000) // original sample rate
+        appendLE16(&opusHead, 0) // output gain
+        opusHead.append(0) // channel mapping family
+
+        var opusTags = Data("OpusTags".utf8)
+        let vendor = Data("libopus".utf8)
+        appendLE32(&opusTags, UInt32(vendor.count))
+        opusTags.append(vendor)
+        let comments = ["TITLE=海阔天空", "ARTIST=Beyond", "ALBUM=乐与怒"]
+        appendLE32(&opusTags, UInt32(comments.count))
+        for comment in comments {
+            let bytes = Data(comment.utf8)
+            appendLE32(&opusTags, UInt32(bytes.count))
+            opusTags.append(bytes)
+        }
+
+        var fileData = Data()
+        fileData.append(makeOggPage(headerType: 0x02, granule: 0, seq: 0, payload: opusHead))
+        fileData.append(makeOggPage(headerType: 0x00, granule: 0, seq: 1, payload: opusTags))
+        fileData.append(makeOggPage(headerType: 0x04, granule: 48_312, seq: 2, payload: Data([0xFC, 0xFF, 0xFE])))
+        try fileData.write(to: opusURL)
+
+        let item = PlaylistItem(path: opusURL.path, title: "track")
+        let meta = await AudioTrackMetadataService.extractMetadataFromDisk(item: item)
+
+        XCTAssertEqual(meta.title, "海阔天空")
+        XCTAssertEqual(meta.artist, "Beyond")
+        XCTAssertEqual(meta.album, "乐与怒")
+        XCTAssertEqual(meta.formatLabel, "OPUS")
+        XCTAssertEqual(meta.sampleRateHz, 48_000)
+        XCTAssertEqual(meta.duration ?? 0, 1.0, accuracy: 0.02)
+    }
+
+    // MARK: - Binary Fixture Helpers
+
+    private func makeOggPage(headerType: UInt8, granule: UInt64, seq: UInt32, payload: Data) -> Data {
+        precondition(payload.count < 255)
+        var page = Data("OggS".utf8)
+        page.append(0) // stream structure version
+        page.append(headerType)
+        appendLE64(&page, granule)
+        appendLE32(&page, 1) // serial
+        appendLE32(&page, seq)
+        appendLE32(&page, 0) // CRC placeholder
+        page.append(1) // page segments
+        page.append(UInt8(payload.count))
+        page.append(payload)
+        return page
+    }
+
+    private func makeSyntheticWAV(listInfoPayload: Data, id3ChunkPayload: Data?) -> Data {
+        var fmt = Data()
+        appendLE16(&fmt, 1) // PCM
+        appendLE16(&fmt, 2) // channels
+        appendLE32(&fmt, 44_100) // sampleRate
+        appendLE32(&fmt, 176_400) // byteRate
+        appendLE16(&fmt, 4) // blockAlign
+        appendLE16(&fmt, 16) // bitsPerSample
+
+        var body = Data()
+        appendIFFChunk(&body, id: "fmt ", payload: fmt, bigEndian: false)
+        appendIFFChunk(&body, id: "LIST", payload: listInfoPayload, bigEndian: false)
+        appendIFFChunk(&body, id: "data", payload: Data(repeating: 0, count: 176_400), bigEndian: false)
+        if let id3ChunkPayload {
+            appendIFFChunk(&body, id: "id3 ", payload: id3ChunkPayload, bigEndian: false)
+        }
+
+        var riff = Data("RIFF".utf8)
+        appendLE32(&riff, UInt32(4 + body.count))
+        riff.append(contentsOf: "WAVE".utf8)
+        riff.append(body)
+        return riff
+    }
+
+    private func makeRIFFInfoPayload(_ entries: [(String, String)]) -> Data {
+        var data = Data("INFO".utf8)
+        for (key, value) in entries {
+            var bytes = Data(value.utf8)
+            bytes.append(0)
+            appendIFFChunk(&data, id: key, payload: bytes, bigEndian: false)
+        }
+        return data
+    }
+
+    private func makeID3v23Tag(_ frames: [(String, Data)]) -> Data {
+        var body = Data()
+        for (id, payload) in frames {
+            body.append(contentsOf: id.utf8.prefix(4))
+            appendBE32(&body, UInt32(payload.count))
+            body.append(contentsOf: [0, 0]) // flags
+            body.append(payload)
+        }
+        let sz = UInt32(body.count)
+        var tag = Data([
+            0x49, 0x44, 0x33, 0x03, 0x00, 0x00,
+            UInt8((sz >> 21) & 0x7F),
+            UInt8((sz >> 14) & 0x7F),
+            UInt8((sz >> 7) & 0x7F),
+            UInt8(sz & 0x7F)
+        ])
+        tag.append(body)
+        return tag
+    }
+
+    private func utf16LEFramePayload(_ text: String) -> Data {
+        var data = Data([0x01, 0xFF, 0xFE])
+        if let encoded = text.data(using: .utf16LittleEndian) {
+            data.append(encoded)
+        }
+        data.append(contentsOf: [0x00, 0x00])
+        return data
+    }
+
+    private func utf8FramePayload(_ text: String) -> Data {
+        var data = Data([0x03])
+        data.append(contentsOf: text.utf8)
+        return data
+    }
+
+    private func appendIFFChunk(_ buffer: inout Data, id: String, payload: Data, bigEndian: Bool) {
+        buffer.append(contentsOf: id.utf8.prefix(4))
+        if bigEndian {
+            appendBE32(&buffer, UInt32(payload.count))
+        } else {
+            appendLE32(&buffer, UInt32(payload.count))
+        }
+        buffer.append(payload)
+        if (payload.count & 1) == 1 {
+            buffer.append(0)
+        }
+    }
+
+    private func appendLE16(_ buffer: inout Data, _ v: UInt16) {
+        buffer.append(UInt8(v & 0xFF))
+        buffer.append(UInt8((v >> 8) & 0xFF))
+    }
+
+    private func appendLE32(_ buffer: inout Data, _ v: UInt32) {
+        buffer.append(UInt8(v & 0xFF))
+        buffer.append(UInt8((v >> 8) & 0xFF))
+        buffer.append(UInt8((v >> 16) & 0xFF))
+        buffer.append(UInt8((v >> 24) & 0xFF))
+    }
+
+    private func appendLE64(_ buffer: inout Data, _ v: UInt64) {
+        appendLE32(&buffer, UInt32(v & 0xFFFF_FFFF))
+        appendLE32(&buffer, UInt32((v >> 32) & 0xFFFF_FFFF))
+    }
+
+    private func appendBE16(_ buffer: inout Data, _ v: UInt16) {
+        buffer.append(UInt8((v >> 8) & 0xFF))
+        buffer.append(UInt8(v & 0xFF))
+    }
+
+    private func appendBE32(_ buffer: inout Data, _ v: UInt32) {
+        buffer.append(UInt8((v >> 24) & 0xFF))
+        buffer.append(UInt8((v >> 16) & 0xFF))
+        buffer.append(UInt8((v >> 8) & 0xFF))
+        buffer.append(UInt8(v & 0xFF))
+    }
 }

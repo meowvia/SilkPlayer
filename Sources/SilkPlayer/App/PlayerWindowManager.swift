@@ -271,6 +271,16 @@ extension Notification.Name {
                 return nil
             }
 
+            // Control + Command + F (Native Fullscreen Menu Shortcut): block inside Music Mode
+            if flags.contains(.command) && flags.contains(.control) && event.charactersIgnoringModifiers?.lowercased() == "f" {
+                let targetWindow = event.window ?? NSApp?.keyWindow
+                if targetWindow !== self.settingsWindow,
+                   let session = (targetWindow != nil ? self.sessions.first(where: { $0.window === targetWindow }) : nil) ?? self.activeSession(preferKey: true),
+                   session.player?.isAudioOnly == true {
+                    return nil
+                }
+            }
+
             // Command + S (Take Screenshot)
             if flags == .command && event.charactersIgnoringModifiers?.lowercased() == "s" {
                 let targetWindow = event.window ?? NSApp?.keyWindow
@@ -1393,6 +1403,9 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
+        if player?.isAudioOnly == true {
+            return false
+        }
         toggleMaximize(window: window)
         return false
     }
@@ -1427,6 +1440,14 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowDidEnterFullScreen(_ notification: Notification) {
+        if player?.isAudioOnly == true, let window = notification.object as? NSWindow {
+            isFullscreenTransitioning = false
+            player?.isFullscreenTransitioning = false
+            DispatchQueue.main.async {
+                window.toggleFullScreen(nil)
+            }
+            return
+        }
         isFullscreenTransitioning = false
         player?.isFullscreenTransitioning = false
         player?.setFullscreenState(true)

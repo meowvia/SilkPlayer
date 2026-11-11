@@ -6,10 +6,22 @@ import AppKit
 public struct HUDMicroTooltipModifier: ViewModifier {
     let text: String
     var edge: VerticalEdge = .top
+    var horizontalAlignment: HorizontalAlignment = .center
 
     @State private var isHovered: Bool = false
     @State private var isVisible: Bool = false
     @State private var timerTask: Task<Void, Never>? = nil
+
+    private var resolvedAlignment: Alignment {
+        switch (edge, horizontalAlignment) {
+        case (.top, .leading): return .topLeading
+        case (.top, .trailing): return .topTrailing
+        case (.top, _): return .top
+        case (.bottom, .leading): return .bottomLeading
+        case (.bottom, .trailing): return .bottomTrailing
+        case (.bottom, _): return .bottom
+        }
+    }
 
     public func body(content: Content) -> some View {
         content
@@ -33,7 +45,7 @@ public struct HUDMicroTooltipModifier: ViewModifier {
                     }
                 }
             }
-            .overlay(alignment: edge == .top ? .top : .bottom) {
+            .overlay(alignment: resolvedAlignment) {
                 if isVisible && !text.isEmpty {
                     Text(text)
                         .font(.system(size: 10.5, weight: .medium))
@@ -69,8 +81,18 @@ public struct HUDMicroTooltipModifier: ViewModifier {
 
 extension View {
     @MainActor
-    public func hudTooltip(_ text: String, edge: VerticalEdge = .top) -> some View {
-        self.modifier(HUDMicroTooltipModifier(text: text, edge: edge))
+    public func hudTooltip(
+        _ text: String,
+        edge: VerticalEdge = .top,
+        horizontalAlignment: HorizontalAlignment = .center
+    ) -> some View {
+        self.modifier(
+            HUDMicroTooltipModifier(
+                text: text,
+                edge: edge,
+                horizontalAlignment: horizontalAlignment
+            )
+        )
     }
 }
 
@@ -82,6 +104,7 @@ struct HUDTransportButton: View {
     var color: Color = .white
     var disabled: Bool = false
     var helpText: String = ""
+    var tooltipHorizontalAlignment: HorizontalAlignment = .center
     var action: () -> Void
 
     @State private var isHovered = false
@@ -107,7 +130,7 @@ struct HUDTransportButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .hudTooltip(helpText, edge: .top)
+        .hudTooltip(helpText, edge: .top, horizontalAlignment: tooltipHorizontalAlignment)
         .help(helpText)
     }
 }
@@ -120,6 +143,7 @@ struct HUDMenuButton<Content: View>: View {
     var color: Color = .white
     var isActive: Bool = false
     var helpText: String = ""
+    var tooltipHorizontalAlignment: HorizontalAlignment = .center
     @ViewBuilder let content: () -> Content
 
     @State private var isHovered = false
@@ -148,7 +172,7 @@ struct HUDMenuButton<Content: View>: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .hudTooltip(helpText, edge: .top)
+        .hudTooltip(helpText, edge: .top, horizontalAlignment: tooltipHorizontalAlignment)
         .help(helpText)
     }
 }
@@ -244,6 +268,7 @@ struct HUDCircleButton: View {
     let icon: String
     var isActive: Bool = false
     var helpText: String = ""
+    var tooltipHorizontalAlignment: HorizontalAlignment = .center
     var action: () -> Void
 
     @State private var isHovered = false
@@ -284,7 +309,7 @@ struct HUDCircleButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .hudTooltip(helpText, edge: .bottom)
+        .hudTooltip(helpText, edge: .bottom, horizontalAlignment: tooltipHorizontalAlignment)
         .help(helpText)
     }
 }

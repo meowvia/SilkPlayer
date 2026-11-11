@@ -24,8 +24,11 @@ public struct MusicModeView: View {
     @State private var isClearHovered: Bool = false
     @State private var isSortHovered: Bool = false
     @State private var isModeHovered: Bool = false
+    @State private var isUpNextHovered: Bool = false
     @State private var isHeroTitleHovered: Bool = false
     @State private var locatePlayingTrigger: Int = 0
+    @State private var suppressedAutoScrollID: UUID? = nil
+    @State private var suppressedAutoScrollDeadline: Date = .distantPast
     @State private var highlightedTrackID: UUID? = nil
     @State private var locateHighlightTask: Task<Void, Never>? = nil
     @State private var wheelController = MusicWheelController()
@@ -264,7 +267,8 @@ public struct MusicModeView: View {
                     HUDCircleButton(
                         icon: "xmark",
                         isActive: false,
-                        helpText: L10n.tr("Close Playback / Return Home (Esc / Cmd+W)", "退出播放 / 返回主页 (Esc / Cmd+W)")
+                        helpText: L10n.tr("Close Playback / Return Home (Esc / Cmd+W)", "退出播放 / 返回主页 (Esc / Cmd+W)"),
+                        tooltipHorizontalAlignment: .trailing
                     ) {
                         player.isPlaylistDrawerVisible = false
                         player.isInspectorVisible = false
@@ -541,7 +545,6 @@ public struct MusicModeView: View {
 
     private func queueSectionCard(windowWidth: CGFloat) -> some View {
         let entries = filteredEntries
-        let upcomingId = (effectiveBrowsingCategory == .audio) ? playlist.upcomingItem?.id : nil
         let showExtendedColumns = MusicModeGeometry.showsExtendedQueueColumns(width: windowWidth)
         let activePlayingID = activePlayingAudioItem?.id
 
@@ -663,10 +666,9 @@ public struct MusicModeView: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: true) {
-                        LazyVStack(spacing: 2) {
+                        LazyVStack(spacing: 1.5) {
                             ForEach(entries, id: \.item.id) { entry in
                                 let isCurrent = (entry.item.id == activePlayingID)
-                                let isUpcoming = (!isCurrent && upcomingId == entry.item.id && effectiveBrowsingCategory == .audio)
                                 MusicQueueRowView(
                                     displayIndex: entry.index + 1,
                                     item: entry.item,
@@ -674,7 +676,6 @@ public struct MusicModeView: View {
                                     category: effectiveBrowsingCategory,
                                     isCurrent: isCurrent,
                                     isPlaying: isCurrent && player.isPlaying,
-                                    isUpcoming: isUpcoming,
                                     isPulseHighlighted: highlightedTrackID == entry.item.id,
                                     showExtendedColumns: showExtendedColumns,
                                     windowWidth: windowWidth,
@@ -695,7 +696,7 @@ public struct MusicModeView: View {
                             }
                         }
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 4.5)
                     }
                     .onAppear {
                         if let active = activePlayingAudioItem {
@@ -707,6 +708,9 @@ public struct MusicModeView: View {
                     }
                     .onChange(of: player.currentFilePath) { _, _ in
                         if let active = activePlayingAudioItem, searchQuery.isEmpty, effectiveBrowsingCategory == .audio {
+                            if suppressedAutoScrollID == active.id && Date() < suppressedAutoScrollDeadline {
+                                return
+                            }
                             withAnimation(.easeInOut(duration: 0.25)) {
                                 proxy.scrollTo(active.id, anchor: .center)
                             }
@@ -714,6 +718,9 @@ public struct MusicModeView: View {
                     }
                     .onChange(of: playlist.audioCurrentIndex) { _, _ in
                         if let active = activePlayingAudioItem, searchQuery.isEmpty, effectiveBrowsingCategory == .audio {
+                            if suppressedAutoScrollID == active.id && Date() < suppressedAutoScrollDeadline {
+                                return
+                            }
                             withAnimation(.easeInOut(duration: 0.25)) {
                                 proxy.scrollTo(active.id, anchor: .center)
                             }
@@ -853,14 +860,25 @@ public struct MusicModeView: View {
         let compact = MusicModeGeometry.usesCompactBottomControls(width: windowWidth)
         let volWidth = MusicModeGeometry.bottomVolumeTrackWidth(forWindowWidth: windowWidth)
         let showVolPercent = MusicModeGeometry.showsVolumePercentage(forWindowWidth: windowWidth)
+        let isSingleLoop = playlist.playbackMode == .singleLoop
+        let upcomingTrack = isSingleLoop ? activePlayingAudioItem : playlist.upcomingItem
 
-        return VStack(spacing: compact ? 8 : 10) {
-            // 1. Native Scrubber (also accepts mouse-wheel vertical scroll to adjust volume)
+        return VStack(spacing: compact ? 6 : 8) {
+            // 1. Subtle Up Next Strip directly above progress bar
+            if let upcomingTrack {
+                upNextPreviewStrip(
+                    item: upcomingTrack,
+                    isRepeatOne: isSingleLoop,
+                    compact: compact
+                )
+            }
+
+            // 2. Native Scrubber (also accepts mouse-wheel vertical scroll to adjust volume)
             PlayerProgressSection(player: player, clock: player.clock, playlist: playlist, tier: scrubberTier)
                 .contentShape(Rectangle())
                 .onHover { wheelController.isHoveringProgressSection = $0 }
 
-            // 2. Centered Transport + Wings
+            // 3. Centered Transport + Wings
             ZStack(alignment: .center) {
                 // Center Group: Prev, Play/Pause, Next
                 HStack(spacing: compact ? 12 : 16) {
@@ -873,6 +891,7 @@ public struct MusicModeView: View {
                             ? (playlist.previousItem.map { "\($0.title) (Cmd+Left)" } ?? L10n.previousTrack)
                             : (player.canRewindToStart ? "\(L10n.previousTrack) (0:00)" : L10n.noPreviousTrack)
                     ) {
+                        suppressedAutoScrollID = nil
                         onPlayPrevious()
                     }
                     .accessibilityLabel(L10n.previousTrack)
@@ -918,6 +937,7 @@ public struct MusicModeView: View {
                             ? (playlist.nextItem.map { "\($0.title) (Cmd+Right)" } ?? L10n.nextTrack)
                             : L10n.noNextTrack
                     ) {
+                        suppressedAutoScrollID = nil
                         onPlayNext()
                     }
                     .accessibilityLabel(L10n.nextTrack)
@@ -948,7 +968,11 @@ public struct MusicModeView: View {
                         }
                         .buttonStyle(.plain)
                         .onHover { isModeHovered = $0 }
-                        .hudTooltip("\(mode.title) (\(L10n.tr("Click to switch", "点击切换模式")))", edge: .top)
+                        .hudTooltip(
+                            "\(mode.title) (\(L10n.tr("Click to switch", "点击切换模式")))",
+                            edge: .top,
+                            horizontalAlignment: .leading
+                        )
                         .help(mode.title)
 
                         HUDSpeedMenuButton(player: player)
@@ -971,7 +995,8 @@ public struct MusicModeView: View {
                             size: 14,
                             weight: .medium,
                             color: .white.opacity(0.90),
-                            helpText: L10n.tr("Preferences (Cmd+,)", "偏好设置 (Cmd+,)")
+                            helpText: L10n.tr("Preferences (Cmd+,)", "偏好设置 (Cmd+,)"),
+                            tooltipHorizontalAlignment: .trailing
                         ) {
                             PlayerWindowManager.shared.openSettings()
                         }
@@ -983,10 +1008,78 @@ public struct MusicModeView: View {
         .padding(.top, 2)
     }
 
+    @ViewBuilder
+    private func upNextPreviewStrip(item: PlaylistItem, isRepeatOne: Bool, compact: Bool) -> some View {
+        let meta = metadataService.metadata(for: item)
+        let displayTitle: String = {
+            if !meta.queueDisplayTitle.isEmpty { return meta.queueDisplayTitle }
+            let cleaned = MediaFilenameSanitizer.sanitize(item.title).cleanTitle
+            return cleaned.isEmpty ? item.title : cleaned
+        }()
+        let durationSec = item.duration > 0 ? item.duration : (meta.duration ?? 0)
+        let modeLabel = isRepeatOne
+            ? L10n.tr("Repeat One", "单曲循环")
+            : L10n.tr("Up Next", "下一首")
+
+        Button {
+            suppressedAutoScrollID = nil
+            if isRepeatOne {
+                player.seek(to: 0)
+            } else {
+                onPlayNext()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isRepeatOne ? "repeat.1" : "text.line.first.and.arrowtriangle.forward")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.45))
+
+                Text("\(modeLabel):")
+                    .font(.system(size: compact ? 10.5 : 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.48))
+                    .fixedSize(horizontal: true, vertical: false)
+
+                Text(displayTitle)
+                    .font(.system(size: compact ? 10.5 : 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.76))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 8)
+
+                if durationSec > 0 {
+                    Text(formatPlaybackTime(durationSec))
+                        .font(.system(size: 10.5, weight: .regular, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundColor(.white.opacity(0.42))
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.white.opacity(isUpNextHovered ? 0.08 : 0.035))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(Color.white.opacity(isUpNextHovered ? 0.14 : 0.06), lineWidth: 0.5)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { isUpNextHovered = $0 }
+        .help(
+            isRepeatOne
+                ? L10n.tr("Click to restart track", "点击重新播放当前曲目")
+                : "\(L10n.tr("Play Next", "立即播放下一首")): \(displayTitle)"
+        )
+    }
+
     // MARK: - Actions
 
     private func locatePlayingTrack() {
         guard let active = activePlayingAudioItem else { return }
+        suppressedAutoScrollID = nil
         if effectiveBrowsingCategory != .audio {
             browsingCategory = .audio
         }
@@ -1022,6 +1115,12 @@ public struct MusicModeView: View {
     }
 
     private func handleSelectQueueItem(_ item: PlaylistItem, in category: MediaCategory) {
+        if category == .audio {
+            suppressedAutoScrollID = item.id
+            suppressedAutoScrollDeadline = Date().addingTimeInterval(1.5)
+        } else {
+            suppressedAutoScrollID = nil
+        }
         if settings.dualPlaylistMode && playlist.activeCategory != category {
             playlist.switchCategory(category)
         }
@@ -1099,7 +1198,6 @@ private struct MusicQueueRowView: View {
     let category: MediaCategory
     let isCurrent: Bool
     let isPlaying: Bool
-    let isUpcoming: Bool
     let isPulseHighlighted: Bool
     let showExtendedColumns: Bool
     let windowWidth: CGFloat
@@ -1140,30 +1238,13 @@ private struct MusicQueueRowView: View {
             }
             .frame(width: 26, alignment: .trailing)
 
-            // Song / Video Title + Inline Upcoming Badge
+            // Song / Video Title
             HStack(spacing: 6) {
                 Text(rowTitleText)
                     .font(.system(size: 12.5, weight: isCurrent ? .semibold : .medium))
                     .foregroundColor(isCurrent ? .cyan : .white.opacity(isHovered ? 0.96 : 0.88))
                     .lineLimit(1)
                     .truncationMode(.tail)
-
-                if isUpcoming {
-                    Text(L10n.tr("Up Next", "下一首"))
-                        .font(.system(size: 9.5, weight: .bold))
-                        .foregroundColor(Color(red: 1.0, green: 0.78, blue: 0.35))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1.5)
-                        .background(
-                            Capsule()
-                                .fill(Color.orange.opacity(0.18))
-                        )
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(Color.orange.opacity(0.35), lineWidth: 0.5)
-                        )
-                        .fixedSize(horizontal: true, vertical: false)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1207,9 +1288,9 @@ private struct MusicQueueRowView: View {
             }
             .frame(width: 44, alignment: .trailing)
         }
-        .frame(minHeight: 34)
+        .frame(minHeight: 31)
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4.5)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(
@@ -1536,10 +1617,6 @@ private struct MusicWindowDragStrip: NSViewRepresentable {
 
         override func mouseDown(with event: NSEvent) {
             guard let window = self.window else { return }
-            if event.clickCount == 2 {
-                (window.delegate as? PlayerWindowDelegate)?.toggleMaximize(window: window)
-                return
-            }
             window.performDrag(with: event)
         }
     }

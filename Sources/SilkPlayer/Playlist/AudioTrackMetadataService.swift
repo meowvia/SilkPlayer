@@ -84,7 +84,7 @@ public struct AudioTrackMetadata: Sendable, Equatable, Codable {
 }
 
 private struct AudioMetadataDiskStore: Codable, Sendable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     let schemaVersion: Int
     var entries: [String: AudioTrackMetadata]
@@ -120,7 +120,7 @@ public final class AudioTrackMetadataService {
             ?? FileManager.default.temporaryDirectory
         return base
             .appendingPathComponent("SilkPlayer", isDirectory: true)
-            .appendingPathComponent("audio_metadata_cache_v2.json", isDirectory: false)
+            .appendingPathComponent("audio_metadata_cache_v3.json", isDirectory: false)
     }
 
     /// Returns cached metadata if available, otherwise synthesizes an instant filename/extension baseline
@@ -203,7 +203,7 @@ public final class AudioTrackMetadataService {
         if let tags {
             for (k, v) in tags {
                 let key = k.lowercased()
-                let repaired = Self.repairMojibakeIfNeeded(v)
+                let repaired = Self.sanitizeTagValue(v)
                 guard !repaired.isEmpty, !Self.looksLikeCorruptLatinMojibake(repaired) else { continue }
                 if key == "title" {
                     base.title = repaired
@@ -214,9 +214,14 @@ public final class AudioTrackMetadataService {
                 }
             }
         }
-        base.title = Self.repairMojibakeIfNeeded(base.title)
-        base.artist = Self.repairMojibakeIfNeeded(base.artist)
-        base.album = Self.repairMojibakeIfNeeded(base.album)
+        let cleanTitle = Self.sanitizeTagValue(base.title)
+        if !cleanTitle.isEmpty {
+            base.title = cleanTitle
+        } else {
+            base.title = Self.fallbackMetadata(for: dummy).title
+        }
+        base.artist = Self.sanitizeTagValue(base.artist)
+        base.album = Self.sanitizeTagValue(base.album)
         cache[path] = base
         attemptedExtractionPaths.insert(path)
         scheduleDiskSave()
@@ -300,11 +305,17 @@ public final class AudioTrackMetadataService {
         var sanitized: [String: AudioTrackMetadata] = [:]
         sanitized.reserveCapacity(store.entries.count)
         for (path, var meta) in store.entries {
-            meta.title = Self.repairMojibakeIfNeeded(meta.title)
-            meta.artist = Self.repairMojibakeIfNeeded(meta.artist)
-            meta.album = Self.repairMojibakeIfNeeded(meta.album)
+            let hadCorruptPlaceholder = Self.isCorruptPlaceholderTag(meta.title)
+                || Self.isCorruptPlaceholderTag(meta.artist)
+                || Self.isCorruptPlaceholderTag(meta.album)
+            meta.title = Self.sanitizeTagValue(meta.title)
+            if meta.title.isEmpty {
+                meta.title = Self.fallbackMetadata(for: PlaylistItem(path: path, title: URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent, duration: meta.duration ?? 0)).title
+            }
+            meta.artist = Self.sanitizeTagValue(meta.artist)
+            meta.album = Self.sanitizeTagValue(meta.album)
             sanitized[path] = meta
-            if (meta.duration ?? 0) > 0 {
+            if (meta.duration ?? 0) > 0 && !hadCorruptPlaceholder {
                 attemptedExtractionPaths.insert(path)
             }
         }
@@ -357,54 +368,97 @@ public final class AudioTrackMetadataService {
     )
 
     /// Repairs strings misdecoded as ISO-8859-1 / Windows-1252 when original bytes were UTF-8, GB18030 (GBK), Big5, or Shift-JIS.
-    /// Leaves genuine accented European strings (e.g. "Beyoncé", "Café del Mar", "Tiësto") untouched.
+    /// Runs up to two passes to unwind double-encoded legacy tags while leaving valid European accented titles untouched.
     public nonisolated static func repairMojibakeIfNeeded(_ raw: String) -> String {
-        let trimmed = raw
+        var current = raw
             .replacingOccurrences(of: "\0", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "" }
+        guard !current.isEmpty else { return "" }
 
-        var hasNonASCII = false
-        for scalar in trimmed.unicodeScalars {
-            if scalar.value >= 0x80 { hasNonASCII = true }
-            if isEastAsianScriptScalar(scalar) {
-                // Already contains genuine CJK / Kana / Hangul characters
-                return trimmed
-            }
-        }
-        guard hasNonASCII else { return trimmed }
-
-        for useCP1252 in [true, false] {
-            guard let bytes = extractSingleByteSequence(from: trimmed, useWindows1252: useCP1252),
-                  hasAdjacentHighBytes(bytes) else {
-                continue
-            }
-
-            if let utf8Decoded = String(data: bytes, encoding: .utf8),
-               !utf8Decoded.contains("\u{FFFD}") {
-                let cleaned = utf8Decoded.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !cleaned.isEmpty, cleaned != trimmed {
-                    return cleaned
+        for _ in 0..<2 {
+            var hasNonASCII = false
+            var hasEastAsian = false
+            for scalar in current.unicodeScalars {
+                if scalar.value >= 0x80 { hasNonASCII = true }
+                if isEastAsianScriptScalar(scalar) {
+                    hasEastAsian = true
+                    break
                 }
             }
+            if hasEastAsian || !hasNonASCII {
+                return current
+            }
 
-            for enc in [gb18030Encoding, big5Encoding, shiftJISEncoding] {
-                if let candidate = String(data: bytes, encoding: enc),
-                   !candidate.contains("\u{FFFD}") {
-                    let cleaned = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let eastAsianCount = cleaned.unicodeScalars.filter { isEastAsianScriptScalar($0) }.count
-                    let hasControlChars = cleaned.unicodeScalars.contains { $0.value < 0x20 }
-                    if eastAsianCount > 0 && !hasControlChars {
-                        return cleaned
+            var updated: String? = nil
+            outerLoop: for useCP1252 in [true, false] {
+                guard let bytes = extractSingleByteSequence(from: current, useWindows1252: useCP1252),
+                      hasAdjacentHighBytes(bytes) else {
+                    continue
+                }
+
+                if let utf8Decoded = String(data: bytes, encoding: .utf8),
+                   !utf8Decoded.contains("\u{FFFD}") {
+                    let cleaned = utf8Decoded.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !cleaned.isEmpty, cleaned != current {
+                        updated = cleaned
+                        break outerLoop
+                    }
+                }
+
+                for enc in [gb18030Encoding, big5Encoding, shiftJISEncoding] {
+                    if let candidate = String(data: bytes, encoding: enc),
+                       !candidate.contains("\u{FFFD}") {
+                        let cleaned = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let eastAsianCount = cleaned.unicodeScalars.filter { isEastAsianScriptScalar($0) }.count
+                        let hasControlChars = cleaned.unicodeScalars.contains { $0.value < 0x20 }
+                        if eastAsianCount > 0 && !hasControlChars {
+                            updated = cleaned
+                            break outerLoop
+                        }
                     }
                 }
             }
+
+            if let next = updated, next != current {
+                current = next
+            } else {
+                break
+            }
         }
 
-        return trimmed
+        return current
     }
 
-    /// Decodes raw tag byte slices (ID3v1 / ID3v2 Latin-1 frames / APEv2 / RIFF INFO).
+    /// Detects tags corrupted by legacy encoders into literal `?` placeholders (e.g. "???", "??-??????", "????2:???")
+    /// or containing Unicode replacement characters (`\u{FFFD}`), while preserving genuine titles like "Why?" or "为什么?".
+    public nonisolated static func isCorruptPlaceholderTag(_ text: String) -> Bool {
+        let trimmed = text
+            .replacingOccurrences(of: "\0", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        if trimmed.contains("\u{FFFD}") { return true }
+        guard trimmed.contains("?") || trimmed.contains("？") else { return false }
+
+        var questionCount = 0
+        var realLetterCount = 0
+        for scalar in trimmed.unicodeScalars {
+            if scalar == "?" || scalar == "？" {
+                questionCount += 1
+            } else if isEastAsianScriptScalar(scalar) || CharacterSet.letters.contains(scalar) {
+                realLetterCount += 1
+            }
+        }
+        return realLetterCount == 0 || (questionCount >= 2 && questionCount >= realLetterCount)
+    }
+
+    /// Normalizes, repairs legacy misdecoding, and rejects degenerate `?` placeholder tags.
+    public nonisolated static func sanitizeTagValue(_ raw: String) -> String {
+        let repaired = repairMojibakeIfNeeded(raw)
+        guard !repaired.isEmpty, !isCorruptPlaceholderTag(repaired) else { return "" }
+        return repaired
+    }
+
+    /// Decodes raw tag byte slices (ID3v1 / ID3v2 Latin-1 frames / APEv2 / RIFF INFO / AIFF / Vorbis).
     public nonisolated static func decodeTagData(_ rawData: Data) -> String {
         let prefix: Data
         if let nulIndex = rawData.firstIndex(of: 0) {
@@ -427,7 +481,7 @@ public final class AudioTrackMetadataService {
 
         // 1. Strict UTF-8
         if let utf8 = String(data: trimmedData, encoding: .utf8), !utf8.contains("\u{FFFD}") {
-            return repairMojibakeIfNeeded(utf8)
+            return sanitizeTagValue(utf8)
         }
 
         // 2. East Asian 8-bit encodings when adjacent high bytes exist
@@ -436,17 +490,17 @@ public final class AudioTrackMetadataService {
                 if let decoded = String(data: trimmedData, encoding: enc),
                    !decoded.contains("\u{FFFD}"),
                    decoded.unicodeScalars.contains(where: { isEastAsianScriptScalar($0) }) {
-                    return decoded.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return sanitizeTagValue(decoded)
                 }
             }
         }
 
         // 3. Fallback single-byte Windows-1252 / Latin-1
         if let cp1252 = String(data: trimmedData, encoding: .windowsCP1252) {
-            return cp1252.trimmingCharacters(in: .whitespacesAndNewlines)
+            return sanitizeTagValue(cp1252)
         }
         if let latin1 = String(data: trimmedData, encoding: .isoLatin1) {
-            return latin1.trimmingCharacters(in: .whitespacesAndNewlines)
+            return sanitizeTagValue(latin1)
         }
         return ""
     }
@@ -533,14 +587,17 @@ public final class AudioTrackMetadataService {
 
     private nonisolated static func merged(base: AudioTrackMetadata, update: AudioTrackMetadata) -> AudioTrackMetadata {
         var result = base
-        if !update.title.isEmpty {
-            result.title = repairMojibakeIfNeeded(update.title)
+        let cleanTitle = sanitizeTagValue(update.title)
+        if !cleanTitle.isEmpty {
+            result.title = cleanTitle
         }
-        if !update.artist.isEmpty {
-            result.artist = repairMojibakeIfNeeded(update.artist)
+        let cleanArtist = sanitizeTagValue(update.artist)
+        if !cleanArtist.isEmpty {
+            result.artist = cleanArtist
         }
-        if !update.album.isEmpty {
-            result.album = repairMojibakeIfNeeded(update.album)
+        let cleanAlbum = sanitizeTagValue(update.album)
+        if !cleanAlbum.isEmpty {
+            result.album = cleanAlbum
         }
         if !update.formatLabel.isEmpty {
             result.formatLabel = update.formatLabel
@@ -562,43 +619,65 @@ public final class AudioTrackMetadataService {
 
     // MARK: - Background Extraction Pipeline
 
-    private nonisolated static func extractMetadataFromDisk(item: PlaylistItem) async -> AudioTrackMetadata {
+    nonisolated static func extractMetadataFromDisk(item: PlaylistItem) async -> AudioTrackMetadata {
         var meta = fallbackMetadata(for: item)
         let url = URL(fileURLWithPath: item.path)
         let ext = url.pathExtension.lowercased()
         var handledDirectly = false
+        var directResolved = (title: false, artist: false, album: false)
 
-        // 1. Parse container-specific headers & tags directly in pure Swift (avoids slow AVFoundation XPC overhead)
+        func recordDirectInfo(_ info: ContainerHeaderInfo, defaultFormat: String? = nil) {
+            let applied = apply(info: info, to: &meta, overwriteTitle: true, overwriteArtist: true, overwriteAlbum: true)
+            if applied.title { directResolved.title = true }
+            if applied.artist { directResolved.artist = true }
+            if applied.album { directResolved.album = true }
+            if let defaultFormat, meta.formatLabel.isEmpty || meta.formatLabel == ext.uppercased() {
+                meta.formatLabel = defaultFormat
+            }
+        }
+
+        // 1. Parse container-specific headers & tags directly in pure Swift (avoids slow AVFoundation XPC & Latin-1 misdecoding)
         switch ext {
         case "flac":
             let flacInfo = parseFLACHeader(url: url)
-            apply(info: flacInfo, to: &meta)
-            meta.formatLabel = "FLAC"
+            recordDirectInfo(flacInfo, defaultFormat: "FLAC")
             handledDirectly = (meta.duration ?? 0) > 0 && (meta.sampleRateHz ?? 0) > 0
 
         case "wav", "wave":
             let wavInfo = parseWAVHeader(url: url)
-            apply(info: wavInfo, to: &meta)
-            meta.formatLabel = ext == "wave" ? "WAVE" : "WAV"
+            recordDirectInfo(wavInfo, defaultFormat: ext == "wave" ? "WAVE" : "WAV")
+            handledDirectly = (meta.duration ?? 0) > 0 && (meta.sampleRateHz ?? 0) > 0
+
+        case "aif", "aiff", "aifc":
+            let aiffInfo = parseAIFFHeaderAndTags(url: url)
+            recordDirectInfo(aiffInfo, defaultFormat: ext == "aifc" ? "AIFC" : "AIFF")
             handledDirectly = (meta.duration ?? 0) > 0 && (meta.sampleRateHz ?? 0) > 0
 
         case "ape":
             let apeInfo = parseAPEHeaderAndTags(url: url)
-            apply(info: apeInfo, to: &meta)
-            meta.formatLabel = "APE"
+            recordDirectInfo(apeInfo, defaultFormat: "APE")
             handledDirectly = (meta.duration ?? 0) > 0 && (meta.sampleRateHz ?? 0) > 0
 
         case "mp3":
             let mp3Info = parseMP3HeaderAndTags(url: url)
-            apply(info: mp3Info, to: &meta)
-            meta.formatLabel = "MP3"
+            recordDirectInfo(mp3Info, defaultFormat: "MP3")
+            handledDirectly = (meta.duration ?? 0) > 0 && (meta.sampleRateHz ?? 0) > 0
+
+        case "dsf":
+            let dsfInfo = parseDSFHeaderAndTags(url: url)
+            recordDirectInfo(dsfInfo, defaultFormat: "DSD")
+            handledDirectly = (meta.duration ?? 0) > 0 && (meta.sampleRateHz ?? 0) > 0
+
+        case "ogg", "opus":
+            let oggInfo = parseOggVorbisOrOpusTags(url: url)
+            recordDirectInfo(oggInfo, defaultFormat: ext == "opus" ? "OPUS" : "OGG")
             handledDirectly = (meta.duration ?? 0) > 0 && (meta.sampleRateHz ?? 0) > 0
 
         default:
             break
         }
 
-        // 2. AVURLAsset extraction for M4A / ALAC / AIFF / AAC / CAF or partial direct parses (skip APE/OGG/OPUS/WMA/DSF/DFF/WV/DTS)
+        // 2. AVURLAsset extraction for M4A / ALAC / AIFF / AAC / CAF or partial direct parses (skip unsupported formats)
         let avFoundationUnsupported: Set<String> = ["ape", "ogg", "opus", "wma", "dsf", "dff", "dsd", "wv", "tak", "mpc", "dts", "dtshd", "ac3", "eac3"]
         if !handledDirectly && !avFoundationUnsupported.contains(ext) {
             let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: false])
@@ -606,15 +685,21 @@ public final class AudioTrackMetadataService {
                 for itemTag in common {
                     guard let key = itemTag.commonKey else { continue }
                     let rawVal = (try? await itemTag.load(.stringValue)) ?? ""
-                    let value = repairMojibakeIfNeeded(rawVal)
+                    let value = sanitizeTagValue(rawVal)
                     guard !value.isEmpty else { continue }
                     switch key {
                     case .commonKeyTitle:
-                        if meta.title.isEmpty || ext != "mp3" { meta.title = value }
+                        if !directResolved.title && (meta.title.isEmpty || ext != "mp3") {
+                            meta.title = value
+                        }
                     case .commonKeyArtist:
-                        if meta.artist.isEmpty || ext != "mp3" { meta.artist = value }
+                        if !directResolved.artist && (meta.artist.isEmpty || ext != "mp3") {
+                            meta.artist = value
+                        }
                     case .commonKeyAlbumName:
-                        if meta.album.isEmpty || ext != "mp3" { meta.album = value }
+                        if !directResolved.album && (meta.album.isEmpty || ext != "mp3") {
+                            meta.album = value
+                        }
                     default:
                         break
                     }
@@ -653,7 +738,13 @@ public final class AudioTrackMetadataService {
         #if canImport(Libavformat) && canImport(Libavutil) && canImport(Libavcodec)
         if (meta.duration ?? 0) <= 0 || (meta.sampleRateHz ?? 0) <= 0 {
             let ffInfo = probeWithLibavformat(url: url, ext: ext)
-            apply(info: ffInfo, to: &meta)
+            _ = apply(
+                info: ffInfo,
+                to: &meta,
+                overwriteTitle: !directResolved.title,
+                overwriteArtist: !directResolved.artist,
+                overwriteAlbum: !directResolved.album
+            )
             if meta.formatLabel.isEmpty, let fmt = ffInfo.formatLabel {
                 meta.formatLabel = fmt
             }
@@ -663,14 +754,41 @@ public final class AudioTrackMetadataService {
         return meta
     }
 
-    private nonisolated static func apply(info: ContainerHeaderInfo, to meta: inout AudioTrackMetadata) {
-        if let t = info.title, !t.isEmpty { meta.title = repairMojibakeIfNeeded(t) }
-        if let a = info.artist, !a.isEmpty { meta.artist = repairMojibakeIfNeeded(a) }
-        if let al = info.album, !al.isEmpty { meta.album = repairMojibakeIfNeeded(al) }
+    @discardableResult
+    private nonisolated static func apply(
+        info: ContainerHeaderInfo,
+        to meta: inout AudioTrackMetadata,
+        overwriteTitle: Bool = true,
+        overwriteArtist: Bool = true,
+        overwriteAlbum: Bool = true
+    ) -> (title: Bool, artist: Bool, album: Bool) {
+        var applied = (title: false, artist: false, album: false)
+        if overwriteTitle, let t = info.title {
+            let clean = sanitizeTagValue(t)
+            if !clean.isEmpty {
+                meta.title = clean
+                applied.title = true
+            }
+        }
+        if overwriteArtist, let a = info.artist {
+            let clean = sanitizeTagValue(a)
+            if !clean.isEmpty {
+                meta.artist = clean
+                applied.artist = true
+            }
+        }
+        if overwriteAlbum, let al = info.album {
+            let clean = sanitizeTagValue(al)
+            if !clean.isEmpty {
+                meta.album = clean
+                applied.album = true
+            }
+        }
         if let fmt = info.formatLabel, !fmt.isEmpty { meta.formatLabel = fmt }
         if let sr = info.sampleRate, sr > 0 { meta.sampleRateHz = sr }
         if let bd = info.bitDepth, bd > 0 { meta.bitDepth = bd }
         if let dur = info.duration, dur > 0 { meta.duration = dur }
+        return applied
     }
 
     private nonisolated static func normalizeFormatLabel(codec: String, path: String) -> String {
@@ -725,6 +843,10 @@ public final class AudioTrackMetadataService {
         UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
     }
 
+    private nonisolated static func readUInt16BE(_ data: Data, at offset: Int) -> UInt16 {
+        (UInt16(data[offset]) << 8) | UInt16(data[offset + 1])
+    }
+
     private nonisolated static func readUInt32LE(_ data: Data, at offset: Int) -> UInt32 {
         UInt32(data[offset])
             | (UInt32(data[offset + 1]) << 8)
@@ -737,6 +859,26 @@ public final class AudioTrackMetadataService {
             | (UInt32(data[offset + 1]) << 16)
             | (UInt32(data[offset + 2]) << 8)
             | UInt32(data[offset + 3])
+    }
+
+    private nonisolated static func readUInt64LE(_ data: Data, at offset: Int) -> UInt64 {
+        let low = UInt64(readUInt32LE(data, at: offset))
+        let high = UInt64(readUInt32LE(data, at: offset + 4))
+        return low | (high << 32)
+    }
+
+    /// Decodes an 80-bit big-endian IEEE 754 extended float (used in AIFF COMM sampleRate).
+    private nonisolated static func decodeIEEE80SampleRate(_ bytes: Data, at offset: Int) -> Double? {
+        guard offset + 10 <= bytes.count else { return nil }
+        let signExp = readUInt16BE(bytes, at: offset)
+        let exponent = Int(signExp & 0x7FFF) - 16383
+        var mantissa: UInt64 = 0
+        for i in 0..<8 {
+            mantissa = (mantissa << 8) | UInt64(bytes[offset + 2 + i])
+        }
+        guard mantissa != 0, exponent >= 0, exponent < 64 else { return nil }
+        let value = Double(mantissa) * pow(2.0, Double(exponent - 63))
+        return value.isFinite && value > 0 ? value : nil
     }
 
     // MARK: FLAC
@@ -819,9 +961,10 @@ public final class AudioTrackMetadataService {
             let sub = data.subdata(in: offset..<(offset + strLen))
             offset += strLen
             let comment = decodeTagData(sub)
-            guard let eqIdx = comment.firstIndex(of: "=") else { continue }
+            let eqIdx = comment.firstIndex(of: "=")
+            guard let eqIdx else { continue }
             let key = String(comment[..<eqIdx]).uppercased()
-            let val = repairMojibakeIfNeeded(String(comment[comment.index(after: eqIdx)...]))
+            let val = sanitizeTagValue(String(comment[comment.index(after: eqIdx)...]))
             guard !val.isEmpty else { continue }
             switch key {
             case "TITLE":
@@ -854,12 +997,14 @@ public final class AudioTrackMetadataService {
         let wave = String(data: riffHeader[8..<12], encoding: .ascii)
         guard riff == "RIFF", wave == "WAVE" else { return info }
 
+        var listInfo = ContainerHeaderInfo()
+        var id3Info = ContainerHeaderInfo()
         var byteRate: UInt32 = 0
         var dataChunkSize: UInt32 = 0
         var offset: UInt64 = 12
         var chunkCount = 0
 
-        while offset + 8 <= fileSize && chunkCount < 32 {
+        while offset + 8 <= fileSize && chunkCount < 64 {
             chunkCount += 1
             do {
                 try handle.seek(toOffset: offset)
@@ -879,22 +1024,29 @@ public final class AudioTrackMetadataService {
                     }
                 } else if chunkID == "data" && chunkSize > 0 {
                     dataChunkSize = UInt32(min(chunkSize, UInt64(UInt32.max)))
-                } else if chunkID == "LIST" && chunkSize >= 4 && chunkSize <= 65_536 {
+                } else if chunkID == "LIST" && chunkSize >= 4 && chunkSize <= 262_144 {
                     if let listData = try? handle.read(upToCount: Int(chunkSize)), listData.count >= 4,
                        String(data: listData[0..<4], encoding: .ascii) == "INFO" {
-                        parseRIFFInfoList(data: Data(listData[4...]), into: &info)
+                        parseRIFFInfoList(data: Data(listData[4...]), into: &listInfo)
                     }
+                } else if (chunkID == "id3 " || chunkID == "ID3 ") && chunkSize >= 10 {
+                    let chunkEnd = min(fileSize, offset + 8 + chunkSize)
+                    parseID3v2Container(handle: handle, startOffset: offset + 8, fileLimit: chunkEnd, into: &id3Info)
                 }
 
+                guard offset + 8 <= fileSize - paddedSize else { break }
                 offset += 8 + paddedSize
-                if byteRate > 0 && dataChunkSize > 0 {
-                    // Continue scanning only if small metadata chunks remain near EOF? Wait: audio data chunk in WAV can be tens of MB, so stop if we already checked LIST or moved past data when near end
-                    if offset >= fileSize { break }
-                }
+                if offset >= fileSize { break }
             } catch {
                 break
             }
         }
+
+        // Priority: embedded ID3v2 chunk (Unicode UTF-16/UTF-8) > LIST/INFO (legacy single-byte / often `?` placeholders)
+        info.title = id3Info.title ?? listInfo.title
+        info.artist = id3Info.artist ?? listInfo.artist
+        info.album = id3Info.album ?? listInfo.album
+        info.formatLabel = "WAV"
 
         if byteRate > 0 {
             let effectiveBytes: UInt64 = dataChunkSize > 0 ? UInt64(dataChunkSize) : (fileSize > 44 ? fileSize - 44 : 0)
@@ -923,6 +1075,248 @@ public final class AudioTrackMetadataService {
             }
             pos += sz + (sz & 1)
         }
+    }
+
+    // MARK: AIFF / AIFC (COMM + NAME/AUTH + ID3 )
+
+    private nonisolated static func parseAIFFHeaderAndTags(url: URL) -> ContainerHeaderInfo {
+        var info = ContainerHeaderInfo()
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return info }
+        defer { try? handle.close() }
+
+        let fileSize = (try? handle.seekToEnd()) ?? 0
+        guard fileSize >= 30 else { return info }
+        try? handle.seek(toOffset: 0)
+
+        guard let formHeader = try? handle.read(upToCount: 12), formHeader.count == 12 else { return info }
+        let form = String(data: formHeader[0..<4], encoding: .ascii)
+        let formType = String(data: formHeader[8..<12], encoding: .ascii)
+        guard form == "FORM", (formType == "AIFF" || formType == "AIFC") else { return info }
+        info.formatLabel = (formType == "AIFC") ? "AIFC" : "AIFF"
+
+        var textInfo = ContainerHeaderInfo()
+        var id3Info = ContainerHeaderInfo()
+        var offset: UInt64 = 12
+        var chunkCount = 0
+
+        while offset + 8 <= fileSize && chunkCount < 64 {
+            chunkCount += 1
+            do {
+                try handle.seek(toOffset: offset)
+                guard let chunkHeader = try? handle.read(upToCount: 8), chunkHeader.count == 8 else { break }
+                let chunkID = String(data: chunkHeader[0..<4], encoding: .ascii) ?? ""
+                let chunkSize = UInt64(readUInt32BE(chunkHeader, at: 4))
+                let paddedSize = chunkSize + (chunkSize & 1)
+
+                if chunkID == "COMM" && chunkSize >= 18 {
+                    let readLen = Int(min(chunkSize, 32))
+                    if let comm = try? handle.read(upToCount: readLen), comm.count >= 18 {
+                        let sampleFrames = readUInt32BE(comm, at: 2)
+                        let sampleSize = Int(readUInt16BE(comm, at: 6))
+                        if sampleSize > 0 && sampleSize <= 64 {
+                            info.bitDepth = sampleSize
+                        }
+                        if let sr = decodeIEEE80SampleRate(comm, at: 8), sr > 0 {
+                            info.sampleRate = sr
+                            if sampleFrames > 0 {
+                                info.duration = Double(sampleFrames) / sr
+                            }
+                        }
+                    }
+                } else if chunkID == "NAME" && chunkSize > 0 && chunkSize <= 65_536 {
+                    if let raw = try? handle.read(upToCount: Int(chunkSize)) {
+                        let clean = decodeTagData(raw)
+                        if !clean.isEmpty, textInfo.title == nil { textInfo.title = clean }
+                    }
+                } else if chunkID == "AUTH" && chunkSize > 0 && chunkSize <= 65_536 {
+                    if let raw = try? handle.read(upToCount: Int(chunkSize)) {
+                        let clean = decodeTagData(raw)
+                        if !clean.isEmpty, textInfo.artist == nil { textInfo.artist = clean }
+                    }
+                } else if (chunkID == "ID3 " || chunkID == "id3 ") && chunkSize >= 10 {
+                    let chunkEnd = min(fileSize, offset + 8 + chunkSize)
+                    parseID3v2Container(handle: handle, startOffset: offset + 8, fileLimit: chunkEnd, into: &id3Info)
+                }
+
+                guard offset + 8 <= fileSize - paddedSize else { break }
+                offset += 8 + paddedSize
+                if offset >= fileSize { break }
+            } catch {
+                break
+            }
+        }
+
+        info.title = id3Info.title ?? textInfo.title
+        info.artist = id3Info.artist ?? textInfo.artist
+        info.album = id3Info.album ?? textInfo.album
+        return info
+    }
+
+    // MARK: Sony DSF (DSD + fmt + trailing ID3v2)
+
+    private nonisolated static func parseDSFHeaderAndTags(url: URL) -> ContainerHeaderInfo {
+        var info = ContainerHeaderInfo()
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return info }
+        defer { try? handle.close() }
+
+        let fileSize = (try? handle.seekToEnd()) ?? 0
+        guard fileSize >= 80 else { return info }
+        try? handle.seek(toOffset: 0)
+
+        guard let dsdChunk = try? handle.read(upToCount: 28), dsdChunk.count == 28,
+              String(data: dsdChunk[0..<4], encoding: .ascii) == "DSD " else {
+            return info
+        }
+
+        let dsdChunkSize = readUInt64LE(dsdChunk, at: 4)
+        let metadataOffset = readUInt64LE(dsdChunk, at: 20)
+        info.formatLabel = "DSD"
+
+        if dsdChunkSize >= 28 && dsdChunkSize + 52 <= fileSize {
+            try? handle.seek(toOffset: dsdChunkSize)
+            if let fmt = try? handle.read(upToCount: 52), fmt.count == 52,
+               String(data: fmt[0..<4], encoding: .ascii) == "fmt " {
+                let sr = readUInt32LE(fmt, at: 28)
+                let bps = readUInt32LE(fmt, at: 32)
+                let sampleCount = readUInt64LE(fmt, at: 36)
+                if sr > 0 {
+                    info.sampleRate = Double(sr)
+                    if sampleCount > 0 {
+                        info.duration = Double(sampleCount) / Double(sr)
+                    }
+                }
+                if bps > 0 && bps <= 64 {
+                    info.bitDepth = Int(bps)
+                }
+            }
+        }
+
+        if metadataOffset > 0 && metadataOffset + 10 <= fileSize {
+            parseID3v2Container(handle: handle, startOffset: metadataOffset, fileLimit: fileSize, into: &info)
+        }
+        return info
+    }
+
+    // MARK: Ogg Vorbis & Ogg Opus
+
+    private nonisolated static func parseOggVorbisOrOpusTags(url: URL) -> ContainerHeaderInfo {
+        var info = ContainerHeaderInfo()
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return info }
+        defer { try? handle.close() }
+
+        let fileSize = (try? handle.seekToEnd()) ?? 0
+        guard fileSize >= 64 else { return info }
+        try? handle.seek(toOffset: 0)
+
+        let headCap = Int(min(fileSize, 262_144))
+        guard let headData = try? handle.read(upToCount: headCap), headData.count >= 64 else { return info }
+
+        var packets: [Data] = []
+        var currentPacket = Data()
+        var pos = 0
+        var pageCount = 0
+
+        while pos + 27 <= headData.count && pageCount < 128 && packets.count < 2 {
+            guard String(data: headData[pos..<(pos + 4)], encoding: .ascii) == "OggS" else { break }
+            pageCount += 1
+            let numSegments = Int(headData[pos + 26])
+            let segTableStart = pos + 27
+            let payloadStart = segTableStart + numSegments
+            guard payloadStart <= headData.count else { break }
+
+            var pagePayloadLen = 0
+            for i in 0..<numSegments {
+                pagePayloadLen += Int(headData[segTableStart + i])
+            }
+            guard payloadStart + pagePayloadLen <= headData.count else { break }
+
+            var segOffset = payloadStart
+            for i in 0..<numSegments {
+                let segLen = Int(headData[segTableStart + i])
+                if segLen > 0 {
+                    currentPacket.append(headData[segOffset..<(segOffset + segLen)])
+                    segOffset += segLen
+                }
+                if segLen < 255 {
+                    packets.append(currentPacket)
+                    currentPacket = Data()
+                    if packets.count >= 2 { break }
+                }
+            }
+
+            pos = payloadStart + pagePayloadLen
+        }
+
+        guard let identPacket = packets.first else { return info }
+        var isOpus = false
+        var opusPreSkip: UInt16 = 0
+
+        if identPacket.count >= 16,
+           identPacket[0] == 0x01,
+           String(data: identPacket[1..<7], encoding: .ascii) == "vorbis" {
+            let sr = readUInt32LE(identPacket, at: 12)
+            if sr > 0 { info.sampleRate = Double(sr) }
+            info.formatLabel = "OGG"
+        } else if identPacket.count >= 19,
+                  String(data: identPacket[0..<8], encoding: .ascii) == "OpusHead" {
+            isOpus = true
+            opusPreSkip = readUInt16LE(identPacket, at: 10)
+            let origSR = readUInt32LE(identPacket, at: 12)
+            info.sampleRate = origSR > 0 ? Double(origSR) : 48_000
+            info.formatLabel = "OPUS"
+        } else {
+            return info
+        }
+
+        if packets.count >= 2 {
+            let commentPacket = packets[1]
+            if !isOpus,
+               commentPacket.count >= 7,
+               commentPacket[0] == 0x03,
+               String(data: commentPacket[1..<7], encoding: .ascii) == "vorbis" {
+                parseVorbisComments(data: Data(commentPacket[7...]), into: &info)
+            } else if isOpus,
+                      commentPacket.count >= 8,
+                      String(data: commentPacket[0..<8], encoding: .ascii) == "OpusTags" {
+                parseVorbisComments(data: Data(commentPacket[8...]), into: &info)
+            }
+        }
+
+        // Compute duration from the final Ogg page granule position near EOF
+        if let granule = readLastOggGranulePosition(handle: handle, fileSize: fileSize) {
+            if isOpus {
+                let effectiveSamples = Int64(bitPattern: granule) - Int64(opusPreSkip)
+                if effectiveSamples > 0 {
+                    info.duration = Double(effectiveSamples) / 48_000.0
+                }
+            } else if let sr = info.sampleRate, sr > 0, granule > 0 && granule != UInt64.max {
+                info.duration = Double(granule) / sr
+            }
+        }
+
+        return info
+    }
+
+    private nonisolated static func readLastOggGranulePosition(handle: FileHandle, fileSize: UInt64) -> UInt64? {
+        let tailLen = Int(min(fileSize, 65_536))
+        guard tailLen >= 27 else { return nil }
+        let start = fileSize - UInt64(tailLen)
+        do {
+            try handle.seek(toOffset: start)
+            guard let tail = try? handle.read(upToCount: tailLen), tail.count >= 27 else { return nil }
+            var idx = tail.count - 27
+            while idx >= 0 {
+                if tail[idx] == 0x4F && tail[idx + 1] == 0x67 && tail[idx + 2] == 0x67 && tail[idx + 3] == 0x53,
+                   tail[idx + 4] == 0 {
+                    let granule = readUInt64LE(tail, at: idx + 6)
+                    if granule != UInt64.max {
+                        return granule
+                    }
+                }
+                idx -= 1
+            }
+        } catch {}
+        return nil
     }
 
     // MARK: Monkey's Audio (.ape) + APEv2 Tags
@@ -1077,18 +1471,8 @@ public final class AudioTrackMetadataService {
 
         var audioStartOffset: UInt64 = 0
         var id3v2Info = ContainerHeaderInfo()
-
-        if let head = try? handle.read(upToCount: 10), head.count == 10,
-           String(data: head[0..<3], encoding: .ascii) == "ID3" {
-            let majorVer = head[3]
-            let flags = head[5]
-            let tagSize = (UInt64(head[6] & 0x7F) << 21)
-                | (UInt64(head[7] & 0x7F) << 14)
-                | (UInt64(head[8] & 0x7F) << 7)
-                | UInt64(head[9] & 0x7F)
-            let hasFooter = (majorVer == 4) && ((flags & 0x10) != 0)
-            audioStartOffset = min(fileSize, 10 + tagSize + (hasFooter ? 10 : 0))
-            parseID3v2Frames(handle: handle, majorVersion: majorVer, flags: flags, tagEndOffset: 10 + tagSize, into: &id3v2Info)
+        if let consumed = parseID3v2Container(handle: handle, startOffset: 0, fileLimit: fileSize, into: &id3v2Info) {
+            audioStartOffset = consumed
         }
 
         // Parse APEv2 & ID3v1 at EOF (priority: ID3v2 > APEv2 > ID3v1)
@@ -1129,15 +1513,54 @@ public final class AudioTrackMetadataService {
         return info
     }
 
+    @discardableResult
+    private nonisolated static func parseID3v2Container(
+        handle: FileHandle,
+        startOffset: UInt64,
+        fileLimit: UInt64,
+        into info: inout ContainerHeaderInfo
+    ) -> UInt64? {
+        guard startOffset + 10 <= fileLimit else { return nil }
+        do {
+            try handle.seek(toOffset: startOffset)
+            guard let head = try? handle.read(upToCount: 10), head.count == 10,
+                  String(data: head[0..<3], encoding: .ascii) == "ID3" else {
+                return nil
+            }
+            let majorVer = head[3]
+            let flags = head[5]
+            let tagSize = (UInt64(head[6] & 0x7F) << 21)
+                | (UInt64(head[7] & 0x7F) << 14)
+                | (UInt64(head[8] & 0x7F) << 7)
+                | UInt64(head[9] & 0x7F)
+            let hasFooter = (majorVer == 4) && ((flags & 0x10) != 0)
+            let bodyStart = startOffset + 10
+            let bodyEnd = min(fileLimit, bodyStart + tagSize)
+            parseID3v2Frames(
+                handle: handle,
+                bodyStartOffset: bodyStart,
+                majorVersion: majorVer,
+                flags: flags,
+                tagEndOffset: bodyEnd,
+                into: &info
+            )
+            let totalEnd = min(fileLimit, bodyStart + tagSize + (hasFooter ? 10 : 0))
+            return totalEnd - startOffset
+        } catch {
+            return nil
+        }
+    }
+
     private nonisolated static func parseID3v2Frames(
         handle: FileHandle,
+        bodyStartOffset: UInt64,
         majorVersion: UInt8,
         flags: UInt8,
         tagEndOffset: UInt64,
         into info: inout ContainerHeaderInfo
     ) {
         guard majorVersion >= 2 && majorVersion <= 4 else { return }
-        var offset: UInt64 = 10
+        var offset: UInt64 = bodyStartOffset
         let hasExtHeader = (majorVersion >= 3) && ((flags & 0x40) != 0)
         if hasExtHeader {
             try? handle.seek(toOffset: offset)
@@ -1209,16 +1632,22 @@ public final class AudioTrackMetadataService {
     private nonisolated static func decodeID3v2TextPayload(_ payload: Data) -> String {
         guard payload.count >= 2 else { return "" }
         let encByte = payload[0]
-        let textData = Data(payload[1...])
+        var textData = Data(payload[1...])
         switch encByte {
         case 0: // ISO-8859-1 (often misused for GBK/Big5/Shift-JIS)
             return decodeTagData(textData)
         case 1: // UTF-16 with BOM
+            if (textData.count & 1) == 1 && textData.last == 0 {
+                textData.removeLast()
+            }
             let raw = String(data: textData, encoding: .utf16) ?? ""
-            return repairMojibakeIfNeeded(raw)
+            return sanitizeTagValue(raw)
         case 2: // UTF-16BE without BOM
+            if (textData.count & 1) == 1 && textData.last == 0 {
+                textData.removeLast()
+            }
             let raw = String(data: textData, encoding: .utf16BigEndian) ?? ""
-            return repairMojibakeIfNeeded(raw)
+            return sanitizeTagValue(raw)
         case 3: // UTF-8
             return decodeTagData(textData)
         default:
@@ -1380,7 +1809,7 @@ public final class AudioTrackMetadataService {
                 entry = UnsafePointer(next)
                 guard let kPtr = next.pointee.key, let vPtr = next.pointee.value else { continue }
                 let k = String(cString: kPtr).lowercased()
-                let v = repairMojibakeIfNeeded(String(cString: vPtr))
+                let v = sanitizeTagValue(String(cString: vPtr))
                 guard !v.isEmpty else { continue }
                 if k == "title" && info.title == nil {
                     info.title = v
