@@ -127,14 +127,14 @@
 
 ## 3. 正式发布安装镜像与 SHA-256 校验和
 - **工程 Git 基准**:
-  - 开源前端: `SilkPlayer`（Commit `6ccdcda`）
-  - 闭源内核: `SilkCoreKit`（Commit `a491ae1`）
+  - 开源前端: `SilkPlayer`（应用构建源码 Commit `3084404`，分支 `feature/v1.6.0`）
+  - 闭源内核: `SilkCoreKit`（Commit `1e49d6f`）
 - **发布安装镜像**:
-  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构): `f1356de01669e880de7192701013c4f183b1b38c42f71851d71d471cd07eca48`
-  - `SilkPlayer-1.6.0-arm64.dmg` (Apple Silicon 专用): `e991673a0ffae4a63cde8911dd3dd58d54fcfc2ecc5f545a3fa7a5968dea7e2f`
-  - `SilkPlayer-1.6.0-x86_64.dmg` (Intel 64 位专用): `7a90dbfa94820bd2fd08f29986a623fa75c12970f2fec051b8a9ba2f11b257b8`
+  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构): `37ddefba7402102091d8330d98c7d381e46ebc86bb431d401873a8d8cf22aa38`
+  - `SilkPlayer-1.6.0-arm64.dmg` (Apple Silicon 专用): `d177b85b4c1da12598715ffead86bf2dd183972029796f0b269fdee88831bd80`
+  - `SilkPlayer-1.6.0-x86_64.dmg` (Intel 64 位专用): `ef01771c21f004d983d4cee0bec9f7be80415e8ce9ec8b9901b6ff8871bc76a9`
 - **动态库依赖审计 (@rpath)**:
-  - 零宿主绝对路径泄漏，所有动态库严格限定在 `@rpath/` 与系统库路径，通过 `package_app.sh` 自动化签名与 Hardened Runtime 校验，挂载校验 100% 通过。
+  - 零宿主绝对路径泄漏，所有动态库严格限定在 `@rpath/` 与系统库路径，通过 `package_app.sh` 自动化签名与 Hardened Runtime 校验，三架构打包完成。
 - **本地应用状态**:
-  - `/Applications/SilkPlayer.app` 已就位更新为 `1.6.0` Universal 双架构正式版。
+  - `/Applications/SilkPlayer.app` 经全新清理安装为 `1.6.0` Universal 双架构待测版本。
 
