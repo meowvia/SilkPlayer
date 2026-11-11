@@ -1029,45 +1029,58 @@ public struct MusicModeView: View {
                 onPlayNext()
             }
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: isRepeatOne ? "repeat.1" : "text.line.first.and.arrowtriangle.forward")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.45))
-
-                Text("\(modeLabel):")
-                    .font(.system(size: compact ? 10.5 : 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.48))
-                    .fixedSize(horizontal: true, vertical: false)
+            HStack(spacing: 7) {
+                HStack(spacing: 3.5) {
+                    if isRepeatOne {
+                        Image(systemName: "repeat.1")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    Text(modeLabel)
+                        .font(.system(size: compact ? 9.5 : 10, weight: .bold))
+                }
+                .foregroundColor(Color(red: 1.0, green: 0.78, blue: 0.35))
+                .padding(.horizontal, 6.5)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill(Color.orange.opacity(0.18))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.orange.opacity(0.36), lineWidth: 0.5)
+                )
+                .fixedSize(horizontal: true, vertical: false)
 
                 Text(displayTitle)
                     .font(.system(size: compact ? 10.5 : 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.76))
+                    .foregroundColor(.white.opacity(isUpNextHovered ? 0.96 : 0.84))
                     .lineLimit(1)
                     .truncationMode(.tail)
-
-                Spacer(minLength: 8)
 
                 if durationSec > 0 {
                     Text(formatPlaybackTime(durationSec))
                         .font(.system(size: 10.5, weight: .regular, design: .monospaced))
                         .monospacedDigit()
-                        .foregroundColor(.white.opacity(0.42))
+                        .foregroundColor(.white.opacity(0.48))
+                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .padding(.leading, 4)
+            .padding(.trailing, 10)
+            .padding(.vertical, 3)
             .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.white.opacity(isUpNextHovered ? 0.08 : 0.035))
+                Capsule()
+                    .fill(Color.orange.opacity(isUpNextHovered ? 0.12 : 0.05))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(Color.white.opacity(isUpNextHovered ? 0.14 : 0.06), lineWidth: 0.5)
+                Capsule()
+                    .strokeBorder(Color.orange.opacity(isUpNextHovered ? 0.32 : 0.16), lineWidth: 0.5)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { isUpNextHovered = $0 }
+        .frame(maxWidth: .infinity, alignment: .center)
         .help(
             isRepeatOne
                 ? L10n.tr("Click to restart track", "点击重新播放当前曲目")
