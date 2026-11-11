@@ -210,6 +210,7 @@ public final class WindowDragCanvasView: NSView {
     override public var mouseDownCanMoveWindow: Bool { false }
     private var initialMouseLocation: NSPoint = .zero
     private var initialWindowOrigin: NSPoint = .zero
+    private var pendingDragMouseDownEvent: NSEvent?
 
     override public func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -230,6 +231,7 @@ public final class WindowDragCanvasView: NSView {
     }
 
     override public func mouseDown(with event: NSEvent) {
+        pendingDragMouseDownEvent = nil
         guard let window = self.window else { return }
         let loc = self.convert(event.locationInWindow, from: nil)
         let b = bounds
@@ -250,22 +252,28 @@ public final class WindowDragCanvasView: NSView {
             return
         }
 
+        pendingDragMouseDownEvent = event
         initialMouseLocation = NSEvent.mouseLocation
         initialWindowOrigin = window.frame.origin
     }
 
     override public func mouseDragged(with event: NSEvent) {
-        guard let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
+        guard let dragEvent = pendingDragMouseDownEvent,
+              let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
         if let del = window.delegate as? PlayerWindowDelegate, del.currentInteractiveMode == .maximized {
+            pendingDragMouseDownEvent = nil
             return
         }
         let current = NSEvent.mouseLocation
         let dx = current.x - initialMouseLocation.x
         let dy = current.y - initialMouseLocation.y
         if hypot(dx, dy) > 3.0 {
-            window.performDrag(with: event)
+            pendingDragMouseDownEvent = nil
+            window.performDrag(with: dragEvent)
         }
     }
 
-    override public func mouseUp(with event: NSEvent) {}
+    override public func mouseUp(with event: NSEvent) {
+        pendingDragMouseDownEvent = nil
+    }
 }

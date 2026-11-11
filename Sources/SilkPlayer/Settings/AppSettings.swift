@@ -201,7 +201,14 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
     public var dualPlaylistMode: Bool {
         didSet {
             UserDefaults.standard.set(dualPlaylistMode, forKey: "dualPlaylistMode")
-            PlaylistManager.shared.applyDualPlaylistMode(dualPlaylistMode)
+            let sessionPlaylists = PlayerWindowManager.shared.sessions.compactMap(\.playlist)
+            if sessionPlaylists.isEmpty {
+                PlaylistManager.shared.applyDualPlaylistMode(dualPlaylistMode)
+            } else {
+                for playlist in sessionPlaylists {
+                    playlist.applyDualPlaylistMode(dualPlaylistMode)
+                }
+            }
         }
     }
     public var shortSeekStep: Double {

@@ -125,29 +125,36 @@ public struct MusicModeView: View {
             let isCollapsed = settings.isMusicQueueCollapsed
 
             ZStack {
-                // Background Smoked Glass Canvas
-                musicBackgroundLayer
+                // Window Background Drag Surface (preserves top/bottom 6pt resize edges; allows left/right side borders & blank gaps to drag window)
+                MusicWindowDragCanvas(preservesVerticalResizeEdges: true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea(.all)
 
                 VStack(spacing: 0) {
                     // Top Chrome Titlebar
-                    topChromeBar(windowWidth: windowWidth)
+                    topChromeBar(windowWidth: windowWidth, isCollapsed: isCollapsed)
                         .padding(.horizontal, sidePadding)
-                        .padding(.top, isCollapsed ? 8 : 10)
-                        .padding(.bottom, isCollapsed ? 8 : 10)
+                        .padding(.top, isCollapsed ? 5 : 9)
+                        .padding(.bottom, isCollapsed ? 5 : 8)
 
-                    // Tier 1: Compact Hero Card
-                    heroCard(windowWidth: windowWidth, isDropHighlighted: isCollapsed && isDropTargeted)
+                    // Tier 1: Compact Hero Card (carries bottom-border expand notch when collapsed)
+                    heroCard(windowWidth: windowWidth, isCollapsed: isCollapsed, isDropHighlighted: isCollapsed && isDropTargeted)
+                        .overlay(alignment: .bottom) {
+                            Group {
+                                if isCollapsed {
+                                    MusicQueueBorderNotch(isCollapsed: true) {
+                                        player.toggleMusicQueueCollapsed()
+                                    }
+                                }
+                            }
+                            // Apply alignmentGuide on the direct overlay child so _ConditionalContent never swallows it;
+                            // dock slightly toward the outer edge of the bottom border so long subtitles stay clear.
+                            .alignmentGuide(.bottom) { d in d[VerticalAlignment.center] - 2.5 }
+                        }
                         .padding(.horizontal, sidePadding)
+                        .padding(.bottom, 8)
 
-                    // Centered Collapse/Expand Triangle Toggle
-                    QueueCollapseToggleStrip(isCollapsed: isCollapsed) {
-                        player.toggleMusicQueueCollapsed()
-                    }
-                    .padding(.horizontal, sidePadding)
-                    .padding(.top, 3)
-                    .padding(.bottom, isCollapsed ? 3 : 5)
-
-                    // Tier 2: Single-Row Toolbar + Headerless Queue
+                    // Tier 2: Single-Row Toolbar + Headerless Queue (carries top-border collapse notch above Search when expanded)
                     if !isCollapsed {
                         queueSectionCard(windowWidth: windowWidth)
                             .padding(.horizontal, sidePadding)
@@ -159,15 +166,18 @@ public struct MusicModeView: View {
                     }
 
                     // Tier 3: Unified Bottom Playback HUD
-                    bottomControlSection(windowWidth: windowWidth)
+                    bottomControlSection(windowWidth: windowWidth, isCollapsed: isCollapsed)
                         .padding(.horizontal, sidePadding)
-                        .padding(.bottom, isCollapsed ? 12 : 14)
+                        .padding(.bottom, isCollapsed ? 8 : 13)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
                     handleDrop(providers: providers)
                 }
             }
+        }
+        .background {
+            musicBackgroundLayer
         }
         .preferredColorScheme(.dark)
         .onAppear {
@@ -209,17 +219,15 @@ public struct MusicModeView: View {
     private var musicBackgroundLayer: some View {
         ZStack {
             VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                .edgesIgnoringSafeArea(.all)
 
             LinearGradient(
                 colors: [
-                    Color(red: 0.08, green: 0.08, blue: 0.10).opacity(0.92),
-                    Color(red: 0.05, green: 0.05, blue: 0.07).opacity(0.96)
+                    Color(red: 0.04, green: 0.05, blue: 0.07).opacity(0.24),
+                    Color(red: 0.02, green: 0.03, blue: 0.05).opacity(0.38)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .edgesIgnoringSafeArea(.all)
 
             if let artwork = player.artworkImage {
                 GeometryReader { geo in
@@ -228,34 +236,35 @@ public struct MusicModeView: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .blur(radius: 75)
-                        .saturation(1.25)
-                        .opacity(0.22)
+                        .saturation(1.22)
+                        .opacity(0.24)
                         .clipped()
                 }
-                .edgesIgnoringSafeArea(.all)
             } else {
                 RadialGradient(
                     colors: [
-                        Color(red: 0.25, green: 0.20, blue: 0.12).opacity(0.16),
+                        Color.white.opacity(0.08),
                         Color.clear
                     ],
-                    center: .top,
-                    startRadius: 20,
-                    endRadius: 420
+                    center: .topLeading,
+                    startRadius: 10,
+                    endRadius: 360
                 )
-                .edgesIgnoringSafeArea(.all)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.all)
         .allowsHitTesting(false)
     }
 
     // MARK: - Top Titlebar
 
-    private func topChromeBar(windowWidth: CGFloat) -> some View {
-        ZStack {
-            MusicWindowDragStrip()
+    private func topChromeBar(windowWidth: CGFloat, isCollapsed: Bool) -> some View {
+        let barHeight: CGFloat = isCollapsed ? 32 : 36
+        return ZStack {
+            MusicWindowDragCanvas(preservesVerticalResizeEdges: false)
                 .frame(maxWidth: .infinity)
-                .frame(height: 36)
+                .frame(height: barHeight)
 
             HStack(spacing: 8) {
                 // Reserve space for native macOS traffic lights (Close / Minimize / Disabled Zoom)
@@ -265,36 +274,22 @@ public struct MusicModeView: View {
 
                 Spacer(minLength: 4)
 
-                // Trailing quick actions: Pin, Inspector, Close
+                // Trailing quick actions: Pin and Close (scoped strictly to Music Mode; zero HUD/tooltip overlap)
                 HStack(spacing: 8) {
-                    HUDCircleButton(
+                    MusicCircleIconButton(
                         icon: settings.keepWindowOnTop ? "pin.fill" : "pin",
                         isActive: settings.keepWindowOnTop,
-                        helpText: settings.keepWindowOnTop
+                        accessibilityTitle: settings.keepWindowOnTop
                             ? L10n.tr("Unpin Window", "取消窗口置顶")
                             : L10n.tr("Keep Window on Top", "保持窗口置顶")
                     ) {
                         PlayerWindowManager.shared.toggleAlwaysOnTop()
-                        let next = PlayerWindowManager.shared.isAlwaysOnTop
-                        player.showOSD(.pictureAdjustment(
-                            name: L10n.tr("Always on Top", "窗口置顶"),
-                            value: next ? L10n.tr("On", "开启") : L10n.tr("Off", "关闭")
-                        ))
                     }
 
-                    HUDCircleButton(
-                        icon: player.isInspectorVisible ? "info.circle.fill" : "info.circle",
-                        isActive: player.isInspectorVisible,
-                        helpText: L10n.tr("Media Properties (I)", "媒体属性 (I)")
-                    ) {
-                        player.toggleInspector()
-                    }
-
-                    HUDCircleButton(
+                    MusicCircleIconButton(
                         icon: "xmark",
                         isActive: false,
-                        helpText: L10n.tr("Close Playback / Return Home (Esc / Cmd+W)", "退出播放 / 返回主页 (Esc / Cmd+W)"),
-                        tooltipHorizontalAlignment: .trailing
+                        accessibilityTitle: L10n.tr("Close Playback / Return Home (Esc / Cmd+W)", "退出播放 / 返回主页 (Esc / Cmd+W)")
                     ) {
                         player.isPlaylistDrawerVisible = false
                         player.isInspectorVisible = false
@@ -310,27 +305,32 @@ public struct MusicModeView: View {
                     titlebarCategoryTab(category: .audio, count: playlist.audioCount)
                 }
                 .padding(3)
-                .background(
-                    Capsule()
-                        .fill(Color.white.opacity(0.08))
-                )
-                .overlay(
-                    Capsule()
-                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.6)
+                .musicGlassSurface(
+                    in: Capsule(),
+                    tint: Color.black.opacity(0.24),
+                    fallbackFill: Color.white.opacity(0.08),
+                    strokeColor: Color.white.opacity(0.18),
+                    strokeWidth: 0.65,
+                    interactive: true
                 )
                 .frame(maxWidth: max(180, windowWidth - 230))
             } else {
                 Text("\(L10n.tr("Queue", "播放列表")) · \(playlist.audioCount)")
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.white.opacity(0.88))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.white.opacity(0.08)))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.6))
+                    .musicGlassSurface(
+                        in: Capsule(),
+                        tint: Color.black.opacity(0.22),
+                        fallbackFill: Color.white.opacity(0.08),
+                        strokeColor: Color.white.opacity(0.18),
+                        strokeWidth: 0.65
+                    )
                     .allowsHitTesting(false)
             }
         }
-        .frame(height: 36)
+        .frame(height: barHeight)
     }
 
     private func titlebarCategoryTab(category: MediaCategory, count: Int) -> some View {
@@ -378,8 +378,9 @@ public struct MusicModeView: View {
 
     // MARK: - Tier 1: Hero Card
 
-    private func heroCard(windowWidth: CGFloat, isDropHighlighted: Bool = false) -> some View {
-        let artSize = MusicModeGeometry.heroArtworkSize(forWindowWidth: windowWidth)
+    private func heroCard(windowWidth: CGFloat, isCollapsed: Bool = false, isDropHighlighted: Bool = false) -> some View {
+        let baseArtSize = MusicModeGeometry.heroArtworkSize(forWindowWidth: windowWidth)
+        let artSize = isCollapsed ? max(56.0, baseArtSize - 8.0) : baseArtSize
         let currentItem = activePlayingAudioItem
         let meta = currentItem.map { metadataService.metadata(for: $0) }
         let titleText: String = {
@@ -418,134 +419,77 @@ public struct MusicModeView: View {
             return total > 0 ? "— / \(total)" : "0 / 0"
         }()
 
-        return HStack(alignment: .center, spacing: 14) {
-            // Leading Vinyl / Album Artwork
-            Group {
-                if let artwork = player.artworkImage {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .fill(Color.black.opacity(0.35))
-                        Image(nsImage: artwork)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: artSize, height: artSize)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .frame(width: artSize, height: artSize)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.7)
-                    )
-                    .shadow(color: Color.black.opacity(0.38), radius: 8, x: 0, y: 3)
-                } else {
-                    FloatingVinylDiscView(
-                        diameter: artSize * 0.82,
-                        isPlaying: player.isPlaying,
-                        rhythm: player.audioRhythm
-                    )
-                    .frame(width: artSize, height: artSize)
-                }
-            }
+        return ZStack {
+            MusicWindowDragCanvas(preservesVerticalResizeEdges: false)
 
-            // Middle: Clickable Now Playing Title + Artist/Album -> locates active song in queue
-            Button(action: locatePlayingTrack) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 5) {
-                        Circle()
-                            .fill(player.isPlaying ? Color.cyan : Color.white.opacity(0.35))
-                            .frame(width: 6, height: 6)
-                        Text(player.isPlaying ? L10n.tr("NOW PLAYING", "正在播放") : L10n.tr("PAUSED", "已暂停"))
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(player.isPlaying ? .cyan.opacity(0.92) : .white.opacity(0.55))
-                            .tracking(0.6)
-                        if isHeroTitleHovered && activePlayingAudioItem != nil {
-                            Image(systemName: "scope")
-                                .font(.system(size: 9.5, weight: .semibold))
-                                .foregroundColor(.cyan.opacity(0.88))
-                                .transition(.opacity)
+            HStack(alignment: .center, spacing: 14) {
+                // Leading Vinyl / Album Artwork
+                Group {
+                    if let artwork = player.artworkImage {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .fill(Color.black.opacity(0.35))
+                            Image(nsImage: artwork)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: artSize, height: artSize)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
-                    }
-
-                    Text(titleText)
-                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                        .foregroundColor(isHeroTitleHovered && activePlayingAudioItem != nil ? .cyan : .white)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-
-                    Text(subtitleText)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.62))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                .padding(.vertical, 2)
-                .padding(.horizontal, 4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(isHeroTitleHovered && activePlayingAudioItem != nil ? Color.white.opacity(0.06) : Color.clear)
-                )
-                .contentShape(Rectangle())
-                .overlay(
-                    MusicPointingHandOverlay(enabled: activePlayingAudioItem != nil)
-                )
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .focusEffectDisabled()
-            .onHover { hovering in
-                withAnimation(.easeOut(duration: 0.14)) {
-                    isHeroTitleHovered = hovering
-                }
-            }
-            .help(L10n.tr("Locate playing song in playlist", "点击在播放列表中定位当前歌曲"))
-            .frame(minWidth: 110, maxWidth: .infinity, alignment: .leading)
-
-            // Trailing: Centered Audio Spec Pill + Symmetrical Spectrum Bars & Counter
-            VStack(alignment: .center, spacing: 11) {
-                Text(specText)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(
-                        isLossless
-                            ? Color(red: 0.98, green: 0.80, blue: 0.45)
-                            : .cyan.opacity(0.92)
-                    )
-                    .lineLimit(1)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3.5)
-                    .background(
-                        Capsule()
-                            .fill(
-                                isLossless
-                                    ? Color(red: 0.98, green: 0.78, blue: 0.35).opacity(0.14)
-                                    : Color.cyan.opacity(0.12)
-                            )
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(
-                                isLossless
-                                    ? Color(red: 0.98, green: 0.78, blue: 0.35).opacity(0.32)
-                                    : Color.cyan.opacity(0.28),
-                                lineWidth: 0.6
-                            )
-                    )
-                    .fixedSize(horizontal: true, vertical: false)
-
-                Button(action: locatePlayingTrack) {
-                    HStack(spacing: 8) {
-                        MusicSpectrumMiniMeter(
-                            rhythm: player.audioRhythm,
-                            isPlaying: player.isPlaying
+                        .frame(width: artSize, height: artSize)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.7)
                         )
-                        Text(indexLabel)
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundColor(.white.opacity(0.68))
-                            .fixedSize(horizontal: true, vertical: false)
+                        .shadow(color: Color.black.opacity(0.38), radius: 8, x: 0, y: 3)
+                    } else {
+                        FloatingVinylDiscView(
+                            diameter: artSize * 0.82,
+                            isPlaying: player.isPlaying,
+                            rhythm: player.audioRhythm
+                        )
+                        .frame(width: artSize, height: artSize)
                     }
+                }
+                .allowsHitTesting(false)
+
+                // Middle: Clickable Now Playing Title + Artist/Album -> locates active song in queue
+                Button(action: locatePlayingTrack) {
+                    VStack(alignment: .leading, spacing: isCollapsed ? 2.5 : 4) {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(player.isPlaying ? Color.cyan : Color.white.opacity(0.35))
+                                .frame(width: 6, height: 6)
+                            Text(player.isPlaying ? L10n.tr("NOW PLAYING", "正在播放") : L10n.tr("PAUSED", "已暂停"))
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(player.isPlaying ? .cyan.opacity(0.92) : .white.opacity(0.55))
+                                .tracking(0.6)
+                            if isHeroTitleHovered && activePlayingAudioItem != nil {
+                                Image(systemName: "scope")
+                                    .font(.system(size: 9.5, weight: .semibold))
+                                    .foregroundColor(.cyan.opacity(0.88))
+                                    .transition(.opacity)
+                            }
+                        }
+
+                        Text(titleText)
+                            .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                            .foregroundColor(isHeroTitleHovered && activePlayingAudioItem != nil ? .cyan : .white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Text(subtitleText)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.64))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .padding(.vertical, isCollapsed ? 1 : 2)
                     .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(isHeroTitleHovered && activePlayingAudioItem != nil ? Color.white.opacity(0.06) : Color.clear)
+                    )
                     .contentShape(Rectangle())
                     .overlay(
                         MusicPointingHandOverlay(enabled: activePlayingAudioItem != nil)
@@ -554,20 +498,110 @@ public struct MusicModeView: View {
                 .buttonStyle(.plain)
                 .focusable(false)
                 .focusEffectDisabled()
+                .onHover { hovering in
+                    withAnimation(.easeOut(duration: 0.14)) {
+                        isHeroTitleHovered = hovering
+                    }
+                }
                 .help(L10n.tr("Locate playing song in playlist", "点击在播放列表中定位当前歌曲"))
+                .frame(minWidth: 110, maxWidth: .infinity, alignment: .leading)
+
+                // Trailing: Centered Audio Spec Pill + Symmetrical Spectrum Bars & Counter
+                VStack(alignment: .center, spacing: 11) {
+                    Text(specText)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(
+                            isLossless
+                                ? Color(red: 0.98, green: 0.80, blue: 0.45)
+                                : .cyan.opacity(0.92)
+                        )
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3.5)
+                        .background(
+                            Capsule()
+                                .fill(
+                                    isLossless
+                                        ? Color(red: 0.98, green: 0.78, blue: 0.35).opacity(0.14)
+                                        : Color.cyan.opacity(0.12)
+                                )
+                        )
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    isLossless
+                                        ? Color(red: 0.98, green: 0.78, blue: 0.35).opacity(0.32)
+                                        : Color.cyan.opacity(0.28),
+                                    lineWidth: 0.6
+                                )
+                        )
+                        .fixedSize(horizontal: true, vertical: false)
+                        .allowsHitTesting(false)
+
+                    Button(action: locatePlayingTrack) {
+                        HStack(spacing: 8) {
+                            MusicSpectrumMiniMeter(
+                                rhythm: player.audioRhythm,
+                                isPlaying: player.isPlaying
+                            )
+                            Text(indexLabel)
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .monospacedDigit()
+                                .foregroundColor(.white.opacity(0.68))
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .contentShape(Rectangle())
+                        .overlay(
+                            MusicPointingHandOverlay(enabled: activePlayingAudioItem != nil)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .focusEffectDisabled()
+                    .help(L10n.tr("Locate playing song in playlist", "点击在播放列表中定位当前歌曲"))
+                }
+                .padding(.top, 2)
             }
-            .padding(.top, 2)
+            .padding(.horizontal, 14)
+            .padding(.top, isCollapsed ? 8 : 10)
+            .padding(.bottom, isCollapsed ? 9 : 10)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .fixedSize(horizontal: false, vertical: true)
+        // Frosted smoked-glass card without live NSGlassEffectView wrapping the 60fps spinning vinyl
+        // so WindowServer stays idle cleanly while desktop glass refracts softly underneath.
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.055))
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.45)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.075),
+                                Color(red: 0.05, green: 0.06, blue: 0.09).opacity(0.26)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .allowsHitTesting(false)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(
-                    isDropHighlighted ? Color.cyan.opacity(0.65) : Color.white.opacity(0.11),
+                    isDropHighlighted
+                        ? AnyShapeStyle(Color.cyan.opacity(0.65))
+                        : AnyShapeStyle(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.26), Color.white.opacity(0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        ),
                     lineWidth: isDropHighlighted ? 1.5 : 0.75
                 )
         )
@@ -595,13 +629,13 @@ public struct MusicModeView: View {
                     .foregroundColor(.white.opacity(0.92))
                     .padding(.horizontal, 10)
                     .frame(height: 28)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.white.opacity(isAddHovered ? 0.16 : 0.10))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.6)
+                    .musicGlassSurface(
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous),
+                        tint: Color.black.opacity(0.18),
+                        fallbackFill: Color.white.opacity(isAddHovered ? 0.16 : 0.10),
+                        strokeColor: Color.white.opacity(isAddHovered ? 0.24 : 0.16),
+                        strokeWidth: 0.65,
+                        interactive: true
                     )
                 }
                 .buttonStyle(.plain)
@@ -627,13 +661,13 @@ public struct MusicModeView: View {
                                 : (isClearHovered ? Color(nsColor: .systemRed) : .white.opacity(0.68))
                         )
                         .frame(width: 28, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(isClearHovered && !sourceQueueItems.isEmpty ? Color.red.opacity(0.14) : Color.white.opacity(0.06))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.6)
+                        .musicGlassSurface(
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous),
+                            tint: isClearHovered && !sourceQueueItems.isEmpty ? Color.red.opacity(0.18) : Color.black.opacity(0.16),
+                            fallbackFill: isClearHovered && !sourceQueueItems.isEmpty ? Color.red.opacity(0.14) : Color.white.opacity(0.06),
+                            strokeColor: Color.white.opacity(0.14),
+                            strokeWidth: 0.6,
+                            interactive: !sourceQueueItems.isEmpty
                         )
                 }
                 .buttonStyle(.plain)
@@ -687,7 +721,8 @@ public struct MusicModeView: View {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 9)
+            .padding(.top, 9)
+            .padding(.bottom, 8)
 
             Divider()
                 .opacity(0.14)
@@ -786,17 +821,42 @@ public struct MusicModeView: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.04))
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(red: 0.05, green: 0.06, blue: 0.09).opacity(0.42))
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.055), Color.clear],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    )
+            }
+            .allowsHitTesting(false)
         )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(
-                    isDropTargeted ? Color.cyan.opacity(0.65) : Color.white.opacity(0.10),
+                    isDropTargeted
+                        ? AnyShapeStyle(Color.cyan.opacity(0.65))
+                        : AnyShapeStyle(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.20), Color.white.opacity(0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        ),
                     lineWidth: isDropTargeted ? 1.5 : 0.75
                 )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(alignment: .top) {
+            MusicQueueBorderNotch(isCollapsed: false) {
+                player.toggleMusicQueueCollapsed()
+            }
+            .alignmentGuide(.top) { d in d[VerticalAlignment.center] }
+        }
     }
 
     private var sortMenuButton: some View {
@@ -843,16 +903,16 @@ public struct MusicModeView: View {
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
             }
-            .foregroundColor(activeOrder == .manual ? .white.opacity(0.80) : .cyan)
+            .foregroundColor(activeOrder == .manual ? .white.opacity(0.84) : .cyan)
             .padding(.horizontal, 9)
             .frame(height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(activeOrder == .manual ? Color.white.opacity(isSortHovered ? 0.14 : 0.07) : Color.cyan.opacity(0.14))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(activeOrder == .manual ? Color.white.opacity(0.11) : Color.cyan.opacity(0.32), lineWidth: 0.6)
+            .musicGlassSurface(
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous),
+                tint: activeOrder == .manual ? Color.black.opacity(0.16) : Color.cyan.opacity(0.14),
+                fallbackFill: activeOrder == .manual ? Color.white.opacity(isSortHovered ? 0.14 : 0.07) : Color.cyan.opacity(0.14),
+                strokeColor: activeOrder == .manual ? Color.white.opacity(0.14) : Color.cyan.opacity(0.34),
+                strokeWidth: 0.65,
+                interactive: true
             )
         }
         .menuStyle(.borderlessButton)
@@ -895,78 +955,83 @@ public struct MusicModeView: View {
 
     // MARK: - Tier 3: Unified Bottom Playback HUD
 
-    private func bottomControlSection(windowWidth: CGFloat) -> some View {
+    private func bottomControlSection(windowWidth: CGFloat, isCollapsed: Bool) -> some View {
         let scrubberTier = HUDLayoutTier.determine(width: windowWidth, isFullscreen: false)
         let compact = MusicModeGeometry.usesCompactBottomControls(width: windowWidth)
         let volWidth = MusicModeGeometry.bottomVolumeTrackWidth(forWindowWidth: windowWidth)
         let showVolPercent = MusicModeGeometry.showsVolumePercentage(forWindowWidth: windowWidth)
         let isSingleLoop = playlist.playbackMode == .singleLoop
         let upcomingTrack = isSingleLoop ? activePlayingAudioItem : playlist.upcomingItem
+        let playButtonSize: CGFloat = isCollapsed ? 35 : 38
 
-        return VStack(spacing: compact ? 6 : 8) {
-            // 1. Subtle Up Next Strip directly above progress bar
-            if let upcomingTrack {
-                upNextPreviewStrip(
-                    item: upcomingTrack,
-                    isRepeatOne: isSingleLoop,
-                    compact: compact
+        return ZStack {
+            MusicWindowDragCanvas(preservesVerticalResizeEdges: false)
+
+            VStack(spacing: isCollapsed ? 4 : (compact ? 5 : 6)) {
+                // 1. Subtle Up Next Strip directly above progress bar
+                if let upcomingTrack {
+                    upNextPreviewStrip(
+                        item: upcomingTrack,
+                        isRepeatOne: isSingleLoop,
+                        compact: compact || isCollapsed
+                    )
+                }
+
+                // 2. Native Scrubber (no video preview card in Music Mode; compact track height so surrounding blank regions drag window)
+                PlayerProgressSection(
+                    player: player,
+                    clock: player.clock,
+                    playlist: playlist,
+                    tier: scrubberTier,
+                    showsHoverPreview: false,
+                    compactScrubberHeight: isCollapsed ? 18 : 20
                 )
-            }
-
-            // 2. Native Scrubber (also accepts mouse-wheel vertical scroll to adjust volume)
-            PlayerProgressSection(player: player, clock: player.clock, playlist: playlist, tier: scrubberTier)
                 .contentShape(Rectangle())
                 .onHover { wheelController.isHoveringProgressSection = $0 }
 
-            // 3. Centered Transport + Wings
-            ZStack(alignment: .center) {
-                // Center Group: Prev, Play/Pause, Next
-                HStack(spacing: compact ? 12 : 16) {
-                    HUDTransportButton(
-                        icon: "backward.end.fill",
-                        size: compact ? 12.5 : 13.5,
-                        weight: .medium,
-                        disabled: !playlist.hasPrevious && !player.canRewindToStart,
-                        helpText: playlist.hasPrevious
-                            ? (playlist.previousItem.map { "\($0.title) (Cmd+Left)" } ?? L10n.previousTrack)
-                            : (player.canRewindToStart ? "\(L10n.previousTrack) (0:00)" : L10n.noPreviousTrack)
-                    ) {
-                        suppressedAutoScrollID = nil
-                        onPlayPrevious()
-                    }
-                    .accessibilityLabel(L10n.previousTrack)
-
-                    Button(action: { player.togglePlayPause() }) {
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.24),
-                                            Color.white.opacity(0.12)
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .frame(width: 38, height: 38)
-                                .overlay(
-                                    Circle()
-                                        .strokeBorder(Color.white.opacity(0.30), lineWidth: 0.8)
-                                )
-                                .shadow(color: Color.black.opacity(0.28), radius: 5, x: 0, y: 2)
-
-                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 15.5, weight: .bold))
-                                .foregroundColor(.white)
-                                .offset(x: player.isPlaying ? 0 : 1.0)
+                // 3. Centered Transport + Wings
+                ZStack(alignment: .center) {
+                    // Center Group: Prev, Play/Pause, Next
+                    HStack(spacing: compact ? 12 : 16) {
+                        HUDTransportButton(
+                            icon: "backward.end.fill",
+                            size: compact ? 12.5 : 13.5,
+                            weight: .medium,
+                            disabled: !playlist.hasPrevious && !player.canRewindToStart,
+                            helpText: playlist.hasPrevious
+                                ? L10n.tr("Previous Track (Cmd+Left)", "上一首 (Cmd+Left)")
+                                : (player.canRewindToStart
+                                    ? L10n.tr("Previous Track (0:00)", "上一首 (0:00)")
+                                    : L10n.tr("No previous track", "没有上一首"))
+                        ) {
+                            suppressedAutoScrollID = nil
+                            onPlayPrevious()
                         }
-                        .contentShape(Circle())
-                    }
-                    .buttonStyle(HUDInteractiveButtonStyle(hoverScale: 1.08))
-                    .accessibilityLabel(player.isPlaying ? L10n.pause : L10n.play)
-                    .hudTooltip("\(player.isPlaying ? L10n.pause : L10n.play) (Space)", edge: .top)
-                    .help("\(player.isPlaying ? L10n.pause : L10n.play) (Space)")
+                        .accessibilityLabel(L10n.tr("Previous Track", "上一首"))
+
+                        Button(action: { player.togglePlayPause() }) {
+                            ZStack {
+                                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                                    .font(.system(size: isCollapsed ? 14.5 : 15.5, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .offset(x: player.isPlaying ? 0 : 1.0)
+                            }
+                            .frame(width: playButtonSize, height: playButtonSize)
+                            .musicGlassSurface(
+                                in: Circle(),
+                                tint: Color.white.opacity(0.10),
+                                fallbackFill: Color.white.opacity(0.14),
+                                strokeColor: Color.white.opacity(0.32),
+                                strokeWidth: 0.8,
+                                interactive: true
+                            )
+                            .shadow(color: Color.black.opacity(0.28), radius: 5, x: 0, y: 2)
+                            .contentShape(Circle())
+                        }
+                        .buttonStyle(HUDInteractiveButtonStyle(hoverScale: 1.08))
+                        .accessibilityLabel(player.isPlaying ? L10n.pause : L10n.play)
+                        .hudTooltip("\(player.isPlaying ? L10n.pause : L10n.play) (Space)", edge: .top)
+                        .help("\(player.isPlaying ? L10n.pause : L10n.play) (Space)")
 
                     HUDTransportButton(
                         icon: "forward.end.fill",
@@ -974,13 +1039,13 @@ public struct MusicModeView: View {
                         weight: .medium,
                         disabled: !playlist.hasNext,
                         helpText: playlist.hasNext
-                            ? (playlist.nextItem.map { "\($0.title) (Cmd+Right)" } ?? L10n.nextTrack)
-                            : L10n.noNextTrack
+                            ? L10n.tr("Next Track (Cmd+Right)", "下一首 (Cmd+Right)")
+                            : L10n.tr("No next track", "没有下一首")
                     ) {
                         suppressedAutoScrollID = nil
                         onPlayNext()
                     }
-                    .accessibilityLabel(L10n.nextTrack)
+                    .accessibilityLabel(L10n.tr("Next Track", "下一首"))
                 }
 
                 // Wings
@@ -1045,7 +1110,8 @@ public struct MusicModeView: View {
                 }
             }
         }
-        .padding(.top, 2)
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -1108,13 +1174,13 @@ public struct MusicModeView: View {
             .padding(.leading, 4)
             .padding(.trailing, 10)
             .padding(.vertical, 3)
-            .background(
-                Capsule()
-                    .fill(Color.orange.opacity(isUpNextHovered ? 0.12 : 0.05))
-            )
-            .overlay(
-                Capsule()
-                    .strokeBorder(Color.orange.opacity(isUpNextHovered ? 0.32 : 0.16), lineWidth: 0.5)
+            .musicGlassSurface(
+                in: Capsule(),
+                tint: Color.orange.opacity(isUpNextHovered ? 0.14 : 0.08),
+                fallbackFill: Color.orange.opacity(isUpNextHovered ? 0.12 : 0.05),
+                strokeColor: Color.orange.opacity(isUpNextHovered ? 0.34 : 0.18),
+                strokeWidth: 0.55,
+                interactive: true
             )
             .contentShape(Capsule())
         }
@@ -1257,10 +1323,103 @@ public struct MusicModeView: View {
     }
 }
 
-// MARK: - Helper Subviews
+// MARK: - Helper Subviews & Liquid Glass Primitives
 
 @MainActor
-private struct QueueCollapseToggleStrip: View {
+private struct MusicGlassSurfaceModifier<S: InsettableShape, StrokeStyleType: ShapeStyle>: ViewModifier {
+    let shape: S
+    let tint: Color
+    let fallbackFill: Color
+    let strokeStyle: StrokeStyleType
+    let strokeWidth: CGFloat
+    let interactive: Bool
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .glassEffect(
+                    interactive ? .regular.tint(tint).interactive() : .regular.tint(tint),
+                    in: shape
+                )
+                .overlay(
+                    shape.strokeBorder(strokeStyle, lineWidth: strokeWidth)
+                )
+        } else {
+            content
+                .background(
+                    ZStack {
+                        shape.fill(.ultraThinMaterial)
+                        shape.fill(fallbackFill)
+                    }
+                )
+                .overlay(
+                    shape.strokeBorder(strokeStyle, lineWidth: strokeWidth)
+                )
+        }
+    }
+}
+
+extension View {
+    fileprivate func musicGlassSurface<S: InsettableShape, StrokeStyleType: ShapeStyle>(
+        in shape: S,
+        tint: Color,
+        fallbackFill: Color,
+        strokeColor: StrokeStyleType,
+        strokeWidth: CGFloat = 0.65,
+        interactive: Bool = false
+    ) -> some View {
+        modifier(
+            MusicGlassSurfaceModifier(
+                shape: shape,
+                tint: tint,
+                fallbackFill: fallbackFill,
+                strokeStyle: strokeColor,
+                strokeWidth: strokeWidth,
+                interactive: interactive
+            )
+        )
+    }
+}
+
+@MainActor
+private struct MusicCircleIconButton: View {
+    let icon: String
+    var isActive: Bool = false
+    var accessibilityTitle: String
+    let action: () -> Void
+
+    @State private var isHovered: Bool = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundColor(
+                    isActive
+                        ? .cyan
+                        : .white.opacity(isHovered ? 0.96 : 0.78)
+                )
+                .frame(width: 26, height: 26)
+                .musicGlassSurface(
+                    in: Circle(),
+                    tint: isActive ? Color.cyan.opacity(0.20) : Color.black.opacity(0.18),
+                    fallbackFill: isActive ? Color.cyan.opacity(0.16) : Color.white.opacity(isHovered ? 0.14 : 0.07),
+                    strokeColor: isActive ? Color.cyan.opacity(0.45) : Color.white.opacity(isHovered ? 0.28 : 0.16),
+                    strokeWidth: 0.65,
+                    interactive: true
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .focusEffectDisabled()
+        .onHover { isHovered = $0 }
+        .accessibilityLabel(accessibilityTitle)
+    }
+}
+
+@MainActor
+private struct MusicQueueBorderNotch: View {
     let isCollapsed: Bool
     let action: () -> Void
 
@@ -1270,24 +1429,26 @@ private struct QueueCollapseToggleStrip: View {
         Button(action: action) {
             ZStack {
                 Color.clear
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 18)
+                    .frame(width: 44, height: 15)
                     .contentShape(Rectangle())
 
-                HStack(spacing: 0) {
-                    Image(systemName: isCollapsed ? "arrowtriangle.down.fill" : "arrowtriangle.up.fill")
-                        .font(.system(size: 8.5, weight: .bold))
-                        .foregroundColor(.white.opacity(isHovered ? 0.92 : 0.56))
-                }
-                .frame(width: 52, height: 16)
-                .background(
-                    Capsule()
-                        .fill(Color.white.opacity(isHovered ? 0.14 : 0.055))
-                )
-                .overlay(
-                    Capsule()
-                        .strokeBorder(Color.white.opacity(isHovered ? 0.24 : 0.10), lineWidth: 0.6)
-                )
+                let notchShape = RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                MusicNotchTriangle(pointsDown: isCollapsed)
+                    .fill(Color.white.opacity(isHovered ? 0.96 : 0.78))
+                    .frame(width: 7.5, height: 3.5)
+                    .frame(width: 28, height: 7)
+                    .background(
+                        notchShape
+                            .fill(Color(red: 0.08, green: 0.09, blue: 0.12).opacity(isHovered ? 0.96 : 0.92))
+                    )
+                    .musicGlassSurface(
+                        in: notchShape,
+                        tint: Color.black.opacity(0.28),
+                        fallbackFill: Color.white.opacity(isHovered ? 0.10 : 0.04),
+                        strokeColor: Color.white.opacity(isHovered ? 0.34 : 0.20),
+                        strokeWidth: 0.65,
+                        interactive: true
+                    )
             }
             .overlay(
                 MusicPointingHandOverlay(enabled: true)
@@ -1307,6 +1468,25 @@ private struct QueueCollapseToggleStrip: View {
                 ? L10n.tr("Expand Playlist Queue (Cmd+L)", "展开播放列表 (Cmd+L)")
                 : L10n.tr("Collapse Playlist Queue (Cmd+L)", "收起播放列表 (Cmd+L)")
         )
+    }
+}
+
+private struct MusicNotchTriangle: Shape {
+    let pointsDown: Bool
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        if pointsDown {
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        } else {
+            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        }
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -1852,21 +2032,46 @@ private struct MusicPointingHandOverlay: NSViewRepresentable {
     }
 }
 
-/// Transparent AppKit drag surface behind the top titlebar supporting drag & double-click vertical maximize.
+/// Transparent AppKit drag surface supporting window dragging from blank margins and non-control areas
+/// while preserving native top/bottom vertical resize edges when configured.
 @MainActor
-private struct MusicWindowDragStrip: NSViewRepresentable {
-    func makeNSView(context: Context) -> MusicDragStripNSView {
-        MusicDragStripNSView()
+private struct MusicWindowDragCanvas: NSViewRepresentable {
+    var preservesVerticalResizeEdges: Bool = true
+
+    func makeNSView(context: Context) -> MusicDragCanvasNSView {
+        let view = MusicDragCanvasNSView()
+        view.preservesVerticalResizeEdges = preservesVerticalResizeEdges
+        return view
     }
 
-    func updateNSView(_ nsView: MusicDragStripNSView, context: Context) {}
+    func updateNSView(_ nsView: MusicDragCanvasNSView, context: Context) {
+        nsView.preservesVerticalResizeEdges = preservesVerticalResizeEdges
+    }
 
-    final class MusicDragStripNSView: NSView {
-        override var mouseDownCanMoveWindow: Bool { true }
+    final class MusicDragCanvasNSView: NSView {
+        var preservesVerticalResizeEdges: Bool = true
+
+        override var mouseDownCanMoveWindow: Bool { false }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard let window = self.window, !window.styleMask.contains(.fullScreen) else {
+                return super.hitTest(point)
+            }
+            if preservesVerticalResizeEdges {
+                let loc = (superview != nil) ? self.convert(point, from: superview) : self.convert(point, from: nil)
+                let edgeMargin: CGFloat = 6.0
+                if loc.y <= edgeMargin || loc.y >= bounds.height - edgeMargin {
+                    return nil
+                }
+            }
+            return super.hitTest(point)
+        }
 
         override func mouseDown(with event: NSEvent) {
-            guard let window = self.window else { return }
-            window.performDrag(with: event)
+            guard let window = self.window,
+                  !window.styleMask.contains(.fullScreen) else { return }
+            MusicWindowDragCoordinator.shared.beginDrag(on: window, with: event)
         }
     }
 }

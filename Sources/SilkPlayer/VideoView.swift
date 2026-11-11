@@ -11,6 +11,7 @@ public final class MetalPlayerContainerView: NSView {
     private var dragInitialWindowOrigin: NSPoint = .zero
     private var isDraggingWindow: Bool = false
     private var canDragWindowFromCurrentMouseDown: Bool = false
+    private var pendingDragMouseDownEvent: NSEvent?
     private var pendingSingleClickWorkItem: DispatchWorkItem?
     private var lastMouseActivityTime: TimeInterval = 0
     private var localMouseDownMonitor: Any?
@@ -133,6 +134,7 @@ public final class MetalPlayerContainerView: NSView {
             self.pendingSingleClickWorkItem?.cancel()
             self.pendingSingleClickWorkItem = nil
             self.canDragWindowFromCurrentMouseDown = false
+            self.pendingDragMouseDownEvent = nil
 
             let isMaximized: Bool
             if let delegate = window.delegate as? PlayerWindowDelegate {
@@ -536,6 +538,7 @@ public final class MetalPlayerContainerView: NSView {
         }
         let isFullscreen = window.styleMask.contains(.fullScreen)
         canDragWindowFromCurrentMouseDown = false
+        pendingDragMouseDownEvent = nil
 
         // 1. 边缘 8pt 预留给 AppKit 原生 NSThemeFrame 八向拉伸，绝不在此拦截
         if !isFullscreen {
@@ -611,6 +614,7 @@ public final class MetalPlayerContainerView: NSView {
 
             // C. 顶栏空白处/标题胶囊处单击：允许拖拽移动窗口（非最大化时）
             canDragWindowFromCurrentMouseDown = !isFullscreen && !isMaximized
+            pendingDragMouseDownEvent = canDragWindowFromCurrentMouseDown ? event : nil
             dragInitialMouseScreenLocation = NSEvent.mouseLocation
             dragInitialWindowOrigin = window.frame.origin
             isDraggingWindow = false
@@ -638,11 +642,13 @@ public final class MetalPlayerContainerView: NSView {
         // 4. 底部控制栏区域：HUD 激活时保护控制面板，禁止单次点击穿透暂停或发起窗口拖拽
         if isBottomControlArea && player.isHUDVisible {
             canDragWindowFromCurrentMouseDown = false
+            pendingDragMouseDownEvent = nil
             return
         }
 
         // 5. 画面区域（已排除四周 8pt 边框）单次点击按下：允许拖拽移动窗口（超过 8pt 调用 window.performDrag）或松开触发播放/暂停
         canDragWindowFromCurrentMouseDown = !isFullscreen && !isMaximized
+        pendingDragMouseDownEvent = canDragWindowFromCurrentMouseDown ? event : nil
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
         dragInitialWindowOrigin = window.frame.origin
         isDraggingWindow = false
@@ -670,12 +676,15 @@ public final class MetalPlayerContainerView: NSView {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
             canDragWindowFromCurrentMouseDown = false
-            window.performDrag(with: event)
+            let dragEvent = pendingDragMouseDownEvent ?? event
+            pendingDragMouseDownEvent = nil
+            window.performDrag(with: dragEvent)
         }
     }
 
     override public func mouseUp(with event: NSEvent) {
         canDragWindowFromCurrentMouseDown = false
+        pendingDragMouseDownEvent = nil
 
         guard event.clickCount == 1 else { return }
 

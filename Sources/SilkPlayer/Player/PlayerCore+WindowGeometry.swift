@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import QuartzCore
 
 extension PlayerCore {
     public func updateRememberedWindowSize(_ contentSize: NSSize) {
@@ -85,8 +86,13 @@ extension PlayerCore {
 
     public func configureMusicModeChrome(on window: NSWindow) {
         if !window.styleMask.contains(.fullScreen) {
-            window.collectionBehavior.remove([.fullScreenPrimary, .fullScreenAllowsTiling, .fullScreenAuxiliary])
-            window.collectionBehavior.insert(.fullScreenNone)
+            var behavior = window.collectionBehavior
+            behavior.remove([.fullScreenPrimary, .fullScreenAllowsTiling, .fullScreenAuxiliary])
+            behavior.insert(.fullScreenNone)
+            if #available(macOS 15.0, *) {
+                behavior.insert(.fullScreenDisallowsTiling)
+            }
+            window.collectionBehavior = behavior
         }
         window.standardWindowButton(.zoomButton)?.isEnabled = false
         window.standardWindowButton(.zoomButton)?.alphaValue = 1.0
@@ -94,8 +100,13 @@ extension PlayerCore {
 
     public func restoreStandardWindowChrome(on window: NSWindow) {
         if !window.styleMask.contains(.fullScreen) {
-            window.collectionBehavior.remove([.fullScreenAuxiliary, .fullScreenNone])
-            window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+            var behavior = window.collectionBehavior
+            behavior.remove([.fullScreenAuxiliary, .fullScreenNone])
+            if #available(macOS 15.0, *) {
+                behavior.remove(.fullScreenDisallowsTiling)
+            }
+            behavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+            window.collectionBehavior = behavior
         }
         window.standardWindowButton(.zoomButton)?.isEnabled = true
     }
@@ -170,6 +181,8 @@ extension PlayerCore {
            abs(currentFrame.height - newFrame.height) > 0.5 ||
            abs(currentFrame.origin.x - newFrame.origin.x) > 0.5 ||
            abs(currentFrame.origin.y - newFrame.origin.y) > 0.5 {
+            isApplyingAudioWindowGeometry = true
+            defer { isApplyingAudioWindowGeometry = false }
             window.setFrame(newFrame, display: true, animate: animated)
         }
 
@@ -210,6 +223,9 @@ extension PlayerCore {
             screenVisibleFrame: screenFrame
         )
 
+        isApplyingAudioWindowGeometry = true
+        defer { isApplyingAudioWindowGeometry = false }
+
         AppSettings.shared.isMusicQueueCollapsed = collapsed
         let minAudioSize = NSSize(width: lockedW, height: min(collapsedH, expandedMinH))
         let maxAudioSize = NSSize(width: lockedW, height: maxH)
@@ -218,10 +234,13 @@ extension PlayerCore {
         window.maxSize = NSSize(width: max(lockedW, window.frame.width), height: max(maxH, window.frame.height))
         window.contentMaxSize = window.maxSize
 
+        // Collapsing synchronously without AppKit's nested resize loop eliminates blank Spacer frames
+        // and prevents external events from interrupting mid-transition at expandedMinHeight.
+        let shouldAnimate = animated && !collapsed
         if PlayerWindowManager.isRunningTests {
             window.setFrame(targetFrame, display: false, animate: false)
         } else {
-            window.setFrame(targetFrame, display: true, animate: animated)
+            window.setFrame(targetFrame, display: true, animate: shouldAnimate)
         }
 
         window.minSize = minAudioSize
@@ -310,5 +329,122 @@ extension PlayerCore {
         }
 
         applyContentAspectRatioLock()
+    }
+}
+
+/// Coordinates local `.eventTracking` window dragging in Music Mode so dragging never triggers
+/// macOS `WindowManager` desktop/edge tiling (`performDrag`) while maintaining raw cursor tracking
+/// with coalescing disabled and no artificial 4-edge screen clamping.
+@MainActor
+public final class MusicWindowDragCoordinator {
+    public static let shared = MusicWindowDragCoordinator()
+
+    public private(set) var isDragging: Bool = false
+
+    public static func translatedOrigin(
+        initialOrigin: NSPoint,
+        initialMouseLocation: NSPoint,
+        currentMouseLocation: NSPoint
+    ) -> NSPoint {
+        NSPoint(
+            x: initialOrigin.x + (currentMouseLocation.x - initialMouseLocation.x),
+            y: initialOrigin.y + (currentMouseLocation.y - initialMouseLocation.y)
+        )
+    }
+
+    public static func screenGrabLocation(
+        for event: NSEvent,
+        on window: NSWindow
+    ) -> NSPoint {
+        if event.window === window {
+            return window.convertPoint(toScreen: event.locationInWindow)
+        }
+        return NSEvent.mouseLocation
+    }
+
+    @discardableResult
+    public static func applyOriginIfMoved(
+        _ targetOrigin: NSPoint,
+        to window: NSWindow,
+        minimumDelta: CGFloat = 0.25
+    ) -> Bool {
+        let currentOrigin = window.frame.origin
+        guard abs(targetOrigin.x - currentOrigin.x) >= minimumDelta ||
+              abs(targetOrigin.y - currentOrigin.y) >= minimumDelta else {
+            return false
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        window.setFrameOrigin(targetOrigin)
+        CATransaction.commit()
+        return true
+    }
+
+    public func beginDrag(on window: NSWindow, with event: NSEvent) {
+        guard !window.styleMask.contains(.fullScreen),
+              !isDragging,
+              !PlayerWindowManager.isRunningTests,
+              (NSEvent.pressedMouseButtons & 1) != 0 else {
+            return
+        }
+
+        let initialOrigin = window.frame.origin
+        let initialMouseLocation = Self.screenGrabLocation(for: event, on: window)
+        let startScreenID = window.screen.map(ObjectIdentifier.init)
+
+        isDragging = true
+        let previousCoalescing = NSEvent.isMouseCoalescingEnabled
+        NSEvent.isMouseCoalescingEnabled = false
+        defer {
+            NSEvent.isMouseCoalescingEnabled = previousCoalescing
+            isDragging = false
+            if let currentScreen = window.screen,
+               let startScreenID,
+               ObjectIdentifier(currentScreen) != startScreenID,
+               let session = PlayerWindowManager.shared.sessions.first(where: { $0.window === window }),
+               session.player?.isAudioOnly == true {
+                (session.player as? PlayerCore)?.applyAudioWindowGeometry(animated: false)
+            }
+        }
+
+        window.trackEvents(
+            matching: [.leftMouseDragged, .leftMouseUp],
+            timeout: NSEvent.foreverDuration,
+            mode: .eventTracking
+        ) { [weak window] trackedEvent, stop in
+            guard let trackedEvent, let window else {
+                stop.pointee = true
+                return
+            }
+
+            var latestEvent = trackedEvent
+            while let queued = window.nextEvent(
+                matching: [.leftMouseDragged, .leftMouseUp],
+                until: .distantPast,
+                inMode: .eventTracking,
+                dequeue: true
+            ) {
+                latestEvent = queued
+                if queued.type == .leftMouseUp {
+                    break
+                }
+            }
+
+            if !window.isVisible || window.styleMask.contains(.fullScreen) {
+                stop.pointee = true
+                return
+            }
+
+            let targetOrigin = Self.translatedOrigin(
+                initialOrigin: initialOrigin,
+                initialMouseLocation: initialMouseLocation,
+                currentMouseLocation: NSEvent.mouseLocation
+            )
+            _ = Self.applyOriginIfMoved(targetOrigin, to: window)
+
+            if latestEvent.type == .leftMouseUp || (NSEvent.pressedMouseButtons & 1) == 0 {
+                stop.pointee = true
+            }
+        }
     }
 }

@@ -7,6 +7,7 @@ struct SilkPlayerApp: App {
     private var settings = AppSettings.shared
 
     init() {
+        Self.purgeSavedWindowFrameAutosave()
         PlayerWindowManager.shared.openShortcutsCheatsheetAction = {
             ShortcutsCheatsheetManager.shared.show()
         }
@@ -22,6 +23,17 @@ struct SilkPlayerApp: App {
         .defaultSize(width: 960, height: 540)
         .commands {
             PlayerCommands()
+        }
+    }
+
+    static func purgeSavedWindowFrameAutosave() {
+        NSWindow.removeFrame(usingName: "playerWindow-AppWindow-1")
+        let defaults = UserDefaults.standard
+        let framePrefix = "NSWindow Frame "
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("\(framePrefix)playerWindow-") {
+            let autosaveName = String(key.dropFirst(framePrefix.count))
+            NSWindow.removeFrame(usingName: autosaveName)
+            defaults.removeObject(forKey: key)
         }
     }
 }

@@ -98,9 +98,9 @@ final class MusicModeTests: XCTestCase {
         let laptopFrame = NSRect(x: 0, y: 40, width: 1440, height: 820)
         let ultrawideFrame = NSRect(x: 0, y: 40, width: 3440, height: 1314)
 
-        XCTAssertEqual(MusicModeGeometry.collapsedHeight(forWindowWidth: 520), 290)
-        XCTAssertEqual(MusicModeGeometry.collapsedHeight(forWindowWidth: 672), 290)
-        XCTAssertEqual(MusicModeGeometry.collapsedHeight(forWindowWidth: 768), 300)
+        XCTAssertEqual(MusicModeGeometry.collapsedHeight(forWindowWidth: 520), 224)
+        XCTAssertEqual(MusicModeGeometry.collapsedHeight(forWindowWidth: 672), 224)
+        XCTAssertEqual(MusicModeGeometry.collapsedHeight(forWindowWidth: 768), 232)
 
         // Expanded -> drag gently above threshold holds expanded min height (500)
         let holdExpanded = MusicModeGeometry.magneticResizeProposal(
@@ -111,27 +111,27 @@ final class MusicModeTests: XCTestCase {
         XCTAssertFalse(holdExpanded.isCollapsed)
         XCTAssertEqual(holdExpanded.size, NSSize(width: 768, height: 500))
 
-        // Expanded -> drag past 410 snaps directly to collapsed height (300)
+        // Expanded -> drag past 370 snaps directly to collapsed height (232)
         let snapCollapse = MusicModeGeometry.magneticResizeProposal(
-            NSSize(width: 768, height: 405),
+            NSSize(width: 768, height: 365),
             isCollapsed: false,
             screenVisibleFrame: ultrawideFrame
         )
         XCTAssertTrue(snapCollapse.isCollapsed)
-        XCTAssertEqual(snapCollapse.size, NSSize(width: 768, height: 300))
+        XCTAssertEqual(snapCollapse.size, NSSize(width: 768, height: 232))
 
-        // Collapsed -> small downward pull (< 370) remains collapsed
+        // Collapsed -> small downward pull (< 330) remains collapsed
         let holdCollapsed = MusicModeGeometry.magneticResizeProposal(
-            NSSize(width: 520, height: 350),
+            NSSize(width: 520, height: 310),
             isCollapsed: true,
             screenVisibleFrame: laptopFrame
         )
         XCTAssertTrue(holdCollapsed.isCollapsed)
-        XCTAssertEqual(holdCollapsed.size, NSSize(width: 520, height: 290))
+        XCTAssertEqual(holdCollapsed.size, NSSize(width: 520, height: 224))
 
-        // Collapsed -> pull past 370 snaps back open to minHeight (500)
+        // Collapsed -> pull past 330 snaps back open to minHeight (500)
         let snapExpand = MusicModeGeometry.magneticResizeProposal(
-            NSSize(width: 520, height: 375),
+            NSSize(width: 520, height: 335),
             isCollapsed: true,
             screenVisibleFrame: laptopFrame
         )
@@ -146,7 +146,7 @@ final class MusicModeTests: XCTestCase {
             rememberedExpandedHeight: 640,
             screenVisibleFrame: ultrawideFrame
         )
-        XCTAssertEqual(collapsedMid.height, 300)
+        XCTAssertEqual(collapsedMid.height, 232)
         XCTAssertEqual(collapsedMid.maxY, expandedMid.maxY)
 
         let reExpandedMid = MusicModeGeometry.toggledCollapseFrame(
@@ -159,7 +159,7 @@ final class MusicModeTests: XCTestCase {
         XCTAssertEqual(reExpandedMid.maxY, expandedMid.maxY)
 
         // Expanding near bottom screen edge pushes frame upward instead of clipping below Dock
-        let collapsedNearBottom = NSRect(x: 400, y: 50, width: 768, height: 300)
+        let collapsedNearBottom = NSRect(x: 400, y: 50, width: 768, height: 232)
         let expandedClampedBottom = MusicModeGeometry.toggledCollapseFrame(
             around: collapsedNearBottom,
             targetCollapsed: false,
@@ -168,6 +168,28 @@ final class MusicModeTests: XCTestCase {
         )
         XCTAssertEqual(expandedClampedBottom.height, 640)
         XCTAssertGreaterThanOrEqual(expandedClampedBottom.minY, ultrawideFrame.minY)
+    }
+
+    @MainActor
+    func testMusicModeIsolatesVideoHUDFeatures() {
+        // Resize dimension/aspect-ratio HUD stays enabled in Video Mode and disabled in Music Mode
+        XCTAssertFalse(PlayerWindowDelegate.shouldShowResizeDimensionHUD(isAudioOnly: true))
+        XCTAssertTrue(PlayerWindowDelegate.shouldShowResizeDimensionHUD(isAudioOnly: false))
+
+        // Video scrubber defaults stay unchanged (hover preview enabled, default height); Music Mode disables preview cleanly
+        let player = PlayerCore()
+        let videoProgress = PlayerProgressSection(player: player, clock: player.clock)
+        XCTAssertTrue(videoProgress.showsHoverPreview)
+        XCTAssertNil(videoProgress.compactScrubberHeight)
+
+        let musicProgress = PlayerProgressSection(
+            player: player,
+            clock: player.clock,
+            showsHoverPreview: false,
+            compactScrubberHeight: 20
+        )
+        XCTAssertFalse(musicProgress.showsHoverPreview)
+        XCTAssertEqual(musicProgress.compactScrubberHeight, 20)
     }
 
     @MainActor
@@ -739,13 +761,494 @@ final class MusicModeTests: XCTestCase {
     @MainActor
     func testStopWithPreserveAudioModePreventsTransientChromeDrop() {
         let player = PlayerCore()
+        let window = NSWindow(
+            contentRect: NSRect(x: 100, y: 100, width: 614, height: 224),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.minSize = NSSize(width: 614, height: 224)
+        window.contentMinSize = NSSize(width: 614, height: 224)
+        player.hostWindow = window
         player.isAudioOnly = true
 
         player.stop(resetUI: false, preserveAudioMode: true)
         XCTAssertTrue(player.isAudioOnly)
+        XCTAssertEqual(window.frame.height, 224, accuracy: 0.5)
+        XCTAssertEqual(window.minSize.height, 224, accuracy: 0.5)
 
         player.stop(resetUI: true)
         XCTAssertFalse(player.isAudioOnly)
+        XCTAssertEqual(window.minSize, NSSize(width: 640, height: 360))
+    }
+
+    @MainActor
+    func testShuffleFullCycleAndUpcomingItemPurity() {
+        let tracks = (0..<12).map {
+            PlaylistItem(
+                path: "/tmp/silk_shuffle_cycle_\($0).flac",
+                title: String(format: "Cycle Track %02d", $0),
+                duration: 180
+            )
+        }
+        let manager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+        manager.setPlaylist(playlistItems: tracks, startingIndex: 0)
+        manager.setPlaybackMode(.shuffle)
+
+        let peekFirst = manager.upcomingItem?.id
+        let peekSecond = manager.upcomingItem?.id
+        XCTAssertNotNil(peekFirst)
+        XCTAssertEqual(peekFirst, peekSecond)
+        if let nextIdx = manager.nextShuffleIndex {
+            XCTAssertEqual(peekFirst, tracks[nextIdx].id)
+        } else {
+            XCTFail("Expected non-nil nextShuffleIndex in shuffle mode")
+        }
+
+        var visited: [UUID] = []
+        if let first = manager.currentItem {
+            visited.append(first.id)
+        }
+        for step in 0..<11 {
+            let next = manager.moveToNext()
+            XCTAssertNotNil(next)
+            if step == 0 {
+                XCTAssertEqual(next?.id, peekFirst)
+            }
+            if let next {
+                visited.append(next.id)
+            }
+        }
+
+        XCTAssertEqual(visited.count, 12)
+        XCTAssertEqual(Set(visited).count, 12)
+    }
+
+    @MainActor
+    func testShuffleManualInterventionSuppressesShortTermRepeats() {
+        let trackCount = 30
+        let tracks = (0..<trackCount).map {
+            PlaylistItem(
+                path: "/tmp/silk_shuffle_cooldown_\($0).flac",
+                title: String(format: "Cooldown %02d", $0),
+                duration: 210
+            )
+        }
+
+        var cooledRankSum = 0
+        var cooledRankSamples = 0
+        let trials = 30
+        let manuallyPickedIndices = [0, 1, 2, 3, 4]
+
+        for _ in 0..<trials {
+            let manager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+            manager.setPlaylist(playlistItems: tracks, startingIndex: 0)
+            manager.setPlaybackMode(.shuffle)
+
+            for idx in manuallyPickedIndices {
+                _ = manager.selectIndex(idx)
+            }
+
+            // Rebuilding candidates after manual selections must exclude recent picks from the immediate next slot
+            // and strongly push them toward the tail of the new cycle.
+            manager.setPlaybackMode(.sequential)
+            manager.setPlaybackMode(.shuffle)
+
+            let recentIDs = Set(manuallyPickedIndices.map { tracks[$0].id })
+            let trackedCooledIDs = Set([0, 1, 2, 3].map { tracks[$0].id })
+
+            XCTAssertFalse(
+                manager.upcomingItem.map { recentIDs.contains($0.id) } ?? true,
+                "Hard guard must keep recently manually picked tracks out of the immediate next slot"
+            )
+
+            for rank in 0..<(trackCount - 1) {
+                if let next = manager.moveToNext(), trackedCooledIDs.contains(next.id) {
+                    cooledRankSum += rank
+                    cooledRankSamples += 1
+                }
+            }
+        }
+
+        let meanRank = Double(cooledRankSum) / Double(max(1, cooledRankSamples))
+        XCTAssertEqual(cooledRankSamples, trials * 4)
+        XCTAssertGreaterThan(
+            meanRank,
+            20.0,
+            "Weighted cooldown should push manually selected recent tracks near the end of the cycle (got \(meanRank))"
+        )
+
+        // Verify in-cycle manual intervention finishes the current cycle without repeating already-played items
+        // and keeps the last pre-wrap tracks out of the immediate post-wrap slot.
+        let cycleManager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+        cycleManager.setPlaylist(playlistItems: tracks, startingIndex: 0)
+        cycleManager.setPlaybackMode(.shuffle)
+
+        var seenBeforeWrap: Set<UUID> = []
+        if let start = cycleManager.currentItem {
+            seenBeforeWrap.insert(start.id)
+        }
+        for _ in 0..<8 {
+            if let next = cycleManager.moveToNext() {
+                seenBeforeWrap.insert(next.id)
+            }
+        }
+        guard let unplayedIndex = tracks.firstIndex(where: { !seenBeforeWrap.contains($0.id) }) else {
+            XCTFail("Expected unplayed track")
+            return
+        }
+        let picked = cycleManager.selectIndex(unplayedIndex)
+        XCTAssertNotNil(picked)
+        if let picked {
+            seenBeforeWrap.insert(picked.id)
+        }
+
+        var lastFourBeforeWrap: [UUID] = [cycleManager.currentItem!.id]
+        while seenBeforeWrap.count < trackCount {
+            guard let next = cycleManager.moveToNext() else {
+                XCTFail("Unexpected nil during cycle completion")
+                return
+            }
+            XCTAssertFalse(
+                seenBeforeWrap.contains(next.id),
+                "In-cycle shuffle repeated an already played track after manual intervention"
+            )
+            seenBeforeWrap.insert(next.id)
+            lastFourBeforeWrap.append(next.id)
+            if lastFourBeforeWrap.count > 4 {
+                lastFourBeforeWrap.removeFirst()
+            }
+        }
+
+        let wrapNext = cycleManager.moveToNext()
+        XCTAssertNotNil(wrapNext)
+        if let wrapNext {
+            XCTAssertFalse(lastFourBeforeWrap.contains(wrapNext.id))
+        }
+    }
+
+    @MainActor
+    func testShufflePreservesQueueAndHistoryOnSortAndMove() {
+        let tracks = (0..<10).map {
+            PlaylistItem(
+                path: "/tmp/silk_shuffle_reorder_\($0).flac",
+                title: String(format: "Reorder %02d", $0),
+                duration: 150
+            )
+        }
+
+        // 1. Sorting audio items preserves active shuffle cycle and remaining queue
+        let sortManager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+        sortManager.setPlaylist(playlistItems: tracks, startingIndex: 0)
+        sortManager.setPlaybackMode(.shuffle)
+
+        var visitedSort: [UUID] = [sortManager.currentItem!.id]
+        for _ in 0..<3 {
+            if let next = sortManager.moveToNext() {
+                visitedSort.append(next.id)
+            }
+        }
+        let playingBeforeSort = sortManager.currentItem?.id
+
+        sortManager.sortAudioItems(by: .title, direction: .descending) {
+            AudioTrackMetadataService.fallbackMetadata(for: $0)
+        }
+
+        XCTAssertEqual(sortManager.currentItem?.id, playingBeforeSort)
+        for _ in 0..<6 {
+            if let next = sortManager.moveToNext() {
+                visitedSort.append(next.id)
+            }
+        }
+        XCTAssertEqual(visitedSort.count, 10)
+        XCTAssertEqual(Set(visitedSort).count, 10)
+
+        // 2. Manual row movement preserves active shuffle cycle and remaining queue
+        let moveManager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+        moveManager.setPlaylist(playlistItems: tracks, startingIndex: 0)
+        moveManager.setPlaybackMode(.shuffle)
+
+        var visitedMove: [UUID] = [moveManager.currentItem!.id]
+        for _ in 0..<3 {
+            if let next = moveManager.moveToNext() {
+                visitedMove.append(next.id)
+            }
+        }
+        let playingBeforeMove = moveManager.currentItem?.id
+
+        moveManager.moveAudioItem(fromOffsets: IndexSet(integer: 0), toOffset: 8)
+
+        XCTAssertEqual(moveManager.currentItem?.id, playingBeforeMove)
+        for _ in 0..<6 {
+            if let next = moveManager.moveToNext() {
+                visitedMove.append(next.id)
+            }
+        }
+        XCTAssertEqual(visitedMove.count, 10)
+        XCTAssertEqual(Set(visitedMove).count, 10)
+    }
+
+    @MainActor
+    func testShufflePersistenceRestoresQueueHistoryAndCooldowns() {
+        let suiteName = "com.silkplayer.tests.shuffle.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            XCTFail("Unable to create isolated UserDefaults suite")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let tracks = (0..<10).map {
+            PlaylistItem(
+                path: "/tmp/silk_shuffle_persist_\($0).flac",
+                title: String(format: "Persist %02d", $0),
+                duration: 200
+            )
+        }
+
+        let manager1 = PlaylistManager(isPersistenceEnabled: true, autoRestore: false, userDefaults: defaults)
+        manager1.setPlaylist(playlistItems: tracks, startingIndex: 0)
+        manager1.setPlaybackMode(.shuffle)
+
+        var visited: [UUID] = [manager1.currentItem!.id]
+        for _ in 0..<3 {
+            if let next = manager1.moveToNext() {
+                visited.append(next.id)
+            }
+        }
+
+        let savedCurrentID = manager1.currentItem?.id
+        let savedUpcomingID = manager1.upcomingItem?.id
+        XCTAssertNotNil(savedCurrentID)
+        XCTAssertNotNil(savedUpcomingID)
+        manager1.saveToStorage()
+
+        let manager2 = PlaylistManager(isPersistenceEnabled: true, autoRestore: true, userDefaults: defaults)
+        XCTAssertEqual(manager2.playbackMode, .shuffle)
+        XCTAssertEqual(manager2.currentItem?.id, savedCurrentID)
+        XCTAssertEqual(manager2.upcomingItem?.id, savedUpcomingID)
+        XCTAssertTrue(manager2.hasPrevious)
+
+        for step in 0..<6 {
+            guard let next = manager2.moveToNext() else {
+                XCTFail("Expected restored shuffle queue item at step \(step)")
+                return
+            }
+            if step == 0 {
+                XCTAssertEqual(next.id, savedUpcomingID)
+            }
+            visited.append(next.id)
+        }
+
+        XCTAssertEqual(visited.count, 10)
+        XCTAssertEqual(Set(visited).count, 10)
+
+        let previous = manager2.moveToPrevious()
+        XCTAssertEqual(previous?.id, visited[8])
+    }
+
+    @MainActor
+    func testShuffleDuplicatePathCooldownAvoidsImmediateSameTrackRepeat() {
+        var tracks = (0..<12).map {
+            PlaylistItem(
+                path: "/tmp/silk_shuffle_dup_\($0).flac",
+                title: String(format: "Dup %02d", $0),
+                duration: 170
+            )
+        }
+        tracks[1] = PlaylistItem(path: tracks[0].path, title: "Dup Copy", duration: 170)
+
+        let manager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+        manager.setPlaylist(playlistItems: tracks, startingIndex: 5)
+        manager.setPlaybackMode(.shuffle)
+
+        for _ in 0..<20 {
+            _ = manager.selectIndex(5)
+            _ = manager.selectIndex(0)
+            XCTAssertNotEqual(
+                manager.upcomingItem?.path,
+                tracks[0].path,
+                "Duplicate path should not be selected as the immediate next shuffle item after manual selection"
+            )
+        }
+    }
+
+    @MainActor
+    func testMusicModeWindowWillResizeRejectsScreenFillAndCollapsedStretch() {
+        let prevCollapsed = AppSettings.shared.isMusicQueueCollapsed
+        defer { AppSettings.shared.isMusicQueueCollapsed = prevCollapsed }
+
+        let player = PlayerCore()
+        player.isLoaded = true
+        player.isAudioOnly = true
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 100, y: 300, width: 614, height: 224),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        player.hostWindow = window
+
+        let session = PlayerWindowSession(window: window, player: player)
+        let delegate = PlayerWindowDelegate()
+        delegate.session = session
+        delegate.player = player
+        window.delegate = delegate
+
+        let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
+        let collapsedH = MusicModeGeometry.collapsedHeight(forWindowWidth: lockedW, screenVisibleHeight: screenFrame.height)
+
+        AppSettings.shared.isMusicQueueCollapsed = true
+        let fillProposal = delegate.windowWillResize(window, to: screenFrame.size)
+        XCTAssertEqual(fillProposal.width, lockedW, accuracy: 0.5)
+        XCTAssertEqual(fillProposal.height, collapsedH, accuracy: 0.5)
+
+        let stretchProposal = delegate.windowWillResize(window, to: NSSize(width: lockedW, height: 500))
+        XCTAssertEqual(stretchProposal.width, lockedW, accuracy: 0.5)
+        XCTAssertEqual(stretchProposal.height, collapsedH, accuracy: 0.5)
+
+        AppSettings.shared.isMusicQueueCollapsed = false
+        let expandedFillProposal = delegate.windowWillResize(window, to: screenFrame.size)
+        XCTAssertEqual(expandedFillProposal.width, lockedW, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testMusicModeWindowDidResizeSelfHealsCollapsedExpandedHeight() {
+        let prevCollapsed = AppSettings.shared.isMusicQueueCollapsed
+        defer { AppSettings.shared.isMusicQueueCollapsed = prevCollapsed }
+
+        let player = PlayerCore()
+        player.isLoaded = true
+        player.isAudioOnly = true
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 120, y: 200, width: 614, height: 500),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        player.hostWindow = window
+
+        let session = PlayerWindowSession(window: window, player: player)
+        let delegate = PlayerWindowDelegate()
+        delegate.session = session
+        delegate.player = player
+        window.delegate = delegate
+
+        let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
+        let collapsedH = MusicModeGeometry.collapsedHeight(forWindowWidth: lockedW, screenVisibleHeight: screenFrame.height)
+
+        AppSettings.shared.isMusicQueueCollapsed = true
+        delegate.windowDidResize(Notification(name: NSWindow.didResizeNotification, object: window))
+        XCTAssertEqual(window.frame.width, lockedW, accuracy: 0.5)
+        XCTAssertEqual(window.frame.height, collapsedH, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testConfigureAndRestoreMusicModeChromeCollectionBehavior() {
+        let player = PlayerCore()
+        let window = NSWindow(
+            contentRect: NSRect(x: 100, y: 100, width: 614, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+
+        player.configureMusicModeChrome(on: window)
+        XCTAssertTrue(window.collectionBehavior.contains(.fullScreenNone))
+        XCTAssertFalse(window.collectionBehavior.contains(.fullScreenAllowsTiling))
+        if #available(macOS 15.0, *) {
+            XCTAssertTrue(window.collectionBehavior.contains(.fullScreenDisallowsTiling))
+        }
+
+        player.restoreStandardWindowChrome(on: window)
+        XCTAssertTrue(window.collectionBehavior.contains(.fullScreenPrimary))
+        XCTAssertTrue(window.collectionBehavior.contains(.fullScreenAllowsTiling))
+        if #available(macOS 15.0, *) {
+            XCTAssertFalse(window.collectionBehavior.contains(.fullScreenDisallowsTiling))
+        }
+    }
+
+    @MainActor
+    func testMusicWindowDragCoordinatorTranslatesOriginAndAppliesMoveWithoutTiling() throws {
+        let player = PlayerCore()
+        let window = NSWindow(
+            contentRect: NSRect(x: 120, y: 200, width: 614, height: 224),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        player.configureMusicModeChrome(on: window)
+        window.minSize = NSSize(width: 614, height: 224)
+        window.contentMinSize = NSSize(width: 614, height: 224)
+        window.maxSize = NSSize(width: 614, height: 900)
+        window.contentMaxSize = NSSize(width: 614, height: 900)
+
+        let translated = MusicWindowDragCoordinator.translatedOrigin(
+            initialOrigin: NSPoint(x: 120, y: 200),
+            initialMouseLocation: NSPoint(x: 300, y: 260),
+            currentMouseLocation: NSPoint(x: -50, y: 410)
+        )
+        XCTAssertEqual(translated.x, -230, accuracy: 0.5)
+        XCTAssertEqual(translated.y, 350, accuracy: 0.5)
+
+        let clickEvent = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown,
+                location: NSPoint(x: 180, y: 60),
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 1,
+                clickCount: 1,
+                pressure: 1.0
+            )
+        )
+        let grabPoint = MusicWindowDragCoordinator.screenGrabLocation(for: clickEvent, on: window)
+        XCTAssertEqual(grabPoint.x, 300, accuracy: 0.5)
+        XCTAssertEqual(grabPoint.y, 260, accuracy: 0.5)
+
+        XCTAssertFalse(
+            MusicWindowDragCoordinator.applyOriginIfMoved(
+                NSPoint(x: window.frame.origin.x + 0.1, y: window.frame.origin.y + 0.1),
+                to: window
+            )
+        )
+        XCTAssertTrue(
+            MusicWindowDragCoordinator.applyOriginIfMoved(
+                NSPoint(x: 240, y: 280),
+                to: window
+            )
+        )
+        XCTAssertEqual(window.frame.origin.x, 240, accuracy: 0.5)
+        XCTAssertEqual(window.frame.origin.y, 280, accuracy: 0.5)
+        XCTAssertTrue(window.styleMask.contains(.resizable))
+        XCTAssertEqual(window.minSize, NSSize(width: 614, height: 224))
+        XCTAssertEqual(window.maxSize, NSSize(width: 614, height: 900))
+        XCTAssertFalse(window.frameDescriptor.contains("tilingState"))
+    }
+
+    @MainActor
+    func testPurgeSavedWindowFrameAutosaveRemovesAllPlayerWindowKeys() {
+        let key1 = "NSWindow Frame playerWindow-AppWindow-1"
+        let key2 = "NSWindow Frame playerWindow-AppWindow-2"
+        let defaults = UserDefaults.standard
+        let prev1 = defaults.object(forKey: key1)
+        let prev2 = defaults.object(forKey: key2)
+        defer {
+            if let prev1 { defaults.set(prev1, forKey: key1) } else { defaults.removeObject(forKey: key1) }
+            if let prev2 { defaults.set(prev2, forKey: key2) } else { defaults.removeObject(forKey: key2) }
+        }
+
+        defaults.set("0 95 2752 1027 0 0 2752 1122 {\"tilingState\":{\"tilingPosition\":9}}", forKey: key1)
+        defaults.set("100 100 960 540 0 0 2752 1122", forKey: key2)
+
+        SilkPlayerApp.purgeSavedWindowFrameAutosave()
+        XCTAssertNil(defaults.object(forKey: key1))
+        XCTAssertNil(defaults.object(forKey: key2))
     }
 
     func testOggOpusHeaderAndVorbisCommentExtraction() async throws {

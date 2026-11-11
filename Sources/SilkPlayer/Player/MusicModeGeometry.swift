@@ -7,10 +7,10 @@ public enum MusicModeGeometry: Sendable {
     public static let minWidth: CGFloat = 520.0
     public static let maxWidth: CGFloat = 768.0
     public static let minHeight: CGFloat = 500.0
-    public static let collapsedStandardHeight: CGFloat = 290.0
-    public static let collapsedExtendedHeight: CGFloat = 300.0
-    public static let collapseDragThreshold: CGFloat = 410.0
-    public static let expandDragThreshold: CGFloat = 370.0
+    public static let collapsedStandardHeight: CGFloat = 224.0
+    public static let collapsedExtendedHeight: CGFloat = 232.0
+    public static let collapseDragThreshold: CGFloat = 370.0
+    public static let expandDragThreshold: CGFloat = 330.0
     public static let extendedQueueWidthThreshold: CGFloat = 680.0
     public static let compactBottomHUDWidthThreshold: CGFloat = 640.0
     public static let contentHorizontalPadding: CGFloat = 20.0

@@ -13,6 +13,7 @@ extension Notification.Name {
     public let id: UUID
     public weak var window: NSWindow?
     public weak var player: (any PlayerControllable)?
+    public weak var playlist: PlaylistManager?
     private let isLoadedProvider: (@MainActor () -> Bool)?
     public var testIsKey: Bool?
 
@@ -185,7 +186,8 @@ extension Notification.Name {
             MainActor.assumeIsolated {
                 guard let self = self, let notifWindow = notifWindow else { return }
                 if let session = self.sessions.first(where: { $0.window === notifWindow }),
-                   session.player?.isAudioOnly == true {
+                   session.player?.isAudioOnly == true,
+                   !MusicWindowDragCoordinator.shared.isDragging {
                     (session.player as? PlayerCore)?.applyAudioWindowGeometry(animated: true)
                 }
             }
@@ -836,15 +838,24 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         return hud
     }
 
+    public static func shouldShowResizeDimensionHUD(isAudioOnly: Bool) -> Bool {
+        !isAudioOnly
+    }
+
     @MainActor
     private func updateResizeHUD(window: NSWindow, resolvedSize: NSSize) {
-        guard !window.styleMask.contains(.fullScreen), !isFullscreenTransitioning else { return }
+        guard Self.shouldShowResizeDimensionHUD(isAudioOnly: self.player?.isAudioOnly ?? false),
+              !window.styleMask.contains(.fullScreen),
+              !isFullscreenTransitioning else {
+            resizeHUDView?.hideImmediately()
+            return
+        }
         let hud = ensureHUDAttached(to: window)
         hud?.update(
             size: resolvedSize,
             videoWidth: self.player?.displayVideoWidth ?? (self.player?.videoWidth ?? 0),
             videoHeight: self.player?.displayVideoHeight ?? (self.player?.videoHeight ?? 0),
-            isAudioOnly: self.player?.isAudioOnly ?? false
+            isAudioOnly: false
         )
     }
 
@@ -951,12 +962,16 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
               !isFullscreenTransitioning else { return }
         musicLiveResizeStartedCollapsed = AppSettings.shared.isMusicQueueCollapsed
         musicLiveResizeDidToggleCollapse = false
+        guard Self.shouldShowResizeDimensionHUD(isAudioOnly: player?.isAudioOnly ?? false) else {
+            resizeHUDView?.hideImmediately()
+            return
+        }
         let hud = ensureHUDAttached(to: window)
         hud?.show(
             size: window.frame.size,
             videoWidth: player?.displayVideoWidth ?? (player?.videoWidth ?? 0),
             videoHeight: player?.displayVideoHeight ?? (player?.videoHeight ?? 0),
-            isAudioOnly: player?.isAudioOnly ?? false
+            isAudioOnly: false
         )
     }
 
@@ -971,48 +986,35 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return window.frame.size
         }
 
-        // 在全屏模式、全屏进出过渡期、等比最大化/还原期间、或缩放至屏幕可用工作区尺寸时，100% 原样放行！
+        // True fullscreen and zoom transitions pass through unchanged.
         if window.styleMask.contains(.fullScreen) ||
            isFullscreenTransitioning ||
            player?.isFullscreen == true ||
            player?.isFullscreenTransitioning == true ||
-           isMaximizingOrRestoring ||
-           frameSize == screenFrame.size {
+           isMaximizingOrRestoring {
             return frameSize
         }
 
-        // 1. 【最大化模式：锁定窗口尺寸】
-        // 最大化占据可用工作区期间严格锁定尺寸，禁止边框拖拽缩小或变形
-        if currentInteractiveMode == .maximized {
-            return screenFrame.size
-        }
-
-        // 如果非用户手动拖拽且传入的是整个物理屏幕尺寸（AppKit 全屏调用首帧），直接放行
-        if !window.inLiveResize, let fullSz = screen?.frame.size,
-           abs(frameSize.width - fullSz.width) <= 2.0 && abs(frameSize.height - fullSz.height) <= 2.0 {
-            return frameSize
-        }
-
-        // Dedicated Music Mode branch: locked responsive width per screen with vertical-only resizing & magnetic queue collapse snap
+        // Dedicated Music Mode branch runs before screen-size tiling/fill bypasses so
+        // system edge-tiling or non-live resizes cannot widen the window or stretch collapsed mode.
         if player?.isAudioOnly == true {
             if !window.inLiveResize {
                 if AppSettings.shared.isMusicQueueCollapsed {
-                    let collapsedSize = MusicModeGeometry.clampedFrame(
-                        around: window.frame,
-                        targetHeight: frameSize.height,
-                        clampToExpandedMin: false,
-                        screenVisibleFrame: screenFrame
-                    ).size
-                    return collapsedSize
+                    let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
+                    let collapsedH = MusicModeGeometry.collapsedHeight(
+                        forWindowWidth: lockedW,
+                        screenVisibleHeight: screenFrame.height
+                    )
+                    return NSSize(width: lockedW, height: collapsedH)
                 }
                 return MusicModeGeometry.clampedResizeProposal(frameSize, screenVisibleFrame: screenFrame)
             }
             let currentCollapsed = AppSettings.shared.isMusicQueueCollapsed
             let collapseThreshold: CGFloat = (musicLiveResizeDidToggleCollapse && musicLiveResizeStartedCollapsed)
-                ? 330.0
+                ? 280.0
                 : MusicModeGeometry.collapseDragThreshold
             let expandThreshold: CGFloat = (musicLiveResizeDidToggleCollapse && !musicLiveResizeStartedCollapsed)
-                ? 455.0
+                ? 420.0
                 : MusicModeGeometry.expandDragThreshold
 
             let proposal = MusicModeGeometry.magneticResizeProposal(
@@ -1028,6 +1030,23 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             }
             updateResizeHUD(window: window, resolvedSize: proposal.size)
             return proposal.size
+        }
+
+        // Allow native workspace fill/zoom for idle and video windows.
+        if frameSize == screenFrame.size {
+            return frameSize
+        }
+
+        // 1. 【最大化模式：锁定窗口尺寸】
+        // 最大化占据可用工作区期间严格锁定尺寸，禁止边框拖拽缩小或变形
+        if currentInteractiveMode == .maximized {
+            return screenFrame.size
+        }
+
+        // 如果非用户手动拖拽且传入的是整个物理屏幕尺寸（AppKit 全屏调用首帧），直接放行
+        if !window.inLiveResize, let fullSz = screen?.frame.size,
+           abs(frameSize.width - fullSz.width) <= 2.0 && abs(frameSize.height - fullSz.height) <= 2.0 {
+            return frameSize
         }
 
         // Allow Shift-key freeform resizing without aspect ratio constraints during interactive dragging
@@ -1229,6 +1248,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
         let contentSize = window.contentRect(forFrameRect: window.frame).size
         musicLiveResizeDidToggleCollapse = false
+        _ = enforceAudioModeWindowBoundsIfNeeded(on: window, screenFrame: screenFrame)
         if let p = self.player {
             if p.isAudioOnly {
                 let expandedMinH = MusicModeGeometry.effectiveMinHeight(forScreenHeight: screenFrame.height)
@@ -1239,6 +1259,67 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
                 p.updateRememberedWindowSize(contentSize)
             }
         }
+    }
+
+    /// Reconciles non-animated or external system frame mutations in Music Mode so width stays locked
+    /// and collapsed mode never persists at an expanded height.
+    @discardableResult
+    private func enforceAudioModeWindowBoundsIfNeeded(on window: NSWindow, screenFrame: NSRect) -> Bool {
+        guard let p = self.player,
+              p.isAudioOnly,
+              !p.isFullscreen,
+              !p.isFullscreenTransitioning,
+              !isFullscreenTransitioning,
+              !isMaximizingOrRestoring,
+              !isAdjustingWindowFrame else {
+            return false
+        }
+        if (p as? PlayerCore)?.isApplyingAudioWindowGeometry == true {
+            return false
+        }
+
+        let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
+        let expandedMinH = MusicModeGeometry.effectiveMinHeight(forScreenHeight: screenFrame.height)
+        let collapsedH = MusicModeGeometry.collapsedHeight(
+            forWindowWidth: lockedW,
+            screenVisibleHeight: screenFrame.height
+        )
+        let maxH = max(expandedMinH, floor(screenFrame.height))
+        let curFrame = window.frame
+        let isCollapsed = AppSettings.shared.isMusicQueueCollapsed
+
+        let targetH: CGFloat
+        if isCollapsed {
+            targetH = collapsedH
+        } else if curFrame.height < expandedMinH - 1.0 || curFrame.height > maxH + 1.0 {
+            targetH = round(max(expandedMinH, min(maxH, curFrame.height)))
+        } else {
+            targetH = round(curFrame.height)
+        }
+
+        let needsWidthFix = abs(curFrame.width - lockedW) > 1.0
+        let needsHeightFix = abs(curFrame.height - targetH) > 1.0
+        guard needsWidthFix || needsHeightFix else { return false }
+
+        let horizontalFrame = MusicModeGeometry.clampedFrame(
+            around: curFrame,
+            targetHeight: targetH,
+            clampToExpandedMin: !isCollapsed,
+            screenVisibleFrame: screenFrame
+        )
+        let maxOriginY = max(screenFrame.minY, screenFrame.maxY - targetH)
+        let topAnchoredY = round(curFrame.maxY - targetH)
+        let correctedFrame = NSRect(
+            x: horizontalFrame.origin.x,
+            y: round(max(screenFrame.minY, min(maxOriginY, topAnchoredY))),
+            width: lockedW,
+            height: targetH
+        )
+
+        isAdjustingWindowFrame = true
+        window.setFrame(correctedFrame, display: !PlayerWindowManager.isRunningTests, animate: false)
+        isAdjustingWindowFrame = false
+        return true
     }
 
     public func windowDidResize(_ notification: Notification) {
@@ -1256,11 +1337,13 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return
         }
 
+        let screen = window.screen ?? NSScreen.main
+        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        _ = enforceAudioModeWindowBoundsIfNeeded(on: window, screenFrame: screenFrame)
+
         isAdjustingWindowFrame = true
         defer { isAdjustingWindowFrame = false }
 
-        let screen = window.screen ?? NSScreen.main
-        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         var curFrame = window.frame
         var adjusted = false
 
@@ -1655,6 +1738,16 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public func windowWillClose(_ notification: Notification) {
         resizeHUDView?.removeFromSuperview()
         resizeHUDView = nil
-        player?.stop()
+        if let window = notification.object as? NSWindow, !window.frameAutosaveName.isEmpty {
+            let autosaveName = window.frameAutosaveName
+            window.setFrameAutosaveName("")
+            NSWindow.removeFrame(usingName: autosaveName)
+        }
+        SilkPlayerApp.purgeSavedWindowFrameAutosave()
+        if let core = player as? PlayerCore {
+            core.stop(resetUI: false, preserveAudioMode: true)
+        } else {
+            player?.stop()
+        }
     }
 }

@@ -5,6 +5,36 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 1.7.0-music-preview (`feature/music-mode-revamp`)
+
+### Added
+- **Collapsible Two-Stage Music Mode (`Proposal 024`)**:
+  - Added expandable/collapsible playlist queue state (`Cmd+L` Window menu action and `28×7` border notch toggle with `MusicNotchTriangle`) shrinking to compact two-stage geometry (`224.0 pt` / `232.0 pt` target heights) with magnetic vertical-drag hysteresis (`370.0 / 330.0` and `280.0 / 420.0`) and expanded window height persistence.
+- **Music Mode Drag Surface & HUD Isolation**:
+  - Added `MusicWindowDragCanvas` across blank margins and non-control gaps while preserving `6.0 pt` top/bottom vertical resize edges.
+  - Added `showsHoverPreview` / `compactScrubberHeight` options on `PlayerProgressSection` / `PlayerScrubberView` and `PlayerWindowDelegate.shouldShowResizeDimensionHUD(isAudioOnly:)` to suppress video thumbnail hover cards and resize dimension overlays in Music Mode without affecting Video Mode.
+
+### Changed
+- **Music Mode Playback CPU & Compositing Optimization**:
+  - Decoupled `audioRhythm` into observable leaf state (`PlayerAudioRhythm`), throttled clock/persistence updates, cached `L10n` lookups, invalidated `PlayerCommands` via `commandSyncToken`, and moved vinyl/bar animations onto CoreAnimation render-server layers (`VinylSpinningLayerView`, `MiniPlayingBarsHostView`, fixed-frame `Canvas`).
+  - Moved `musicBackgroundLayer` to outer `GeometryReader.background` with `.ignoresSafeArea(.all)`, lowered `AppShellView.rootMinHeight` to `140.0` in audio mode, and centered border notches with `.alignmentGuide`.
+  - Streamlined Music Mode top-right controls to `pin` and `xmark` (`ISSUE-015`), removing the redundant `info.circle` button, pin-click OSD, and downward button hover tooltips to prevent overlap with track titles and audio spec badges, and standardized Music Mode transport tooltips to concise `Previous Track` / `Next Track` (`上一首` / `下一首`) labels without altering Video Mode.
+  - Upgraded `PlaylistManager` shuffle scheduling with weighted recency cooldown and state persistence: Efraimidis-Spirakis weighted permutation without replacement, quartic recency decay window (`min(N-2, max(1, min(N/2, 100)))`), duplicate-path suppression (`0.0002`), and 4-step hard head guard across manual `selectIndex` interventions, mode toggles, and cycle wraps; preserved active shuffle queues and play histories across `sortAudioItems` and `moveAudioItem`; and added UUID-mapped queue/history plus recent-path persistence (`saveToStorage` / `restoreFromStorage`) flushed on quit via `AppDelegate.persistActiveSessionsBeforeExit()`.
+
+### Fixed
+- **Collapsed Music Mode Border Notch Clearance**:
+  - Wrapped `if isCollapsed` inside `Group` before `.alignmentGuide(.bottom)` on `MusicQueueBorderNotch` in `MusicModeView` so `_ConditionalContent` does not swallow the border-centering guide, keeping the `28×7` notch centered on the `heroCard` bottom border (`~15 pt` clearance below long artist/album subtitles).
+- **Music Mode Quit Frame Persistence (`ISSUE-016`)**:
+  - Updated `AppDelegate` termination hooks and `PlayerWindowDelegate.windowWillClose` to call `player.stop(resetUI: false, preserveAudioMode: true)`, preventing `AppShellView.rootMinHeight` from snapping back to `200 + 28 = 228 pt` during window autosave on exit (`614 × 224 pt` preserved).
+- **Music Mode Window Tiling / Maximize Prevention & Collapse State Stability**:
+  - Added `.fullScreenDisallowsTiling` (`macOS 15.0+`) in `PlayerCore.configureMusicModeChrome` (restored via `restoreStandardWindowChrome` when leaving Music Mode), gated `PlayerWindowDelegate.windowWillResize` `screenFrame`/screen-fill bypasses when `isAudioOnly == true`, and replaced `window.performDrag(with:)` in `MusicWindowDragCoordinator` (`ISSUE-017`) with an isolated `.eventTracking` loop (`window.trackEvents` + `isMouseCoalescingEnabled = false` + queued-drag drain + live `NSEvent.mouseLocation` + `CATransaction.setDisableActions(true)` + native unclamped `window.setFrameOrigin` and `didChangeScreen` deferral during drags), completely bypassing macOS `WindowManager` desktop/edge tiling (`tilingPosition` `5`/`6`/`9`) while eliminating default-RunLoop/4-edge-clamp cursor separation.
+  - Updated `MetalPlayerContainerView` (`VideoView.swift`) and `WindowDragCanvasView` (`EmptyPlaybackView.swift`) to pass the saved original `mouseDown` event to `window.performDrag(with:)` after passing their click/double-click debounce thresholds, eliminating fast-flick initial grab offsets (`ISSUE-017`, also logged for `1.7.0` mainline port).
+  - Updated `PlayerCore.setMusicQueueCollapsed` to animate expand only (`animate: false` on collapse) while guarding geometry updates with `isApplyingAudioWindowGeometry`, locked `!inLiveResize && isMusicQueueCollapsed` resizes strictly to collapsed height (`224/232 pt`), and added `enforceAudioModeWindowBoundsIfNeeded` self-healing in `windowDidResize`/`windowDidEndLiveResize` so collapsed Music Mode windows never get stuck at `614 × 500 pt`.
+- **Cold-Launch `960 × 540` Frame Isolation (`ISSUE-018`)**:
+  - Disabled `NSWindow` restoration and `frameAutosaveName` persistence (`NSWindow Frame playerWindow-*`) across `SilkPlayerApp`, `AppShellView`, `PlayerWindowDelegate.windowWillClose`, and `AppDelegate`, and added a post-presentation cold-launch check so macOS `tilingState` (Fill / edge tiles from any mode) never overrides the default centered `960 × 540` window on startup.
+
+---
+
 ## [1.6.0] - 2026-11-09
 
 ### Added

@@ -66,28 +66,32 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    private func persistActiveSessionsBeforeExit() {
+        var didSaveSessionPlaylist = false
         for session in PlayerWindowManager.shared.sessions {
             if let player = session.player as? PlayerCore {
                 if let path = player.currentFilePath, player.currentTime > 0 {
                     AppSettings.shared.savePosition(for: path, position: player.currentTime, duration: player.duration)
                 }
-                player.stop()
+                player.stop(resetUI: false, preserveAudioMode: true)
+            }
+            if let playlist = session.playlist {
+                playlist.saveToStorage()
+                didSaveSessionPlaylist = true
             }
         }
-        PlaylistManager.shared.saveToStorage()
+        if !didSaveSessionPlaylist {
+            PlaylistManager.shared.saveToStorage()
+        }
+        SilkPlayerApp.purgeSavedWindowFrameAutosave()
+    }
+
+    public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        persistActiveSessionsBeforeExit()
         return .terminateNow
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
-        for session in PlayerWindowManager.shared.sessions {
-            if let player = session.player as? PlayerCore {
-                if let path = player.currentFilePath, player.currentTime > 0 {
-                    AppSettings.shared.savePosition(for: path, position: player.currentTime, duration: player.duration)
-                }
-                player.stop()
-            }
-        }
-        PlaylistManager.shared.saveToStorage()
+        persistActiveSessionsBeforeExit()
     }
 }

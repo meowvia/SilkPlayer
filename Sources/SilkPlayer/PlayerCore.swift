@@ -145,6 +145,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var activeOSD: OSDNotification? = nil
     public var hasAppliedInitialWindowSize: Bool = false
     public var pendingAudioGeometryAfterExitFullScreen: Bool = false
+    public var isApplyingAudioWindowGeometry: Bool = false
     public static let musicModeHeightDefaultsKey = "SilkPlayer.MusicMode.WindowHeight"
 
     // MARK: - Live Resize Precision HUD

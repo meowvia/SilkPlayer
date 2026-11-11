@@ -42,13 +42,24 @@ public struct PlayerProgressSection: View {
     var clock: PlayerClock
     var playlist: PlaylistManager
     var tier: HUDLayoutTier = .expanded
+    var showsHoverPreview: Bool = true
+    var compactScrubberHeight: CGFloat? = nil
     @State private var showRemainingTime: Bool = false
 
-    public init(player: PlayerCore, clock: PlayerClock, playlist: PlaylistManager = PlaylistManager.shared, tier: HUDLayoutTier = .expanded) {
+    public init(
+        player: PlayerCore,
+        clock: PlayerClock,
+        playlist: PlaylistManager = PlaylistManager.shared,
+        tier: HUDLayoutTier = .expanded,
+        showsHoverPreview: Bool = true,
+        compactScrubberHeight: CGFloat? = nil
+    ) {
         self.player = player
         self.clock = clock
         self.playlist = playlist
         self.tier = tier
+        self.showsHoverPreview = showsHoverPreview
+        self.compactScrubberHeight = compactScrubberHeight
     }
 
     public var body: some View {
@@ -62,7 +73,12 @@ public struct PlayerProgressSection: View {
                 .frame(minWidth: tier == .minimal ? 38 : 46, alignment: .trailing)
 
             // Progress Bar Scrubber
-            PlayerScrubberView(player: player, clock: clock)
+            PlayerScrubberView(
+                player: player,
+                clock: clock,
+                showsHoverPreview: showsHoverPreview,
+                compactHeight: compactScrubberHeight
+            )
 
             // Clickable Duration / Remaining Time Toggle
             Button(action: { showRemainingTime.toggle() }) {
@@ -94,6 +110,8 @@ public struct PlayerProgressSection: View {
 public struct PlayerScrubberView: View {
     @ObservedObject var player: PlayerCore
     var clock: PlayerClock
+    var showsHoverPreview: Bool = true
+    var compactHeight: CGFloat? = nil
     @ObservedObject private var thumbnailEngine = SilkThumbnailEngine.shared
 
     @State private var isHovered: Bool = false
@@ -114,9 +132,16 @@ public struct PlayerScrubberView: View {
         Color.blue.opacity(0.80)
     ])
 
-    public init(player: PlayerCore, clock: PlayerClock) {
+    public init(
+        player: PlayerCore,
+        clock: PlayerClock,
+        showsHoverPreview: Bool = true,
+        compactHeight: CGFloat? = nil
+    ) {
         self.player = player
         self.clock = clock
+        self.showsHoverPreview = showsHoverPreview
+        self.compactHeight = compactHeight
     }
 
     public var body: some View {
@@ -242,8 +267,8 @@ public struct PlayerScrubberView: View {
                     .position(x: currentKnobX, y: geometry.size.height / 2.0)
 
                 // 7. Hover / Scrub Floating Preview Card with I-Frame Thumbnail & High-Precision Timestamp
-                let activeAnchorX = player.isScrubbing ? currentKnobX : (hoverLocationX != nil ? max(currentKnobRadius, min(totalWidth - currentKnobRadius, hoverLocationX!)) : currentKnobX)
-                if clock.duration > 0, (isHovered || player.isScrubbing) {
+                if showsHoverPreview, clock.duration > 0, (isHovered || player.isScrubbing) {
+                    let activeAnchorX = player.isScrubbing ? currentKnobX : (hoverLocationX != nil ? max(currentKnobRadius, min(totalWidth - currentKnobRadius, hoverLocationX!)) : currentKnobX)
                     let activeFraction = fraction(for: activeAnchorX, totalWidth: totalWidth, isExpanded: isExpanded)
                     let rawTime = player.isScrubbing ? player.scrubTime : (activeFraction * clock.duration)
                     let activeChapter = player.chapters.last(where: { $0.time <= rawTime })
@@ -274,7 +299,7 @@ public struct PlayerScrubberView: View {
                         isHovered = true
                         hoverLocationX = location.x
                     }
-                    if clock.duration > 0 {
+                    if showsHoverPreview, clock.duration > 0 {
                         let activeFraction = fraction(for: location.x, totalWidth: geometry.size.width, isExpanded: true)
                         let rawTargetTime = max(0.0, min(clock.duration, activeFraction * clock.duration))
                         if abs(rawTargetTime - lastHoverRequestedTime) >= 0.05 {
@@ -300,7 +325,7 @@ public struct PlayerScrubberView: View {
                         isHovered = false
                         hoverLocationX = nil
                     }
-                    if !player.isScrubbing {
+                    if showsHoverPreview, !player.isScrubbing {
                         thumbnailEngine.clearCurrent()
                     }
                 }
@@ -315,7 +340,7 @@ public struct PlayerScrubberView: View {
                         let rawTime = max(0.0, min(clock.duration, dragFraction * clock.duration))
                         let targetTime = Self.snapTime(rawTime, duration: clock.duration, chapters: player.chapters)
                         player.updateScrubbing(to: targetTime)
-                        if abs(targetTime - lastHoverRequestedTime) >= 0.05 {
+                        if showsHoverPreview, abs(targetTime - lastHoverRequestedTime) >= 0.05 {
                             let isInitialScrub = (lastHoverRequestedTime < 0)
                             lastHoverRequestedTime = targetTime
                             hoverDebounceTask?.cancel()
@@ -338,14 +363,14 @@ public struct PlayerScrubberView: View {
                         let rawTime = max(0.0, min(clock.duration, dragFraction * clock.duration))
                         let targetTime = Self.snapTime(rawTime, duration: clock.duration, chapters: player.chapters)
                         player.finishScrubbing(to: targetTime)
-                        if !isHovered {
+                        if showsHoverPreview, !isHovered {
                             thumbnailEngine.clearCurrent()
                         }
                     }
             )
             .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isExpanded)
         }
-        .frame(height: 32)
+        .frame(height: compactHeight ?? 32)
     }
 
     // MARK: - Knob Geometry and Physical Center Kinematics

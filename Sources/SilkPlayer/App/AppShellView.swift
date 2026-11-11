@@ -47,8 +47,8 @@ public struct AppShellView: View {
 
     private var rootMinHeight: CGFloat {
         if player.isAudioOnly {
-            // Keep below collapsed frame height minus SwiftUI titlebar safe-area inset so AppKit window.minSize (290/300) governs cleanly
-            return max(200, MusicModeGeometry.collapsedStandardHeight - 40.0)
+            // Keep well below collapsed height minus titlebar safe-area inset (~28-32pt) so AppKit window.minSize governs cleanly
+            return 140.0
         } else if isPlaying || player.isLoaded {
             return 200
         } else {
@@ -444,6 +444,7 @@ public struct AppShellView: View {
         session.appendPlaylistHandler = { [self] paths in
             self.appendPlaylistPaths(paths)
         }
+        session.playlist = playlistManager
         PlayerWindowManager.shared.registerSession(session)
     }
 
@@ -486,14 +487,21 @@ public struct AppShellView: View {
             _ = (window.delegate as? PlayerWindowDelegate)?.ensureHUDAttached(to: window)
         }
         player.hostWindow = window
+        // Never allow SwiftUI's automatic NSWindow autosave/tilingState to override cold-launch sizing.
+        window.isRestorable = false
+        if !window.frameAutosaveName.isEmpty {
+            let autosaveName = window.frameAutosaveName
+            window.setFrameAutosaveName("")
+            NSWindow.removeFrame(usingName: autosaveName)
+        }
+        SilkPlayerApp.purgeSavedWindowFrameAutosave()
         window.toolbar = nil
         window.titlebarSeparatorStyle = .none
         window.acceptsMouseMovedEvents = true
         if player.isAudioOnly {
             player.configureMusicModeChrome(on: window)
         } else {
-            window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
-            window.standardWindowButton(.zoomButton)?.isEnabled = true
+            player.restoreStandardWindowChrome(on: window)
         }
         window.tabbingMode = .disallowed
         window.titleVisibility = .hidden
@@ -535,6 +543,16 @@ public struct AppShellView: View {
                 let centerY = round(screenFrame.minY + (screenFrame.height - defaultH) / 2)
                 let defaultFrame = NSRect(x: centerX, y: centerY, width: defaultW, height: defaultH)
                 window.setFrame(defaultFrame, display: true, animate: false)
+                // Re-apply after initial SwiftUI window presentation settles in case WindowGroup applies a cached frame/tile late.
+                DispatchQueue.main.async { [weak window] in
+                    guard let window = window,
+                          !self.isPlaying,
+                          !self.player.isAudioOnly,
+                          !window.styleMask.contains(.fullScreen) else { return }
+                    if abs(window.frame.width - defaultW) > 1.0 || abs(window.frame.height - defaultH) > 1.0 {
+                        window.setFrame(defaultFrame, display: true, animate: false)
+                    }
+                }
             }
         }
         player.updateTrafficLightsVisibility(animated: false)
