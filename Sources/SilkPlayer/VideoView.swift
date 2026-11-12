@@ -499,7 +499,7 @@ public final class MetalPlayerContainerView: NSView {
         let scalePresets: [(title: String, fraction: Double)] = [
             ("50%", 0.5),
             ("75%", 0.75),
-            (L10n.windowSizeFitEdges, 1.0)
+            ("100%", 1.0)
         ]
 
         let activeWindow = player.hostWindow ?? window ?? NSApp.keyWindow

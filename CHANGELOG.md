@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Context Menu Window Size Presets (Proposal 027 / GitHub Issue #6)**:
-  - Added a `Window Size` submenu (`50%`, `75%`, `100% (Fit Edges)`, and `Default Adaptive Size`) to the video canvas context menu (`MetalPlayerContainerView`), with dynamic boundary state/enablement gating and automatic disablement in fullscreen, audio-only, or unloaded states.
+  - Added a `Window Size` submenu (`50%`, `75%`, `100%`, and `Reset to Default`) to the video canvas context menu (`MetalPlayerContainerView`), with dynamic boundary state/enablement gating and automatic disablement in fullscreen, audio-only, or unloaded states.
   - Refactored window geometry helpers (`PlayerGeometry.adaptiveVideoContentSize`, `windowPresetContentSize`, `windowPresetMenuState`) and `PlayerCore.fitWindow(scale:)` / `resetWindowSize()` with aspect-locked uncropped bounding inside desktop visible limits, temporary `minSize` relaxation, maximized-state reset, and percentage OSD feedback.
 - **Window Live-Resize Precision Dimension HUD (Proposal 023)**:
   - Dynamically floats a translucent, monospaced dimension badge near the cursor during manual window edge resizing.

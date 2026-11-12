@@ -370,7 +370,11 @@ final class GeometryAndTransformTests: XCTestCase {
         let containerView = MetalPlayerContainerView(playerCore: player)
         let menuAt50 = containerView.buildContextMenu(for: player)
         let submenuAt50 = menuAt50.items.first { $0.title == L10n.windowSizeMenu }?.submenu
-        XCTAssertEqual(submenuAt50?.items.count, 5) // 50%, 75%, 100%, separator, reset
+        XCTAssertEqual(submenuAt50?.items.count, 5) // 50%, 75%, 100%, separator, Reset to Default
+        XCTAssertEqual(submenuAt50?.items[0].title, "50%")
+        XCTAssertEqual(submenuAt50?.items[1].title, "75%")
+        XCTAssertEqual(submenuAt50?.items[2].title, "100%")
+        XCTAssertEqual(submenuAt50?.items[4].title, L10n.windowSizeReset)
         XCTAssertEqual(submenuAt50?.items[0].state, .on)
         XCTAssertFalse(submenuAt50?.items[0].isEnabled ?? true)  // 50% current -> disabled
         XCTAssertTrue(submenuAt50?.items[1].isEnabled ?? false)  // 75% -> enabled

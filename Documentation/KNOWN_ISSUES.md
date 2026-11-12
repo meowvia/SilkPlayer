@@ -879,7 +879,7 @@ public enum WindowPresentationState: Equatable {
 
 ### 3. 解决落地（解决版本：`1.6.0`）
 - **合并顶栏重名菜单并移除冗余入口**：在 `PlayerCommands.swift` 将自定义 `CommandMenu(L10n.menuWindow)` 替换为 `CommandGroup(before: .windowList)` 归入系统「窗口」菜单（保留媒体详情、播放列表、窗口置顶及分隔线），并移除 `Menu(L10n.fitToVideo)` 及其废弃本地化键值；
-- **窗口比例调节收拢至右键菜单**：按 [`提案 027`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Documentation/FEATURE_PROPOSALS.md) 在 `1.6.0` 于视频画布右键菜单提供 `50% / 75% / 100%（撑满边缘）` 与「恢复默认自适应大小」入口，并完善 `fitWindow(scale:)` 的 `minSize` 释放、`.maximized` 复位、OSD 提示、边界置灰门控及全屏/纯音频禁用保护。
+- **窗口比例调节收拢至右键菜单**：按 [`提案 027`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Documentation/FEATURE_PROPOSALS.md) 在 `1.6.0` 于视频画布右键菜单提供 `50% / 75% / 100%` 与「恢复默认」入口，并完善 `fitWindow(scale:)` 的 `minSize` 释放、`.maximized` 复位、OSD 提示、边界置灰门控及全屏/纯音频禁用保护。
 
 
 

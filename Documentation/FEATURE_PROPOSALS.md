@@ -967,13 +967,12 @@
 ### 1. 来源与明确决策口径
 对应 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6) 的 4 项建议，经实测评估后最终定调并在 `1.6.0` 提前并入交付（已从 `1.7.0` 候选排期核销）：
 1. **打开视频默认原始尺寸**：**不采纳**。保持当前基于视频比例与桌面安全可用区（`minimumContentSize` / `maximizedContentSize`）的自适应开窗策略，避免高分片源超出桌面可用区或低分片源挤压底栏控件。
-2. **新增窗口快捷缩放档位 & 3. 竖屏视频快速调大**：**合并以右键菜单百分比比例方案解决**。放弃与片源物理像素耦合的固定倍率（在 1080p/4K 片源下极易与桌面可见区上限冲突），改为在视频画面右键菜单提供基于当前影片长宽比与桌面可见区的 `50%`、`75%`、`100%（撑满边缘）` 三档无裁切适配及「恢复默认自适应大小」入口。`100%` 严格贴合桌面可用区最大外接包络（无黑边撑满且不裁切画面与字幕），已达或越界方向自动置灰禁用。
+2. **新增窗口快捷缩放档位 & 3. 竖屏视频快速调大**：**合并以右键菜单百分比比例方案解决**。放弃与片源物理像素耦合的固定倍率（在 1080p/4K 片源下极易与桌面可见区上限冲突），改为在视频画面右键菜单提供基于当前影片长宽比与桌面可见区的 `50%`、`75%`、`100%` 三档无裁切适配及「恢复默认」入口。`100%` 严格贴合桌面可用区最大外接包络（无黑边撑满且不裁切画面与字幕），已达或越界方向自动置灰禁用。
 4. **上方标题显示时长（1~2 秒隐藏）**：**保持现状不变**。空闲自动隐藏默认保持 `1.8` 秒，仅在鼠标停留在控制区保护带、暂停或窗口失焦时保持显示。
 
 ### 2. 已落地实现路径 (`1.6.0`)
 1. **右键菜单扩充百分比档位与边界门控 (`VideoView.swift` / `L10n.swift`)**：
-   - 在 `L10n.swift` 新增 `windowSizeFitEdges`（`100%（撑满边缘）` / `100% (Fit Edges)`）；
-   - 在 `MetalPlayerContainerView.buildContextMenu(for:)` 新增「窗口尺寸 / Window Size」子菜单，提供 `50%`、`75%`、`100%（撑满边缘）` 与「恢复默认自适应大小 (`resetWindowSize()`)」菜单项；在全屏模式、纯音频（`!player.isAudioOnly`）或无已加载媒体时禁用缩放，并根据当前窗口尺寸与可用区边界动态控制各项 `.isEnabled` 与 `.state` 勾选状态。
+   - 在 `MetalPlayerContainerView.buildContextMenu(for:)` 新增「窗口大小 / Window Size」子菜单，提供 `50%`、`75%`、`100%` 与「恢复默认 (`resetWindowSize()`)」菜单项（对应 `L10n.windowSizeMenu` / `windowSizeReset`）；在全屏模式、纯音频（`!player.isAudioOnly`）或无已加载媒体时禁用缩放，并根据当前窗口尺寸与可用区边界动态控制各项 `.isEnabled` 与 `.state` 勾选状态。
 2. **窗口几何与比例包络计算重构 (`PlayerModels.swift` / `PlayerCore+WindowGeometry.swift` / `PlayerWindowManager.swift`)**：
    - 在 `PlayerGeometry` 新增 `adaptiveVideoContentSize(...)`（对 55% 宽度上限取整避免亚像素错位）、`windowPresetContentSize(fraction:aspect:screenVisibleSize:)`（在 `[minimumContentSize, maximizedContentSize]` 间保持原片比例，禁止裁切画面）及 `windowPresetMenuState(...)`（输出 `WindowScalePresetState` 边界状态）；
    - 提取共享辅助方法 `applyVideoWindowContentSize(...)` 统一承载 `applyRotationWindowAdaptation`、`applyAdaptiveWindowGeometry`、`fitWindow(scale:)` 与 `resetWindowSize()`；
