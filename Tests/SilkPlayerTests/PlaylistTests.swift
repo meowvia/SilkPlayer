@@ -1886,5 +1886,32 @@ final class PlaylistRegressionTests: XCTestCase {
 
     XCTAssert(HUDLayoutTier.expanded.showsMoreMenuButton(isAudioOnly: false) == false, "Video expanded hides more menu")
     XCTAssert(HUDLayoutTier.expanded.showsDirectSettingsButton(isAudioOnly: false) == true, "Video expanded shows direct settings button")
+
+    // Vertical/narrow HUD volume layout & clearance invariants across compact/standard/expanded windows
+    XCTAssertFalse(HUDLayoutTier.minimal.supportsInlineHorizontalVolumeExpansion(width: 400, isFullscreen: false))
+    XCTAssertFalse(HUDLayoutTier.compact.supportsInlineHorizontalVolumeExpansion(width: 493, isFullscreen: false), "Default 4:5 portrait compact width uses vertical volume popup")
+    XCTAssertFalse(HUDLayoutTier.compact.supportsInlineHorizontalVolumeExpansion(width: 578, isFullscreen: false), "100% 9:16 portrait compact width uses vertical volume popup")
+    XCTAssertFalse(HUDLayoutTier.standard.supportsInlineHorizontalVolumeExpansion(width: 770, isFullscreen: false), "Standard width < 950pt uses vertical volume popup")
+    XCTAssertFalse(HUDLayoutTier.expanded.supportsInlineHorizontalVolumeExpansion(width: 860, isFullscreen: false), "Narrow expanded width < 950pt avoids colliding with centered controls")
+    XCTAssertTrue(HUDLayoutTier.expanded.supportsInlineHorizontalVolumeExpansion(width: 960, isFullscreen: false), "Wide desktop window expands volume slider inline horizontally")
+    XCTAssertTrue(HUDLayoutTier.expanded.supportsInlineHorizontalVolumeExpansion(width: 930, isFullscreen: true), "Fullscreen window has zero outer padding and supports inline volume expansion at 930pt+")
+
+    // Verify right-wing non-overlap clearance across all tier minimum widths (outer window inset 8pt per side)
+    let windowOuterPadding: CGFloat = 8
+    let minimalAvailable = 280.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.minimal.outerBottomHorizontalPadding + HUDLayoutTier.minimal.wingHorizontalPadding) - 57.0
+    let minimalRightWing = 28.0 * 2.0 + HUDLayoutTier.minimal.wingItemSpacing
+    XCTAssertGreaterThanOrEqual(minimalAvailable, minimalRightWing, "Minimal 280pt min portrait width clears Next button")
+
+    let compactAvailable = 480.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.compact.outerBottomHorizontalPadding + HUDLayoutTier.compact.wingHorizontalPadding) - 61.0
+    let compactRightWingFixed = 28.0 * 4.0 + HUDLayoutTier.compact.wingItemSpacing * 3.0
+    XCTAssertGreaterThanOrEqual(compactAvailable, compactRightWingFixed, "Compact 480pt right wing with fixed 28pt volume icon clears Next button")
+
+    let standardAvailable = 660.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.standard.outerBottomHorizontalPadding + HUDLayoutTier.standard.wingHorizontalPadding) - 103.0
+    let standardRightWingFixed = 28.0 * 5.0 + HUDLayoutTier.standard.wingItemSpacing * 4.0
+    XCTAssertGreaterThanOrEqual(standardAvailable, standardRightWingFixed, "Standard 660pt right wing with fixed 28pt volume icon clears Next button")
+
+    let expandedHorizontalAvailable = 950.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.expanded.outerBottomHorizontalPadding + HUDLayoutTier.expanded.wingHorizontalPadding) - 145.0
+    let expandedRightWingInline = 114.0 + 28.0 * 4.0 + HUDLayoutTier.expanded.wingItemSpacing * 4.0
+    XCTAssertGreaterThanOrEqual(expandedHorizontalAvailable, expandedRightWingInline, "Wide expanded >= 950pt clears centered Next even when inline horizontal slider is expanded")
     }
 }

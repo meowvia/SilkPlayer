@@ -46,7 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **HUD Narrow Window Volume Control Overlap (ISSUE-019)**:
-  - Hid the inline bottom volume slider in `.minimal` layout tier (`< 480 pt` narrow/portrait windows) while keeping a mute/unmute toggle inside the overflow menu, eliminating overlap with the Next button.
+  - Hid the inline bottom volume slider in `.minimal` layout tier (`< 480 pt` narrow/portrait windows) while keeping a mute/unmute toggle inside the overflow menu;
+  - Added width-aware vertical volume popover expansion in `HUDVolumeSlider` for narrow windows (`< 950 pt` windowed / `< 930 pt` fullscreen) and tightened wing margins/spacing in `.compact` and `.standard` tiers so hovering or dragging volume never overlaps the centered Next track button across portrait and compact sizes.
 - **Top Menu Bar Duplicate Window Menu & Fit-to-Video Cleanup (ISSUE-020)**:
   - Replaced the duplicate `Window` `CommandMenu` with `CommandGroup(before: .windowList)` so Media Inspector, Playlist, and Float on Top integrate into the standard macOS Window menu, and removed the redundant `Fit to Video (100% / 200%)` menu item.
 

@@ -861,8 +861,10 @@ public enum WindowPresentationState: Equatable {
    - 在 `< 480 pt` 的竖屏窗口宽度下，右翼同时渲染 `HUDVolumeSlider`（折叠态 `28 pt`、悬停展开 `> 100 pt`）、更多按钮与全屏按钮，总宽超出右侧可用余量，向左侵入并遮挡 `centerControls` 最右侧的“下一首”按钮。
 
 ### 3. 修复落地（解决版本：`1.6.0`）
-- **核心改动**：在 `feature/v1.6.0` 修改 `PlayerHUDView.swift` 中的 `HUDLayoutTier.showsVolumeSlider(isAudioOnly:)` 为 `!isAudioOnly && self != .minimal`，收紧 `.minimal` 档底栏横向边距与右侧间距，并在溢出菜单 (`moreMenuContent`) 保留静音/取消静音入口（同时保留滚轮、方向键及 `M` 键静音控制）；
-- **测试补全**：更新 `Tests/SilkPlayerTests/PlaylistTests.swift` Test 63 断言 `HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false`，已通过回归测试。
+- **核心改动**：
+  - 在 `PlayerHUDView.swift` 中保持 `.minimal`（`< 480 pt`）隐藏底栏音量控件（`HUDLayoutTier.showsVolumeSlider` 返回 `!isAudioOnly && self != .minimal`），并将横向外边距与翼栏间距收紧（`outerBottomHorizontalPadding = 10`，`wingItemSpacing = 6`），在溢出菜单 (`moreMenuContent`) 保留静音/取消静音入口（兼容滚轮、方向键及 `M` 键）；
+  - 为 `480 ..< 950 pt` 桌面窄窗（含 `.compact` 档宽竖屏、`9:16` 放大至 `100%` 的 `578 pt`、`.standard` 与窄 `.expanded`）新增 [`supportsInlineHorizontalVolumeExpansion`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift#L63-L68) 判定，使 [`HUDVolumeSlider`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/HUD/HUDVolumeSlider.swift) 在窄窗下保持固定 `28 pt` 占位并在悬停/拖拽时向上垂直弹出 `32 × 92 pt` 音量条，同时收紧 `.compact` / `.standard` 翼栏边距与间距，消除所有窗口宽度下的遮挡冲突；
+- **测试补全**：更新 `Tests/SilkPlayerTests/PlaylistTests.swift` Test 63，验证 `.minimal` 音量隐藏、各档位全清空间隔余量与 `< 950 pt` 垂直弹出开关。
 
 ---
 

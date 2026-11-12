@@ -58,6 +58,35 @@ public enum HUDLayoutTier: Equatable {
     public func showsDirectSettingsButton(isAudioOnly: Bool) -> Bool {
         isAudioOnly || self == .expanded
     }
+
+    /// Whether horizontal width permits inline leftward expansion of `HUDVolumeSlider`
+    /// without colliding with centered transport controls (`Next`).
+    public func supportsInlineHorizontalVolumeExpansion(width: CGFloat, isFullscreen: Bool = false) -> Bool {
+        guard self == .expanded else { return false }
+        let minimumSafeWidth: CGFloat = isFullscreen ? 930 : 950
+        return width >= minimumSafeWidth
+    }
+
+    public var outerBottomHorizontalPadding: CGFloat {
+        self == .minimal ? 10 : 16
+    }
+
+    public var wingHorizontalPadding: CGFloat {
+        switch self {
+        case .minimal: return 0
+        case .compact: return 4
+        case .standard: return 8
+        case .expanded: return 16
+        }
+    }
+
+    public var wingItemSpacing: CGFloat {
+        switch self {
+        case .minimal: return 6
+        case .compact, .standard: return 8
+        case .expanded: return 12
+        }
+    }
 }
 
 @MainActor
@@ -405,7 +434,7 @@ public struct PlayerHUDView: View {
         VStack(spacing: tier == .minimal ? 6 : 8) {
             // 1. Sleek Scrubber Progress Section (Directly embedded on video canvas)
             PlayerProgressSection(player: player, clock: player.clock, playlist: playlist, tier: tier)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, tier == .minimal ? 6 : 16)
 
             // 2. Cohesive Transport and Functional Controls
             ZStack(alignment: .center) {
@@ -416,12 +445,13 @@ public struct PlayerHUDView: View {
                 HStack(alignment: .center, spacing: 0) {
                     leftWingControls(tier: tier)
                     Spacer()
-                    rightWingControls(tier: tier)
+                    rightWingControls(tier: tier, width: width)
                 }
-                .padding(.horizontal, tier == .minimal ? 0 : 16)
+                .padding(.horizontal, tier.wingHorizontalPadding)
             }
+            .zIndex(20)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, tier.outerBottomHorizontalPadding)
         .padding(.top, 24)
         .padding(.bottom, 14)
         .background(
@@ -564,7 +594,7 @@ public struct PlayerHUDView: View {
     @ViewBuilder
     private func leftWingControls(tier: HUDLayoutTier) -> some View {
         let isAudio = player.isAudioOnly
-        HStack(spacing: tier == .minimal ? 10 : 12) {
+        HStack(spacing: tier.wingItemSpacing) {
             // 0. 播放模式 (顺序播放 / 列表循环 / 单曲循环 / 随机播放)
             PlaybackModeButton(playlist: playlist)
 
@@ -603,12 +633,16 @@ public struct PlayerHUDView: View {
 
     // MARK: - Right Wing Controls (Volume, Tracks, Subtitles, More, Settings, Fullscreen)
     @ViewBuilder
-    private func rightWingControls(tier: HUDLayoutTier) -> some View {
+    private func rightWingControls(tier: HUDLayoutTier, width: CGFloat) -> some View {
         let isAudio = player.isAudioOnly
-        HStack(spacing: tier == .minimal ? 8 : 12) {
-            // 0. 音量微调滑块 (纯音频模式下隐藏，统一走滚轮/触控板手势与键盘上下键调节)
+        let inlineVolumeExpanded = tier.supportsInlineHorizontalVolumeExpansion(
+            width: width,
+            isFullscreen: player.isFullscreen
+        )
+        HStack(spacing: tier.wingItemSpacing) {
+            // 0. 音量微调滑块 (窄窗口切换为向上垂直弹出，避免横向挤压居中“下一首”按钮；纯音频模式隐藏)
             if tier.showsVolumeSlider(isAudioOnly: isAudio) {
-                HUDVolumeSlider(player: player)
+                HUDVolumeSlider(player: player, expandVertically: !inlineVolumeExpanded)
             }
 
             // 1. 音轨选择原生菜单 (仅视频模式 expanded/standard 直显)

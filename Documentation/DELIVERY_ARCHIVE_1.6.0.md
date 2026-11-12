@@ -108,8 +108,8 @@
 - **右键窗口比例子菜单 (Proposal 027 / GitHub Issue #6)**：
   - `VideoView.swift` (`MetalPlayerContainerView.buildContextMenu(for:)`) 与 `L10n.swift` (`windowSizeMenu` / `windowSizeReset`) 新增「窗口大小 / Window Size」子菜单，提供 `50%`、`75%`、`100%` 与「恢复默认 (`resetWindowSize()`)」，在全屏、纯音频（`!player.isAudioOnly`）或无已加载媒体时自动禁用，并按当前窗口包络与边界状态控制菜单勾选与置灰；
   - `PlayerModels.swift` (`PlayerGeometry.adaptiveVideoContentSize` / `windowPresetContentSize` / `windowPresetMenuState` / `WindowScalePresetState`) 与 `Player/PlayerCore+WindowGeometry.swift` 统一收敛旋转与百分比开窗尺寸逻辑，确保所有档位在桌面可用区内保持原片比例且零画面/字幕裁切，并修复 `fitWindow(scale:)` 的 `window.minSize` 临时释放/恢复、`.maximized` 状态经 `PlayerWindowDelegate.resetInteractiveModeToNormal()` 复位及百分比 OSD 反馈。
-- **竖屏/极窄窗口底栏音量按钮重叠修复 (ISSUE-019)**：
-  - `PlayerHUDView.swift` 在 `.minimal` 档位下隐藏底栏内联音量滑块，收紧边距与右侧间距，并在溢出菜单 (`moreMenuContent`) 补充静音开关；`PlaylistTests.swift` Test 63 同步更新断言 `HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false`。
+- **竖屏/窄窗口底栏音量滑块重叠与垂直弹出修复 (ISSUE-019)**：
+  - `PlayerHUDView.swift` 在 `.minimal` 档（`< 480 pt`）隐藏底栏音量控件并在 `moreMenuContent` 补充静音入口，同时在 [`HUDVolumeSlider.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/HUD/HUDVolumeSlider.swift) 引入宽度自适应垂直弹出模式：当窗口宽度 `< 950 pt`（全屏 `< 930 pt`）时保持底栏 `28 pt` 固定占位，悬停或拖拽时向上弹出 `32 × 92 pt` 垂直音量滑块，并收紧各档边距与间距；`PlaylistTests.swift` Test 63 同步验证 `.minimal` 隐藏与全档位非重叠空间余量。
 - **顶栏重名「窗口」菜单合并与冗余入口清理 (ISSUE-020)**：
   - `PlayerCommands.swift` 将独立 `CommandMenu(L10n.menuWindow)` 替换为 `CommandGroup(before: .windowList)` 归入系统标准窗口菜单，并移除冗余 `Menu(L10n.fitToVideo)` 及其废弃本地化字段。
 
