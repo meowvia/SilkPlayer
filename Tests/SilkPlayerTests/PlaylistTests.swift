@@ -1784,6 +1784,34 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(UpdateService.compareVersions("1.6.1", "1.6.0") == .orderedDescending, "1.6.1 is newer than 1.6.0")
     XCTAssert(UpdateService.compareVersions("1.5.0", "1.6.0") == .orderedAscending, "1.5.0 is older than 1.6.0")
     XCTAssert(UpdateService.compareVersions("1.6.0", "1.6.0") == .orderedSame, "Identical versions compare as equal")
+    XCTAssertEqual(
+        UpdateService.resolveDownloadURLString(version: "1.6.1"),
+        "https://github.com/meowvia/SilkPlayer/releases/download/1.6.1/SilkPlayer-1.6.1-universal.dmg",
+        "Default update URL targets the Universal DMG asset"
+    )
+    XCTAssertEqual(
+        UpdateService.resolveDownloadURLString(
+            version: "1.6.1",
+            assets: [
+                ["name": "SilkPlayer-1.6.1-arm64.dmg", "browser_download_url": "https://example.com/arm64.dmg"],
+                ["name": "SilkPlayer-1.6.1-universal.dmg", "browser_download_url": "https://example.com/universal.dmg"]
+            ],
+            preferredArch: "arm64"
+        ),
+        "https://example.com/universal.dmg",
+        "Universal DMG asset takes priority over single-arch packages when available"
+    )
+    XCTAssertEqual(
+        UpdateService.resolveDownloadURLString(
+            version: "1.6.1",
+            assets: [
+                ["name": "SilkPlayer-1.6.1-arm64.dmg", "browser_download_url": "https://example.com/arm64.dmg"]
+            ],
+            preferredArch: "arm64"
+        ),
+        "https://example.com/arm64.dmg",
+        "Falls back to matching architecture DMG if only arch-specific assets exist"
+    )
 
     let updateService = UpdateService.shared
     updateService.latestVersion = "1.6.1"

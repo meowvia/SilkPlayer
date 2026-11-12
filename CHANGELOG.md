@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Standardized on ITU-R BT.2408 diffuse white reference level ($Y \le 1.0$) for 1:1 uncompressed absolute fidelity.
   - Implemented $C^1$-continuous rational shoulder roll-off for extreme highlights, scaling RGB channels proportionately to prevent solarization, cloud blowout, and chromaticity shift on both Apple XDR and SDR screens.
 - **Smart Silent Update & Lossless In-Place Overwrite Installer (Proposal 020)**:
-  - Built-in `UpdateService` providing asynchronous background release checking against GitHub API.
+  - Built-in `UpdateService` providing asynchronous background release checking against GitHub API, resolving `-universal.dmg` release assets first via `resolveDownloadURLString` (with architecture fallback).
   - Cold-start prompt displays target latest version number with minimal binary choice ("Yes" / "No") and 7-day quiet cadence gatekeeper upon dismissal.
   - Persistent 6pt red dot indicator on the Settings "About" tab when an update is pending.
   - End-to-end in-place lossless updater replacing `/Applications/SilkPlayer.app` cleanly while 100% preserving all user history, playlists, and preferences.

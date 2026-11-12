@@ -57,11 +57,11 @@
   - 实现克制且闭环的端内更新生态，保障零侵扰观影与用户配置数据无损。
 - **技术实现路径**:
   - 封装 `@Observable public final class UpdateService`；
-  - 冷启动后台异步检测 GitHub 最新版本；
+  - 冷启动后台异步检测 GitHub 最新版本，并通过 `resolveDownloadURLString(version:assets:preferredArch:)` 解析 Release 资产列表，优先下载 `-universal.dmg` 通用镜像（兼容单架构包回退）；
   - 弹窗直观显示最新版本号（“发现新版本 x.x.x，是否立即更新？”），仅提供“是”与“否”；
   - 点击“否”记录时间戳，开启 7 天绝对静默门禁，期间冷启动不再弹窗；
   - 设置面板“关于”Tab 图标常驻 6pt 微型红点（不受“否”影响）；
-  - 点击“是”端内下载架构匹配的 DMG 镜像，唤起后台静默替换脚本，原子替换 `/Applications/SilkPlayer.app` 并重启，100% 保护所有应用支持数据与偏好配置。
+  - 点击“是”端内下载匹配的 Universal DMG 镜像，唤起后台静默替换脚本，原子替换 `/Applications/SilkPlayer.app` 并重启，100% 保护所有应用支持数据与偏好配置。
 - **交付资产**:
   - `Sources/SilkPlayer/Shared/UpdateService.swift`
   - `AppDelegate.swift` 冷启动异步触发
