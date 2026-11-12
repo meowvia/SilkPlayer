@@ -13,12 +13,14 @@ public final class UpdateService {
     public private(set) var isDownloading: Bool = false
     public private(set) var downloadProgress: Double = 0.0
     public var latestVersion: String? = nil
+    public var latestDownloadURL: String? = nil
 
     public var isShowingUpdateAlert: Bool = false
     public var isShowingUpToDateAlert: Bool = false
     public var alertErrorMessage: String? = nil
 
     private let userDefaultsLatestVersionKey = "SilkPlayer.Update.LatestVersion"
+    private let userDefaultsLatestDownloadURLKey = "SilkPlayer.Update.LatestDownloadURL"
     private let userDefaultsHasPendingUpdateKey = "SilkPlayer.Update.HasPendingUpdate"
     private let userDefaultsLastColdStartReminderKey = "SilkPlayer.Update.LastColdStartReminderDate"
 
@@ -38,6 +40,9 @@ public final class UpdateService {
     public init() {
         if let savedLatest = UserDefaults.standard.string(forKey: userDefaultsLatestVersionKey) {
             self.latestVersion = savedLatest
+        }
+        if let savedURL = UserDefaults.standard.string(forKey: userDefaultsLatestDownloadURLKey) {
+            self.latestDownloadURL = savedURL
         }
     }
 
@@ -126,6 +131,8 @@ public final class UpdateService {
                 }
 
                 let remoteVersion = rawTagName.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
+                let assets = json["assets"] as? [[String: Any]]
+                let resolvedDownloadURL = Self.resolveDownloadURLString(version: remoteVersion, assets: assets)
 
                 await MainActor.run {
                     guard let self = self else { return }
@@ -134,12 +141,16 @@ public final class UpdateService {
 
                     if comparison == .orderedDescending {
                         self.latestVersion = remoteVersion
+                        self.latestDownloadURL = resolvedDownloadURL
                         self.hasPendingUpdate = true
                         UserDefaults.standard.set(remoteVersion, forKey: self.userDefaultsLatestVersionKey)
+                        UserDefaults.standard.set(resolvedDownloadURL, forKey: self.userDefaultsLatestDownloadURLKey)
                         completion(true, remoteVersion)
                     } else {
+                        self.latestDownloadURL = nil
                         self.hasPendingUpdate = false
                         UserDefaults.standard.removeObject(forKey: self.userDefaultsLatestVersionKey)
+                        UserDefaults.standard.removeObject(forKey: self.userDefaultsLatestDownloadURLKey)
                         completion(false, nil)
                     }
                 }
@@ -147,6 +158,45 @@ public final class UpdateService {
                 await MainActor.run { completion(false, nil) }
             }
         }
+    }
+
+    public nonisolated static func resolveDownloadURLString(
+        version: String,
+        assets: [[String: Any]]? = nil,
+        preferredArch: String? = nil
+    ) -> String {
+        let resolvedArch: String = {
+            if let preferredArch { return preferredArch }
+            #if arch(arm64)
+            return "arm64"
+            #else
+            return "x86_64"
+            #endif
+        }()
+
+        let candidateNames = [
+            "SilkPlayer-\(version)-universal.dmg",
+            "SilkPlayer-\(version).dmg",
+            "SilkPlayer-\(version)-\(resolvedArch).dmg"
+        ]
+
+        if let assets {
+            for candidate in candidateNames {
+                if let match = assets.first(where: { ($0["name"] as? String) == candidate }),
+                   let downloadURL = match["browser_download_url"] as? String,
+                   !downloadURL.isEmpty {
+                    return downloadURL
+                }
+            }
+            if let universalDMG = assets.first(where: {
+                guard let name = $0["name"] as? String else { return false }
+                return name.hasSuffix(".dmg") && name.localizedCaseInsensitiveContains("universal")
+            }), let downloadURL = universalDMG["browser_download_url"] as? String, !downloadURL.isEmpty {
+                return downloadURL
+            }
+        }
+
+        return "https://github.com/meowvia/SilkPlayer/releases/download/\(version)/SilkPlayer-\(version)-universal.dmg"
     }
 
     // MARK: - User Decisions
@@ -166,19 +216,22 @@ public final class UpdateService {
         isDownloading = true
         downloadProgress = 0.05
 
-        #if arch(arm64)
-        let dmgName = "SilkPlayer-\(version)-arm64.dmg"
-        #else
-        let dmgName = "SilkPlayer-\(version)-x86_64.dmg"
-        #endif
+        let downloadURLString: String
+        if let cachedURL = latestDownloadURL,
+           !cachedURL.isEmpty,
+           latestVersion == version {
+            downloadURLString = cachedURL
+        } else {
+            downloadURLString = Self.resolveDownloadURLString(version: version)
+        }
 
-        let downloadURLString = "https://github.com/meowvia/SilkPlayer/releases/download/\(version)/\(dmgName)"
         guard let downloadURL = URL(string: downloadURLString) else {
             isDownloading = false
             alertErrorMessage = L10n.tr("Invalid download URL", "下载地址无效")
             return
         }
 
+        let dmgName = downloadURL.lastPathComponent.isEmpty ? "SilkPlayer-\(version)-universal.dmg" : downloadURL.lastPathComponent
         let tempDir = FileManager.default.temporaryDirectory
         let targetDMG = tempDir.appendingPathComponent(dmgName)
 

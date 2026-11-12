@@ -1786,6 +1786,34 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(UpdateService.compareVersions("1.6.1", "1.6.0") == .orderedDescending, "1.6.1 is newer than 1.6.0")
     XCTAssert(UpdateService.compareVersions("1.5.0", "1.6.0") == .orderedAscending, "1.5.0 is older than 1.6.0")
     XCTAssert(UpdateService.compareVersions("1.6.0", "1.6.0") == .orderedSame, "Identical versions compare as equal")
+    XCTAssertEqual(
+        UpdateService.resolveDownloadURLString(version: "1.6.1"),
+        "https://github.com/meowvia/SilkPlayer/releases/download/1.6.1/SilkPlayer-1.6.1-universal.dmg",
+        "Default update URL targets the Universal DMG asset"
+    )
+    XCTAssertEqual(
+        UpdateService.resolveDownloadURLString(
+            version: "1.6.1",
+            assets: [
+                ["name": "SilkPlayer-1.6.1-arm64.dmg", "browser_download_url": "https://example.com/arm64.dmg"],
+                ["name": "SilkPlayer-1.6.1-universal.dmg", "browser_download_url": "https://example.com/universal.dmg"]
+            ],
+            preferredArch: "arm64"
+        ),
+        "https://example.com/universal.dmg",
+        "Universal DMG asset takes priority over single-arch packages when available"
+    )
+    XCTAssertEqual(
+        UpdateService.resolveDownloadURLString(
+            version: "1.6.1",
+            assets: [
+                ["name": "SilkPlayer-1.6.1-arm64.dmg", "browser_download_url": "https://example.com/arm64.dmg"]
+            ],
+            preferredArch: "arm64"
+        ),
+        "https://example.com/arm64.dmg",
+        "Falls back to matching architecture DMG if only arch-specific assets exist"
+    )
 
     let updateService = UpdateService.shared
     updateService.latestVersion = "1.6.1"
@@ -1840,9 +1868,12 @@ final class PlaylistRegressionTests: XCTestCase {
         XCTAssert(tier.retainsPrevNextButtons == true, "Music mode retains prev/next buttons in \(tier)")
     }
 
-    // Video mode remains completely unaffected across every tier
-    XCTAssert(HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == true, "Video minimal shows volume slider")
+    // Video mode hides inline volume slider on minimal tier (ISSUE-019) and retains fullscreen button
+    XCTAssert(HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false, "Video minimal hides inline volume slider")
     XCTAssert(HUDLayoutTier.minimal.showsFullscreenButton(isAudioOnly: false) == true, "Video minimal retains fullscreen button")
+    XCTAssert(HUDLayoutTier.compact.showsVolumeSlider(isAudioOnly: false) == true, "Video compact shows volume slider")
+    XCTAssert(HUDLayoutTier.standard.showsVolumeSlider(isAudioOnly: false) == true, "Video standard shows volume slider")
+    XCTAssert(HUDLayoutTier.expanded.showsVolumeSlider(isAudioOnly: false) == true, "Video expanded shows volume slider")
     XCTAssert(HUDLayoutTier.minimal.showsSpeedButton(isAudioOnly: false) == false, "Video minimal hides speed button")
     XCTAssert(HUDLayoutTier.minimal.showsSubtitleTrackButton(isAudioOnly: false) == false, "Video minimal hides subtitle button")
     XCTAssert(HUDLayoutTier.minimal.showsMoreMenuButton(isAudioOnly: false) == true, "Video minimal shows more menu")
@@ -1859,5 +1890,32 @@ final class PlaylistRegressionTests: XCTestCase {
 
     XCTAssert(HUDLayoutTier.expanded.showsMoreMenuButton(isAudioOnly: false) == false, "Video expanded hides more menu")
     XCTAssert(HUDLayoutTier.expanded.showsDirectSettingsButton(isAudioOnly: false) == true, "Video expanded shows direct settings button")
+
+    // Vertical/narrow HUD volume layout & clearance invariants across compact/standard/expanded windows
+    XCTAssertFalse(HUDLayoutTier.minimal.supportsInlineHorizontalVolumeExpansion(width: 400, isFullscreen: false))
+    XCTAssertFalse(HUDLayoutTier.compact.supportsInlineHorizontalVolumeExpansion(width: 493, isFullscreen: false), "Default 4:5 portrait compact width uses vertical volume popup")
+    XCTAssertFalse(HUDLayoutTier.compact.supportsInlineHorizontalVolumeExpansion(width: 578, isFullscreen: false), "100% 9:16 portrait compact width uses vertical volume popup")
+    XCTAssertFalse(HUDLayoutTier.standard.supportsInlineHorizontalVolumeExpansion(width: 770, isFullscreen: false), "Standard width < 950pt uses vertical volume popup")
+    XCTAssertFalse(HUDLayoutTier.expanded.supportsInlineHorizontalVolumeExpansion(width: 860, isFullscreen: false), "Narrow expanded width < 950pt avoids colliding with centered controls")
+    XCTAssertTrue(HUDLayoutTier.expanded.supportsInlineHorizontalVolumeExpansion(width: 960, isFullscreen: false), "Wide desktop window expands volume slider inline horizontally")
+    XCTAssertTrue(HUDLayoutTier.expanded.supportsInlineHorizontalVolumeExpansion(width: 930, isFullscreen: true), "Fullscreen window has zero outer padding and supports inline volume expansion at 930pt+")
+
+    // Verify right-wing non-overlap clearance across all tier minimum widths (outer window inset 8pt per side)
+    let windowOuterPadding: CGFloat = 8
+    let minimalAvailable = 280.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.minimal.outerBottomHorizontalPadding + HUDLayoutTier.minimal.wingHorizontalPadding) - 57.0
+    let minimalRightWing = 28.0 * 2.0 + HUDLayoutTier.minimal.wingItemSpacing
+    XCTAssertGreaterThanOrEqual(minimalAvailable, minimalRightWing, "Minimal 280pt min portrait width clears Next button")
+
+    let compactAvailable = 480.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.compact.outerBottomHorizontalPadding + HUDLayoutTier.compact.wingHorizontalPadding) - 61.0
+    let compactRightWingFixed = 28.0 * 4.0 + HUDLayoutTier.compact.wingItemSpacing * 3.0
+    XCTAssertGreaterThanOrEqual(compactAvailable, compactRightWingFixed, "Compact 480pt right wing with fixed 28pt volume icon clears Next button")
+
+    let standardAvailable = 660.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.standard.outerBottomHorizontalPadding + HUDLayoutTier.standard.wingHorizontalPadding) - 103.0
+    let standardRightWingFixed = 28.0 * 5.0 + HUDLayoutTier.standard.wingItemSpacing * 4.0
+    XCTAssertGreaterThanOrEqual(standardAvailable, standardRightWingFixed, "Standard 660pt right wing with fixed 28pt volume icon clears Next button")
+
+    let expandedHorizontalAvailable = 950.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.expanded.outerBottomHorizontalPadding + HUDLayoutTier.expanded.wingHorizontalPadding) - 145.0
+    let expandedRightWingInline = 114.0 + 28.0 * 4.0 + HUDLayoutTier.expanded.wingItemSpacing * 4.0
+    XCTAssertGreaterThanOrEqual(expandedHorizontalAvailable, expandedRightWingInline, "Wide expanded >= 950pt clears centered Next even when inline horizontal slider is expanded")
     }
 }

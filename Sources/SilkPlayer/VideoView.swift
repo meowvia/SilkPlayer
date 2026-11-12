@@ -439,7 +439,13 @@ public final class MetalPlayerContainerView: NSView {
 
     override public func menu(for event: NSEvent) -> NSMenu? {
         guard let player = playerCore, !player.isAudioOnly else { return nil }
+        return buildContextMenu(for: player)
+    }
+
+    /// Constructs the video canvas context menu (exposed for unit verification of fullscreen gating and presets).
+    public func buildContextMenu(for player: PlayerCore) -> NSMenu {
         let menu = NSMenu()
+        menu.autoenablesItems = false
 
         let rotateCW = NSMenuItem(
             title: L10n.tr("Rotate 90° Clockwise", "顺时针旋转 90°"),
@@ -485,6 +491,92 @@ public final class MetalPlayerContainerView: NSView {
         flipV.state = player.transform.flipV ? .on : .off
         menu.addItem(flipV)
 
+        menu.addItem(.separator())
+
+        let isFullscreenWindow = player.isFullscreen || (window?.styleMask.contains(.fullScreen) == true)
+        let canScaleWindow = !isFullscreenWindow && !player.isAudioOnly && player.videoWidth > 0 && player.videoHeight > 0
+
+        let scaleSubmenu = NSMenu()
+        scaleSubmenu.autoenablesItems = false
+        let scalePresets: [(title: String, fraction: Double)] = [
+            ("50%", 0.5),
+            ("75%", 0.75),
+            ("100%", 1.0)
+        ]
+
+        let activeWindow = player.hostWindow ?? window ?? NSApp.keyWindow
+        let screenVisibleSize = (activeWindow?.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)).size
+        let currentSize = activeWindow?.frame.size ?? .zero
+        let aspect = player.effectiveAspectRatio
+        let minSz = PlayerGeometry.minimumContentSize(for: aspect, screenVisibleHeight: screenVisibleSize.height)
+        let maxSz = PlayerGeometry.maximizedContentSize(for: aspect, screenVisibleSize: screenVisibleSize)
+
+        for preset in scalePresets {
+            let item = NSMenuItem(
+                title: preset.title,
+                action: #selector(handleFitWindowScale(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = preset.fraction
+            if canScaleWindow {
+                let targetSize = PlayerGeometry.windowPresetContentSize(
+                    fraction: CGFloat(preset.fraction),
+                    aspect: aspect,
+                    screenVisibleSize: screenVisibleSize
+                )
+                let state = PlayerGeometry.windowPresetMenuState(
+                    targetSize: targetSize,
+                    currentSize: currentSize,
+                    minSize: minSz,
+                    maxSize: maxSz
+                )
+                item.isEnabled = state.isEnabled
+                item.state = state.isCurrent ? .on : .off
+            } else {
+                item.isEnabled = false
+                item.state = .off
+            }
+            scaleSubmenu.addItem(item)
+        }
+
+        scaleSubmenu.addItem(.separator())
+
+        let resetSizeItem = NSMenuItem(
+            title: L10n.windowSizeReset,
+            action: #selector(handleResetWindowSize(_:)),
+            keyEquivalent: ""
+        )
+        resetSizeItem.target = self
+        if canScaleWindow {
+            let rawW = CGFloat(player.displayVideoWidth > 0 ? player.displayVideoWidth : player.videoWidth)
+            let rawH = CGFloat(player.displayVideoHeight > 0 ? player.displayVideoHeight : player.videoHeight)
+            let baseW = player.transform.isPerpendicular ? rawH : rawW
+            let adaptiveSize = PlayerGeometry.adaptiveVideoContentSize(
+                for: aspect,
+                isVertical: player.isEffectiveVertical,
+                rawVideoWidth: baseW,
+                screenVisibleSize: screenVisibleSize
+            )
+            let resetState = PlayerGeometry.windowPresetMenuState(
+                targetSize: adaptiveSize,
+                currentSize: currentSize,
+                minSize: minSz,
+                maxSize: maxSz
+            )
+            resetSizeItem.isEnabled = resetState.isEnabled
+            resetSizeItem.state = resetState.isCurrent ? .on : .off
+        } else {
+            resetSizeItem.isEnabled = false
+            resetSizeItem.state = .off
+        }
+        scaleSubmenu.addItem(resetSizeItem)
+
+        let windowSizeItem = NSMenuItem(title: L10n.windowSizeMenu, action: nil, keyEquivalent: "")
+        windowSizeItem.submenu = scaleSubmenu
+        windowSizeItem.isEnabled = canScaleWindow
+        menu.addItem(windowSizeItem)
+
         return menu
     }
 
@@ -506,6 +598,15 @@ public final class MetalPlayerContainerView: NSView {
 
     @objc private func handleFlipV(_ sender: Any?) {
         playerCore?.toggleFlipVertical()
+    }
+
+    @objc private func handleFitWindowScale(_ sender: NSMenuItem) {
+        guard let scale = sender.representedObject as? Double else { return }
+        playerCore?.fitWindow(scale: scale)
+    }
+
+    @objc private func handleResetWindowSize(_ sender: Any?) {
+        playerCore?.resetWindowSize()
     }
 
     override public func hitTest(_ point: NSPoint) -> NSView? {
