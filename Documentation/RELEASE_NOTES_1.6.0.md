@@ -2,34 +2,36 @@
 
 ## 版本概括 / Overview
 
-SilkPlayer 1.6.0 新增偏好设置界面重构、窗口拉伸实时尺寸提示、HDR 动态高光映射优化、右键窗口比例预设及 Universal 通用镜像更新支持，并修复了菜单栏与窄窗口底栏控件布局问题。
-SilkPlayer 1.6.0 introduces a redesigned Settings interface, live window resize dimensions, improved HDR highlight tone-mapping, context menu window size presets, and Universal update support, along with menu bar and narrow-window control fixes.
+基于 1.5.1 版本，SilkPlayer 1.6.0 新增偏好设置界面重构、窗口拉伸实时尺寸提示、右键窗口大小预设、HDR 动态高光映射与跳转稳定性优化以及内置版本检查更新，并统一优化了竖屏与窄窗口下的交互布局。
+Building on version 1.5.1, SilkPlayer 1.6.0 introduces a redesigned Settings window, live window resize dimensions, context menu window size presets, improved HDR highlight tone-mapping and seek stability, and built-in update checking, along with refined layouts for portrait and narrow windows.
 
 ---
 
 ## 核心特性 / Key Features
 
-- **窗口拉伸实时尺寸与画幅比例 / Live Window Resize Dimensions**:
-  - 拖拽调整窗口大小时，在光标附近实时显示当前像素尺寸（如 `1920 × 1080`）与标准画幅比例（`16:9`、`4:3`、`21:9` 等）；匹配片源原始分辨率时显示 `100%` 标识。
-  - Displays live pixel dimensions and standard aspect ratios near the cursor while resizing, showing a `100%` badge when matching the video's native resolution.
-- **视频右键窗口大小预设 / Context Menu Window Size Presets**:
-  - 视频画面右键「窗口大小」子菜单提供 `50%`、`75%`、`100%` 与「恢复默认」选项；基于当前视频长宽比与桌面可用区自动贴合边缘且不裁切画面与字幕，已达当前档位或越界方向自动置灰，全屏、纯音频或无媒体时自动禁用。
-  - Added a `Window Size` right-click submenu (`50%`, `75%`, `100%`, `Reset to Default`) that fits the video aspect ratio inside the desktop visible area without cropping frames or subtitles, with boundary item gating and automatic disablement in fullscreen, audio-only, or unloaded states.
-- **重构偏好设置窗口 / Redesigned Settings**:
-  - 将设置整合为「通用」、「播放」、「关于」三个标签页（520 × 490 pt 固定布局），新增全屏时钟显示、截图格式与存储路径选择、快进快退步长调节及鼠标滚轮行为配置。
-  - Consolidated preferences into General, Playback, and About tabs (fixed 520 × 490 pt layout), adding a fullscreen clock overlay, screenshot format and path options, seek interval settings, and mouse wheel actions.
-- **HDR 高光渲染优化 / Improved HDR Highlights**:
-  - 优化 HDR10 与杜比视界在高光区域的动态色调映射，基于屏幕实际 EDR 余量平滑压缩高光细节，减少过曝发白。
-  - Improved dynamic highlight tone-mapping for HDR10 and Dolby Vision based on screen EDR headroom to preserve bright scene details.
-- **播放列表侧边拉手改进 / Refined Playlist Handle**:
-  - 播放列表侧边拉手改用透明细线框并紧贴窗口边缘，减少对画面的遮挡。
-  - Redesigned the playlist drawer handle with a transparent three-sided outline flush against the window edge to minimize video obstruction.
+- **偏好设置界面重构 / Redesigned Settings Window**:
+  - 将原有设置整合为「通用」、「播放」、「关于」三个标签页，采用 520 × 490 pt 固定窗口布局，精简次级开关，在「通用」中提供启动视窗行为选项，并在「播放」中新增媒体播放历史保留开关。
+  - Consolidated Settings into General, Playback, and About tabs in a fixed 520 × 490 pt layout, streamlined redundant toggles, added Startup Window behavior options in General, and added a Playback History retention toggle under Playback.
+- **窗口拉伸实时尺寸与右键大小预设 / Live Resize Dimensions & Context Menu Presets**:
+  - 拖拽调整窗口边缘时，在窗口顶部居中实时显示当前像素尺寸（如 `1920 × 1080`）与标准画幅比例（`16:9`、`4:3`、`21:9`、`2.39:1` 等），匹配片源原始分辨率时显示 `100%` 标识。
+  - Displays live pixel dimensions and standard aspect ratios at the top-center of the window while resizing, with a `100%` badge when matching native video resolution.
+  - 视频画面右键新增「窗口大小」子菜单，提供 `50%`、`75%`、`100%` 与「恢复默认」选项，在桌面可用区内保持原片长宽比缩放且不裁切画面与字幕。
+  - Added a `Window Size` right-click submenu (`50%`, `75%`, `100%`, and `Reset to Default`) to scale windows inside the desktop visible area without cropping frames or subtitles.
+- **HDR 动态高光映射与渲染优化 / Improved HDR Highlights & Core Stability**:
+  - 优化 HDR10 与杜比视界在高光区域的动态色调映射，结合显示器 EDR 余量平滑压缩高光细节，减少过曝发白。
+  - Improved dynamic highlight tone-mapping for HDR10 and Dolby Vision using display EDR headroom to preserve highlight details.
+  - 优化底层解码缓冲大小与跳转时的纹理缓存清理策略，减少拖拽跳转时的画面闪回与卡顿。
+  - Improved demuxer buffer sizing and texture cache flushing during seeks to reduce frame flashback and stuttering.
 - **检查更新与端内升级 / Check for Updates & In-Place Upgrades**:
-  - 支持冷启动低频后台检测与在「关于」面板手动检查 GitHub 新版本；确认更新后自动下载 Universal 通用镜像并在位无损替换应用，保留历史记录与偏好配置。
-  - Added quiet cold-start and manual release checks in About, downloading the Universal DMG image for lossless in-place upgrades while preserving history and preferences.
-- **界面与菜单栏修复 / Interface & Menu Bar Fixes**:
-  - 合并顶部菜单栏重复「窗口」条目并移除失效尺寸菜单；修复竖屏与极窄窗口下底栏音量滑块与「下一首」按钮重叠的问题，并在溢出菜单补充静音入口。
-  - Consolidated duplicate top Window menu items and removed the redundant size menu; fixed bottom volume slider overlap with the Next button in narrow/portrait windows and added mute to the overflow menu.
+  - 新增启动后台版本检测与「关于」面板手动检查更新，支持 7 天静默提醒周期、更新红点标记以及在位下载替换升级（保留历史记录与偏好设置）。
+  - Added startup background and manual release checks in About with a 7-day snooze period, badge indicator, and in-place upgrades that preserve user history and preferences.
+- **界面交互与菜单优化 / Interface & Menu Refinements**:
+  - 播放列表侧边拉手改为透明三边细线框并紧贴窗口边缘，减少对视频画面的遮挡。
+  - Redesigned the playlist drawer handle as a border-flush transparent outline to reduce video obstruction.
+  - 优化音乐模式及竖屏/窄窗口底栏控制布局：纯音频模式仅保留核心控制入口；窄窗口下通过纵向弹出音量条及精简间距，避免调节音量时遮挡「下一首」按钮。
+  - Streamlined bottom HUD controls for music mode and portrait/narrow windows, using a vertical volume popover on narrow windows so volume adjustments stay clear of the Next button.
+  - 将媒体检查器、播放列表与置顶控制并入系统标准「窗口」菜单，消除菜单栏重复的「窗口」项。
+  - Merged Media Inspector, Playlist, and Float on Top controls into the native macOS Window menu, eliminating the duplicate Window menu bar item.
 
 ---
 
@@ -43,9 +45,9 @@ SilkPlayer 1.6.0 introduces a redesigned Settings interface, live window resize 
 
 ## 安装方式 / Installation
 
-1. 下载并打开通用安装包 `SilkPlayer-1.6.0-universal.dmg`；
+1. 下载并打开 `SilkPlayer-1.6.0-universal.dmg`；
    Download and open `SilkPlayer-1.6.0-universal.dmg`;
 2. 将 `SilkPlayer.app` 拖入 `Applications`（应用程序）文件夹即可完成安装；
    Drag `SilkPlayer.app` into your `Applications` folder;
-3. 首次启动若提示未签名，可在「系统设置」->「隐私与安全性」中选择「仍要打开」。
-   If prompted by Gatekeeper on first launch, click "Open Anyway" in System Settings -> Privacy & Security.
+3. 首次启动若触发系统安全提示，可在「系统设置」->「隐私与安全性」中选择「仍要打开」。
+   If prompted by macOS Gatekeeper on first launch, click "Open Anyway" in System Settings -> Privacy & Security.

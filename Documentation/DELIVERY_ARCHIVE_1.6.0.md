@@ -96,9 +96,9 @@
   - 为满足用户官网截图、宣发排版与专业观影对像素级标准比例和统一尺寸的严苛需求，解决随手拉伸产生非标奇数像素与比例割裂感痛点。
 - **技术实现路径**:
   - `PlayerWindowDelegate` 接入 `windowWillStartLiveResize`、`windowWillResize` 与 `windowDidEndLiveResize`；
-  - 捕获当前实时帧尺寸与 AppKit 光标位置，注入 `PlayerCore` 状态机；
+  - 捕获当前实时窗口尺寸，更新 `WindowResizeHUDView` 状态；
   - 封装 `WindowDimensionFormatter`，精准识别 `16:9`、`16:10`、`4:3`、`21:9`、`2.39:1`、`1:1`，并在对齐片源分辨率时提供 `100% 原尺寸` 徽章；
-  - `WindowResizeDimensionHUD.swift` 实现极简等宽深色毛玻璃胶囊，安全视口内自适应贴近光标，松手后 0.35 秒平滑淡出，零遮挡观影。
+  - `WindowResizeDimensionHUD.swift` 实现极简等宽深色毛玻璃胶囊，顶部居中显示（距顶部 `12 pt`），松手后 0.35 秒平滑淡出，零遮挡观影。
 - **交付资产**:
   - `Sources/SilkPlayer/Player/WindowResizeDimensionHUD.swift`
   - `PlayerWindowManager.swift`、`PlayerCore.swift`、`AppShellView.swift`
