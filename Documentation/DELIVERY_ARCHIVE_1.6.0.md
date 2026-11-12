@@ -104,10 +104,10 @@
   - `PlayerWindowManager.swift`、`PlayerCore.swift`、`AppShellView.swift`
   - `Tests/SilkPlayerTests/PlaylistTests.swift` 新增 Test 62 格式化与画幅判定断言。
 
-### 1.8 窗口倍率菜单与 HUD/菜单栏问题收敛 (Proposal 027 · ISSUE-019 · ISSUE-020)
-- **右键窗口倍率子菜单 (Proposal 027 / GitHub Issue #6)**：
-  - `VideoView.swift` (`MetalPlayerContainerView.buildContextMenu(for:)`) 新增「窗口尺寸 / Window Size」子菜单，支持 `0.5x`、`1x`、`1.5x`、`2x` 与「恢复默认自适应大小 (`resetWindowSize()`)」，在全屏或无已加载媒体时自动禁用；
-  - `PlayerModels.swift` (`PlayerGeometry.adaptiveVideoContentSize` / `scaledVideoContentSize`) 与 `Player/PlayerCore+WindowGeometry.swift` 统一收敛旋转与倍率开窗尺寸逻辑，修复 `fitWindow(scale:)` 的 `window.minSize` 临时释放/恢复、`.maximized` 状态经 `PlayerWindowDelegate.resetInteractiveModeToNormal()` 复位、全屏拦截及 OSD 反馈。
+### 1.8 窗口比例菜单与 HUD/菜单栏问题收敛 (Proposal 027 · ISSUE-019 · ISSUE-020)
+- **右键窗口比例子菜单 (Proposal 027 / GitHub Issue #6)**：
+  - `L10n.swift` 新增 `windowSizeFitEdges`（`100%（撑满边缘）` / `100% (Fit Edges)`）；`VideoView.swift` (`MetalPlayerContainerView.buildContextMenu(for:)`) 新增「窗口尺寸 / Window Size」子菜单，提供 `50%`、`75%`、`100%（撑满边缘）` 与「恢复默认自适应大小 (`resetWindowSize()`)」，在全屏、纯音频（`!player.isAudioOnly`）或无已加载媒体时自动禁用，并按当前窗口包络与边界状态控制菜单勾选与置灰；
+  - `PlayerModels.swift` (`PlayerGeometry.adaptiveVideoContentSize` / `windowPresetContentSize` / `windowPresetMenuState` / `WindowScalePresetState`) 与 `Player/PlayerCore+WindowGeometry.swift` 统一收敛旋转与百分比开窗尺寸逻辑，确保所有档位在桌面可用区内保持原片比例且零画面/字幕裁切，并修复 `fitWindow(scale:)` 的 `window.minSize` 临时释放/恢复、`.maximized` 状态经 `PlayerWindowDelegate.resetInteractiveModeToNormal()` 复位及百分比 OSD 反馈。
 - **竖屏/极窄窗口底栏音量按钮重叠修复 (ISSUE-019)**：
   - `PlayerHUDView.swift` 在 `.minimal` 档位下隐藏底栏内联音量滑块，收紧边距与右侧间距，并在溢出菜单 (`moreMenuContent`) 补充静音开关；`PlaylistTests.swift` Test 63 同步更新断言 `HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false`。
 - **顶栏重名「窗口」菜单合并与冗余入口清理 (ISSUE-020)**：
@@ -119,7 +119,7 @@
 - **测试框架**: XCTest + Swift Testing 双引擎；
 - **测试套件**: 全量回归测试通过（100% PASS，编译零告警）；
 - **基准固化**:
-  - `GeometryAndTransformTests`（7/7 通过）：几何边界约束、画幅自适应及右键倍率缩放与全屏门控测试；
+  - `GeometryAndTransformTests`（7/7 通过）：几何边界约束、画幅自适应及右键百分比缩放（`50% / 75% / 100%`）与边界/全屏/纯音频门控测试（`testWindowPresetContentSizeAndBoundaryMenuGating`、`testFitWindowPercentageAndContextMenuStateGating`）；
   - `PlaylistRegressionTests`（Test 1-63 全部断言通过）：播放列表、双轨分流、自然排序、Metal 容错、`UpdateService` 校验、HUD 实时尺寸及 `.minimal` 音量隐藏断言；
   - `SwiftTestingSanityTests`（1/1 通过）：基础断言测试通过。
 

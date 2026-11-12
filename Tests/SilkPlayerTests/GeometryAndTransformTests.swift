@@ -273,36 +273,59 @@ final class GeometryAndTransformTests: XCTestCase {
     }
 
     // MARK: - 6. Window Scale Presets & Right-Click Context Menu Gating (Proposal 027)
-    func testScaledVideoContentSizeBoundsAndPresets() {
-        let ultrawideScreen = NSSize(width: 2752, height: 1122)
+    func testWindowPresetContentSizeAndBoundaryMenuGating() {
+        let ultrawideScreen = NSSize(width: 2752, height: 1027)
+        let aspect16x9: CGFloat = 16.0 / 9.0
+        let min16x9 = PlayerGeometry.minimumContentSize(for: aspect16x9, screenVisibleHeight: ultrawideScreen.height)
+        let max16x9 = PlayerGeometry.maximizedContentSize(for: aspect16x9, screenVisibleSize: ultrawideScreen)
+        XCTAssertEqual(max16x9, NSSize(width: 1826, height: 1027))
 
-        // 1080p video on 2752x1122 display reaches exact 1:1 (1920x1080) and 0.5x (960x540)
-        let s05 = PlayerGeometry.scaledVideoContentSize(scale: 0.5, aspect: 16.0 / 9.0, rawBaseWidth: 1920, screenVisibleSize: ultrawideScreen)
-        let s10 = PlayerGeometry.scaledVideoContentSize(scale: 1.0, aspect: 16.0 / 9.0, rawBaseWidth: 1920, screenVisibleSize: ultrawideScreen)
-        let s15 = PlayerGeometry.scaledVideoContentSize(scale: 1.5, aspect: 16.0 / 9.0, rawBaseWidth: 1920, screenVisibleSize: ultrawideScreen)
-        XCTAssertEqual(s05, NSSize(width: 960, height: 540))
-        XCTAssertEqual(s10, NSSize(width: 1920, height: 1080))
-        XCTAssertEqual(s15, NSSize(width: 1995, height: 1122))
+        let p50 = PlayerGeometry.windowPresetContentSize(fraction: 0.5, aspect: aspect16x9, screenVisibleSize: ultrawideScreen)
+        let p75 = PlayerGeometry.windowPresetContentSize(fraction: 0.75, aspect: aspect16x9, screenVisibleSize: ultrawideScreen)
+        let p100 = PlayerGeometry.windowPresetContentSize(fraction: 1.0, aspect: aspect16x9, screenVisibleSize: ultrawideScreen)
+        XCTAssertEqual(p50, NSSize(width: 913, height: 514))
+        XCTAssertEqual(p75, NSSize(width: 1370, height: 771))
+        XCTAssertEqual(p100, max16x9)
+        XCTAssertGreaterThanOrEqual(p50.width, min16x9.width)
 
-        // 720p video on 2752x1122 produces four distinct steps across 0.5x / 1x / 1.5x / 2x
-        let h05 = PlayerGeometry.scaledVideoContentSize(scale: 0.5, aspect: 16.0 / 9.0, rawBaseWidth: 1280, screenVisibleSize: ultrawideScreen)
-        let h10 = PlayerGeometry.scaledVideoContentSize(scale: 1.0, aspect: 16.0 / 9.0, rawBaseWidth: 1280, screenVisibleSize: ultrawideScreen)
-        let h15 = PlayerGeometry.scaledVideoContentSize(scale: 1.5, aspect: 16.0 / 9.0, rawBaseWidth: 1280, screenVisibleSize: ultrawideScreen)
-        let h20 = PlayerGeometry.scaledVideoContentSize(scale: 2.0, aspect: 16.0 / 9.0, rawBaseWidth: 1280, screenVisibleSize: ultrawideScreen)
-        XCTAssertEqual(h05, NSSize(width: 640, height: 360))
-        XCTAssertEqual(h10, NSSize(width: 1280, height: 720))
-        XCTAssertEqual(h15, NSSize(width: 1920, height: 1080))
-        XCTAssertEqual(h20, NSSize(width: 1995, height: 1122))
+        // Portrait 9:16 fills vertical edges at 100%, halves cleanly to 50%, and locks enlargement at 100%
+        let portraitAspect: CGFloat = 9.0 / 16.0
+        let minPortrait = PlayerGeometry.minimumContentSize(for: portraitAspect, screenVisibleHeight: ultrawideScreen.height)
+        let maxPortrait = PlayerGeometry.maximizedContentSize(for: portraitAspect, screenVisibleSize: ultrawideScreen)
+        XCTAssertEqual(maxPortrait, NSSize(width: 578, height: 1027))
 
-        // Portrait 1080x1920 scales cleanly up to desktop visible height without 0.85x truncation
-        let p05 = PlayerGeometry.scaledVideoContentSize(scale: 0.5, aspect: 9.0 / 16.0, rawBaseWidth: 1080, screenVisibleSize: ultrawideScreen)
-        let p10 = PlayerGeometry.scaledVideoContentSize(scale: 1.0, aspect: 9.0 / 16.0, rawBaseWidth: 1080, screenVisibleSize: ultrawideScreen)
-        XCTAssertEqual(p05, NSSize(width: 540, height: 960))
-        XCTAssertEqual(p10, NSSize(width: 631, height: 1122))
+        let vp50 = PlayerGeometry.windowPresetContentSize(fraction: 0.5, aspect: portraitAspect, screenVisibleSize: ultrawideScreen)
+        let vp75 = PlayerGeometry.windowPresetContentSize(fraction: 0.75, aspect: portraitAspect, screenVisibleSize: ultrawideScreen)
+        let vp100 = PlayerGeometry.windowPresetContentSize(fraction: 1.0, aspect: portraitAspect, screenVisibleSize: ultrawideScreen)
+        XCTAssertEqual(vp50, NSSize(width: 289, height: 514))
+        XCTAssertEqual(vp75, NSSize(width: 433, height: 770))
+        XCTAssertEqual(vp100, maxPortrait)
+
+        // When vertical window is already flush against top/bottom edges (100%): 100% is disabled (cannot enlarge), 75% & 50% stay enabled
+        let atEdge100 = PlayerGeometry.windowPresetMenuState(targetSize: vp100, currentSize: maxPortrait, minSize: minPortrait, maxSize: maxPortrait)
+        let atEdge75 = PlayerGeometry.windowPresetMenuState(targetSize: vp75, currentSize: maxPortrait, minSize: minPortrait, maxSize: maxPortrait)
+        let atEdge50 = PlayerGeometry.windowPresetMenuState(targetSize: vp50, currentSize: maxPortrait, minSize: minPortrait, maxSize: maxPortrait)
+        XCTAssertEqual(atEdge100, .init(isEnabled: false, isCurrent: true))
+        XCTAssertEqual(atEdge75, .init(isEnabled: true, isCurrent: false))
+        XCTAssertEqual(atEdge50, .init(isEnabled: true, isCurrent: false))
+
+        // After shrinking to 50%: 50% disables as current, while 75% and 100% unlock for scaling back up
+        let at50State50 = PlayerGeometry.windowPresetMenuState(targetSize: vp50, currentSize: vp50, minSize: minPortrait, maxSize: maxPortrait)
+        let at50State75 = PlayerGeometry.windowPresetMenuState(targetSize: vp75, currentSize: vp50, minSize: minPortrait, maxSize: maxPortrait)
+        let at50State100 = PlayerGeometry.windowPresetMenuState(targetSize: vp100, currentSize: vp50, minSize: minPortrait, maxSize: maxPortrait)
+        XCTAssertEqual(at50State50, .init(isEnabled: false, isCurrent: true))
+        XCTAssertEqual(at50State75, .init(isEnabled: true, isCurrent: false))
+        XCTAssertEqual(at50State100, .init(isEnabled: true, isCurrent: false))
+
+        // Even 2.39:1 on 1512x900 clamps 50% cleanly to minimumContentSize without UI crush
+        let macbookScreen = NSSize(width: 1512, height: 900)
+        let wideMin = PlayerGeometry.minimumContentSize(for: 2.39, screenVisibleHeight: macbookScreen.height)
+        let wideP50 = PlayerGeometry.windowPresetContentSize(fraction: 0.5, aspect: 2.39, screenVisibleSize: macbookScreen)
+        XCTAssertEqual(wideP50, wideMin)
     }
 
     @MainActor
-    func testFitWindowScaleAndContextMenuFullscreenGating() {
+    func testFitWindowPercentageAndContextMenuStateGating() {
         let player = PlayerCore()
         let session = PlayerWindowSession(id: UUID(), player: player)
         let window = NSWindow(
@@ -321,29 +344,54 @@ final class GeometryAndTransformTests: XCTestCase {
 
         player.isLoaded = true
         player.isAudioOnly = false
-        player.videoWidth = 1280
-        player.videoHeight = 720
-        player.displayVideoWidth = 1280
-        player.displayVideoHeight = 720
+        player.videoWidth = 3840
+        player.videoHeight = 2160
+        player.displayVideoWidth = 3840
+        player.displayVideoHeight = 2160
 
         let screenVisible = (window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)).size
 
-        // Simulate locked large minSize + maximized mode before scaling down to 0.5x
+        // Simulate locked large minSize + maximized mode before shrinking to 50%
         window.minSize = NSSize(width: 900, height: 506)
         window.contentMinSize = window.minSize
         delegate.toggleMaximize(window: window)
         XCTAssertEqual(delegate.currentInteractiveMode, .maximized)
 
         player.fitWindow(scale: 0.5)
-        let expected05 = PlayerGeometry.scaledVideoContentSize(
-            scale: 0.5,
+        let expected50 = PlayerGeometry.windowPresetContentSize(
+            fraction: 0.5,
             aspect: player.effectiveAspectRatio,
-            rawBaseWidth: 1280,
             screenVisibleSize: screenVisible
         )
         XCTAssertEqual(delegate.currentInteractiveMode, .normal)
-        XCTAssertEqual(round(window.frame.width), expected05.width)
-        XCTAssertEqual(round(window.frame.height), expected05.height)
+        XCTAssertEqual(round(window.frame.width), expected50.width)
+        XCTAssertEqual(round(window.frame.height), expected50.height)
+
+        let containerView = MetalPlayerContainerView(playerCore: player)
+        let menuAt50 = containerView.buildContextMenu(for: player)
+        let submenuAt50 = menuAt50.items.first { $0.title == L10n.windowSizeMenu }?.submenu
+        XCTAssertEqual(submenuAt50?.items.count, 5) // 50%, 75%, 100%, separator, reset
+        XCTAssertEqual(submenuAt50?.items[0].state, .on)
+        XCTAssertFalse(submenuAt50?.items[0].isEnabled ?? true)  // 50% current -> disabled
+        XCTAssertTrue(submenuAt50?.items[1].isEnabled ?? false)  // 75% -> enabled
+        XCTAssertTrue(submenuAt50?.items[2].isEnabled ?? false)  // 100% -> enabled
+
+        // Programmatic scale > 1.0 clamps to 100% edge fit and locks 100% menu item
+        player.fitWindow(scale: 2.0)
+        let expected100 = PlayerGeometry.windowPresetContentSize(
+            fraction: 1.0,
+            aspect: player.effectiveAspectRatio,
+            screenVisibleSize: screenVisible
+        )
+        XCTAssertEqual(round(window.frame.width), expected100.width)
+        XCTAssertEqual(round(window.frame.height), expected100.height)
+
+        let menuAt100 = containerView.buildContextMenu(for: player)
+        let submenuAt100 = menuAt100.items.first { $0.title == L10n.windowSizeMenu }?.submenu
+        XCTAssertTrue(submenuAt100?.items[0].isEnabled ?? false)  // 50% -> enabled
+        XCTAssertTrue(submenuAt100?.items[1].isEnabled ?? false)  // 75% -> enabled
+        XCTAssertEqual(submenuAt100?.items[2].state, .on)
+        XCTAssertFalse(submenuAt100?.items[2].isEnabled ?? true)  // 100% at edge -> disabled
 
         // Reset to adaptive default even if autoResizeWindow is turned off
         let previousAutoResize = AppSettings.shared.autoResizeWindow
@@ -354,20 +402,18 @@ final class GeometryAndTransformTests: XCTestCase {
         let expectedAdaptive = PlayerGeometry.adaptiveVideoContentSize(
             for: player.effectiveAspectRatio,
             isVertical: false,
-            rawVideoWidth: 1280,
+            rawVideoWidth: 3840,
             screenVisibleSize: screenVisible
         )
         XCTAssertEqual(round(window.frame.width), expectedAdaptive.width)
         XCTAssertEqual(round(window.frame.height), expectedAdaptive.height)
 
-        // Fullscreen mode blocks fitWindow and disables context menu scale submenu
-        let containerView = MetalPlayerContainerView(playerCore: player)
-        let windowedMenu = containerView.buildContextMenu(for: player)
-        let windowedSizeItem = windowedMenu.items.first { $0.title == L10n.windowSizeMenu }
-        XCTAssertNotNil(windowedSizeItem)
-        XCTAssertTrue(windowedSizeItem?.isEnabled ?? false)
-        XCTAssertEqual(windowedSizeItem?.submenu?.items.count, 6) // 0.5x, 1x, 1.5x, 2x, separator, reset
+        let menuAtDefault = containerView.buildContextMenu(for: player)
+        let resetItemAtDefault = menuAtDefault.items.first { $0.title == L10n.windowSizeMenu }?.submenu?.items.last
+        XCTAssertEqual(resetItemAtDefault?.state, .on)
+        XCTAssertFalse(resetItemAtDefault?.isEnabled ?? true)
 
+        // Fullscreen mode blocks fitWindow and disables context menu scale submenu
         player.isFullscreen = true
         let frameBeforeFullscreenFit = window.frame
         player.fitWindow(scale: 0.5)

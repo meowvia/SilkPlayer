@@ -123,6 +123,7 @@ public enum L10n {
 
     public static var floatOnTop: String { tr("Float on Top", "置顶浮动") }
     public static var windowSizeMenu: String { tr("Window Size", "窗口大小") }
+    public static var windowSizeFitEdges: String { tr("100% (Fit Edges)", "100%（撑满边缘）") }
     public static var windowSizeReset: String { tr("Default Adaptive Size", "恢复默认自适应大小") }
     public static var windowSizeDefaultShort: String { tr("Default", "默认") }
 

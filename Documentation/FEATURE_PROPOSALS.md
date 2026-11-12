@@ -37,7 +37,7 @@
 | 提案 024 | 音乐模式可折叠两段式视图与磁吸切换机制 (Collapsible Two-Stage Music Mode & Magnetic Snap) | 预览实现 (待 2.0.0 评估收口) | **2.0.0 音乐模式规划** |
 | 提案 025 | 音乐模式状态栏常驻入口与轻量播控形态 (Music Mode Persistent Status Bar Entry) | 灵感归档 (待后续决策方案) | **2.0.0 音乐模式规划** |
 | 提案 026 | 黑边动态高斯模糊环境光填充 (Dynamic Ambient Letterbox Blur Fill) | 需求定稿 (方案就绪 · 规划归属 2.0.0) | **2.0.0 视觉体验规划** |
-| ~~提案 027~~ | ~~右键菜单窗口倍率缩放入口 (Context Menu Window Scale Presets · GitHub Issue #6)~~ | ~~决策定稿~~ **已落地销项** | **1.6.0** |
+| ~~提案 027~~ | ~~右键菜单窗口比例适配入口 (Context Menu Window Size Presets · GitHub Issue #6)~~ | ~~决策定稿~~ **已落地销项** | **1.6.0** |
 
 
 ---
@@ -962,25 +962,26 @@
 
 ---
 
-## 提案 027: 右键菜单窗口倍率缩放入口 (Context Menu Window Scale Presets · GitHub Issue #6)
+## 提案 027: 右键菜单窗口比例适配入口 (Context Menu Window Size Presets · GitHub Issue #6)
 
 ### 1. 来源与明确决策口径
-对应 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6) 的 4 项建议，经评估后最终定调并在 `1.6.0` 提前并入交付（已从 `1.7.0` 候选排期核销）：
+对应 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6) 的 4 项建议，经实测评估后最终定调并在 `1.6.0` 提前并入交付（已从 `1.7.0` 候选排期核销）：
 1. **打开视频默认原始尺寸**：**不采纳**。保持当前基于视频比例与桌面安全可用区（`minimumContentSize` / `maximizedContentSize`）的自适应开窗策略，避免高分片源超出桌面可用区或低分片源挤压底栏控件。
-2. **新增 `0.5x / 1x / 1.5x / 2x` 倍率快捷调整 & 3. 竖屏视频快速调大**：**合并以右键菜单方案解决**。不在视频 HUD 上增加实体按键，也不改变竖屏默认开窗比例；统一在视频画面右键菜单中提供窗口倍率切换入口，由用户按需缩放。
+2. **新增窗口快捷缩放档位 & 3. 竖屏视频快速调大**：**合并以右键菜单百分比比例方案解决**。放弃与片源物理像素耦合的固定倍率（在 1080p/4K 片源下极易与桌面可见区上限冲突），改为在视频画面右键菜单提供基于当前影片长宽比与桌面可见区的 `50%`、`75%`、`100%（撑满边缘）` 三档无裁切适配及「恢复默认自适应大小」入口。`100%` 严格贴合桌面可用区最大外接包络（无黑边撑满且不裁切画面与字幕），已达或越界方向自动置灰禁用。
 4. **上方标题显示时长（1~2 秒隐藏）**：**保持现状不变**。空闲自动隐藏默认保持 `1.8` 秒，仅在鼠标停留在控制区保护带、暂停或窗口失焦时保持显示。
 
 ### 2. 已落地实现路径 (`1.6.0`)
-1. **右键菜单扩充倍率入口 (`VideoView.swift` / `L10n.swift`)**：
-   - 在 `MetalPlayerContainerView.buildContextMenu(for:)` 新增「窗口尺寸 / Window Size」子菜单，提供 `0.5x`、`1x`、`1.5x`、`2x` 与「恢复默认自适应大小 (`resetWindowSize()`)」菜单项（对应动作 `handleFitWindowScale` / `handleResetWindowSize`）；全屏模式下或无已加载媒体时自动禁用缩放子菜单。
-2. **窗口几何与倍率计算重构 (`PlayerModels.swift` / `PlayerCore+WindowGeometry.swift` / `PlayerWindowManager.swift`)**：
-   - 在 `PlayerGeometry` 新增 `adaptiveVideoContentSize(...)` 与 `scaledVideoContentSize(...)`，将倍率计算上限对齐桌面可见区 `maximizedContentSize`；
+1. **右键菜单扩充百分比档位与边界门控 (`VideoView.swift` / `L10n.swift`)**：
+   - 在 `L10n.swift` 新增 `windowSizeFitEdges`（`100%（撑满边缘）` / `100% (Fit Edges)`）；
+   - 在 `MetalPlayerContainerView.buildContextMenu(for:)` 新增「窗口尺寸 / Window Size」子菜单，提供 `50%`、`75%`、`100%（撑满边缘）` 与「恢复默认自适应大小 (`resetWindowSize()`)」菜单项；在全屏模式、纯音频（`!player.isAudioOnly`）或无已加载媒体时禁用缩放，并根据当前窗口尺寸与可用区边界动态控制各项 `.isEnabled` 与 `.state` 勾选状态。
+2. **窗口几何与比例包络计算重构 (`PlayerModels.swift` / `PlayerCore+WindowGeometry.swift` / `PlayerWindowManager.swift`)**：
+   - 在 `PlayerGeometry` 新增 `adaptiveVideoContentSize(...)`（对 55% 宽度上限取整避免亚像素错位）、`windowPresetContentSize(fraction:aspect:screenVisibleSize:)`（在 `[minimumContentSize, maximizedContentSize]` 间保持原片比例，禁止裁切画面）及 `windowPresetMenuState(...)`（输出 `WindowScalePresetState` 边界状态）；
    - 提取共享辅助方法 `applyVideoWindowContentSize(...)` 统一承载 `applyRotationWindowAdaptation`、`applyAdaptiveWindowGeometry`、`fitWindow(scale:)` 与 `resetWindowSize()`；
-   - 为 `fitWindow(scale:)` 与 `resetWindowSize()` 补全全屏/纯音频拦截、`.maximized` 状态经 `PlayerWindowDelegate.resetInteractiveModeToNormal()` 复位、设帧前临时放宽并恢复 `window.minSize`，以及倍率/默认大小 OSD 反馈。
+   - 为 `fitWindow(scale:)` 与 `resetWindowSize()` 补全全屏/纯音频拦截、`.maximized` 状态经 `PlayerWindowDelegate.resetInteractiveModeToNormal()` 复位、设帧前临时放宽并恢复 `window.minSize`，以及百分比 / 默认大小 OSD 反馈。
 3. **顶栏冗余入口同步清理 (`ISSUE-020`)**：
-   - 顶栏「窗口 -> 贴合画面尺寸 (`100% / 200%`)」已在 `1.6.0` 从 `PlayerCommands.swift` 移除，窗口倍率调节统一收拢至视频画布右键菜单。
+   - 顶栏「窗口 -> 贴合画面尺寸 (`100% / 200%`)」已在 `1.6.0` 从 `PlayerCommands.swift` 移除，窗口比例调节统一收拢至视频画布右键菜单。
 4. **单元测试覆盖 (`GeometryAndTransformTests.swift`)**：
-   - 新增 `testScaledVideoContentSizeBoundsAndPresets` 与 `testFitWindowScaleAndContextMenuFullscreenGating`，覆盖倍率边界裁剪、默认尺寸一致性与全屏菜单禁用门控。
+   - 新增 `testWindowPresetContentSizeAndBoundaryMenuGating` 与 `testFitWindowPercentageAndContextMenuStateGating`，覆盖 16:9 / 21:9 / 竖屏画幅百分比包络计算、越界/当前档位菜单禁用与勾选态、以及全屏/纯音频门控。
 
 ### 3. 当前状态
 - **已落地销项 (`1.6.0`)**：已合入 `feature/v1.6.0` 主线版本，从 `1.7.0` 候选排期中核销，待 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6) 随 `1.6.0` 正式发版关闭。

@@ -492,16 +492,23 @@ public final class MetalPlayerContainerView: NSView {
         menu.addItem(.separator())
 
         let isFullscreenWindow = player.isFullscreen || (window?.styleMask.contains(.fullScreen) == true)
-        let canScaleWindow = !isFullscreenWindow && player.videoWidth > 0 && player.videoHeight > 0
+        let canScaleWindow = !isFullscreenWindow && !player.isAudioOnly && player.videoWidth > 0 && player.videoHeight > 0
 
         let scaleSubmenu = NSMenu()
         scaleSubmenu.autoenablesItems = false
-        let scalePresets: [(title: String, scale: Double)] = [
-            ("0.5x", 0.5),
-            ("1x", 1.0),
-            ("1.5x", 1.5),
-            ("2x", 2.0)
+        let scalePresets: [(title: String, fraction: Double)] = [
+            ("50%", 0.5),
+            ("75%", 0.75),
+            (L10n.windowSizeFitEdges, 1.0)
         ]
+
+        let activeWindow = player.hostWindow ?? window ?? NSApp.keyWindow
+        let screenVisibleSize = (activeWindow?.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)).size
+        let currentSize = activeWindow?.frame.size ?? .zero
+        let aspect = player.effectiveAspectRatio
+        let minSz = PlayerGeometry.minimumContentSize(for: aspect, screenVisibleHeight: screenVisibleSize.height)
+        let maxSz = PlayerGeometry.maximizedContentSize(for: aspect, screenVisibleSize: screenVisibleSize)
+
         for preset in scalePresets {
             let item = NSMenuItem(
                 title: preset.title,
@@ -509,8 +516,25 @@ public final class MetalPlayerContainerView: NSView {
                 keyEquivalent: ""
             )
             item.target = self
-            item.representedObject = preset.scale
-            item.isEnabled = canScaleWindow
+            item.representedObject = preset.fraction
+            if canScaleWindow {
+                let targetSize = PlayerGeometry.windowPresetContentSize(
+                    fraction: CGFloat(preset.fraction),
+                    aspect: aspect,
+                    screenVisibleSize: screenVisibleSize
+                )
+                let state = PlayerGeometry.windowPresetMenuState(
+                    targetSize: targetSize,
+                    currentSize: currentSize,
+                    minSize: minSz,
+                    maxSize: maxSz
+                )
+                item.isEnabled = state.isEnabled
+                item.state = state.isCurrent ? .on : .off
+            } else {
+                item.isEnabled = false
+                item.state = .off
+            }
             scaleSubmenu.addItem(item)
         }
 
@@ -522,7 +546,28 @@ public final class MetalPlayerContainerView: NSView {
             keyEquivalent: ""
         )
         resetSizeItem.target = self
-        resetSizeItem.isEnabled = canScaleWindow
+        if canScaleWindow {
+            let rawW = CGFloat(player.displayVideoWidth > 0 ? player.displayVideoWidth : player.videoWidth)
+            let rawH = CGFloat(player.displayVideoHeight > 0 ? player.displayVideoHeight : player.videoHeight)
+            let baseW = player.transform.isPerpendicular ? rawH : rawW
+            let adaptiveSize = PlayerGeometry.adaptiveVideoContentSize(
+                for: aspect,
+                isVertical: player.isEffectiveVertical,
+                rawVideoWidth: baseW,
+                screenVisibleSize: screenVisibleSize
+            )
+            let resetState = PlayerGeometry.windowPresetMenuState(
+                targetSize: adaptiveSize,
+                currentSize: currentSize,
+                minSize: minSz,
+                maxSize: maxSz
+            )
+            resetSizeItem.isEnabled = resetState.isEnabled
+            resetSizeItem.state = resetState.isCurrent ? .on : .off
+        } else {
+            resetSizeItem.isEnabled = false
+            resetSizeItem.state = .off
+        }
         scaleSubmenu.addItem(resetSizeItem)
 
         let windowSizeItem = NSMenuItem(title: L10n.windowSizeMenu, action: nil, keyEquivalent: "")

@@ -125,14 +125,11 @@ extension PlayerCore {
 
         let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
         let aspect = effectiveAspectRatio
-        let rawW = CGFloat(displayVideoWidth > 0 ? displayVideoWidth : videoWidth)
-        let rawH = CGFloat(displayVideoHeight > 0 ? displayVideoHeight : videoHeight)
-        let baseW = transform.isPerpendicular ? rawH : rawW
+        let clampedFraction = min(1.0, max(0.1, scale))
 
-        let targetSize = PlayerGeometry.scaledVideoContentSize(
-            scale: CGFloat(scale),
+        let targetSize = PlayerGeometry.windowPresetContentSize(
+            fraction: CGFloat(clampedFraction),
             aspect: aspect,
-            rawBaseWidth: baseW,
             screenVisibleSize: screenFrame.size
         )
         let minSz = PlayerGeometry.minimumContentSize(for: aspect, screenVisibleHeight: screenFrame.height)
@@ -145,7 +142,7 @@ extension PlayerCore {
             animated: true
         )
 
-        let scaleLabel = Self.formattedWindowScaleLabel(scale)
+        let scaleLabel = Self.formattedWindowPercentageLabel(clampedFraction)
         showOSD(.pictureAdjustment(
             name: L10n.windowSizeMenu,
             value: "\(scaleLabel) (\(Int(targetSize.width)) × \(Int(targetSize.height)))"
@@ -227,13 +224,8 @@ extension PlayerCore {
         applyContentAspectRatioLock()
     }
 
-    private static func formattedWindowScaleLabel(_ scale: Double) -> String {
-        let rounded = Int((scale * 100.0).rounded())
-        if rounded % 100 == 0 {
-            return "\(rounded / 100)x"
-        } else if rounded % 10 == 0 {
-            return String(format: "%.1fx", scale)
-        }
-        return String(format: "%.2fx", scale)
+    private static func formattedWindowPercentageLabel(_ fraction: Double) -> String {
+        let percent = Int((min(1.0, max(0.1, fraction)) * 100.0).rounded())
+        return "\(percent)%"
     }
 }
