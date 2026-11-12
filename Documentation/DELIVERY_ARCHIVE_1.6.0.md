@@ -127,10 +127,10 @@
 
 ## 3. 正式发布安装镜像与 SHA-256 校验和
 - **工程 Git 基准**:
-  - 开源前端: `SilkPlayer`（应用构建源码 Commit `e751dd4`，分支 `feature/v1.6.0`）
+  - 开源前端: `SilkPlayer`（应用构建源码 Commit `7357597`，分支 `feature/v1.6.0`）
   - 闭源内核: `SilkCoreKit`（Commit `1e49d6f`）
 - **发布安装镜像**:
-  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构，Apple Silicon + Intel 64 位单镜像交付): `c332d4fa6f7cc56952a858eafeecce68885acd8bc69c031f8fcd09fd8cefe388`
+  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构，Apple Silicon + Intel 64 位单镜像交付): `620d07e76e7a79bbbdf77bd5bed340d03cf46600b215811ab4449bcdb8116d61`
 - **动态库依赖审计 (@rpath)**:
   - 零宿主绝对路径泄漏，所有动态库严格限定在 `@rpath/` 与系统库路径，通过 `package_app.sh` 自动化签名与 Hardened Runtime 校验，Universal 单镜像打包完成。
 - **本地应用状态**:
