@@ -115,6 +115,9 @@ public struct AppShellView: View {
                             onFilesDropped: { urls in
                                 let paths = urls.map(\.path)
                                 openExternalPaths(paths)
+                            },
+                            onOpenSettings: { tab in
+                                PlayerWindowManager.shared.openSettings(initialTab: tab)
                             }
                         )
                         .edgesIgnoringSafeArea(.all)
@@ -224,6 +227,7 @@ public struct AppShellView: View {
                             HStack(spacing: 0) {
                                 SilkLANSourceDrawerView(
                                     drawerWidth: max(290, drawerWidth),
+                                    isInMediaLibrary: isProLibraryActive,
                                     onCompletedConfiguration: {
                                         withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
                                             isLeftSourceDrawerVisible = false
@@ -778,6 +782,45 @@ public struct AppShellView: View {
         if panel.runModal() == .OK {
             let paths = panel.urls.map(\.path)
             openExternalPaths(paths)
+        }
+    }
+}
+
+/// Thin left-edge trigger handle preserving open-source `SilkDrawerHandleRepresentable` mouse tracking.
+@MainActor
+public struct LeftLANSourceHandleTab: View {
+    public let isDrawerVisible: Bool
+    public let drawerWidth: CGFloat
+    public var onHoverChange: ((Bool) -> Void)? = nil
+    public let action: () -> Void
+
+    public init(
+        isDrawerVisible: Bool,
+        drawerWidth: CGFloat,
+        onHoverChange: ((Bool) -> Void)? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.isDrawerVisible = isDrawerVisible
+        self.drawerWidth = drawerWidth
+        self.onHoverChange = onHoverChange
+        self.action = action
+    }
+
+    public var body: some View {
+        HStack(spacing: 0) {
+            SilkDrawerHandleRepresentable(
+                isDrawerVisible: isDrawerVisible,
+                isLeadingEdge: true,
+                onHoverChange: onHoverChange,
+                action: action
+            )
+            .frame(width: 28, height: 128)
+            .help(L10n.tr("LAN & Media Sources", "局域网与媒体源"))
+            .opacity(isDrawerVisible ? 0.0 : 1.0)
+            .allowsHitTesting(!isDrawerVisible)
+
+            Spacer()
+                .allowsHitTesting(false)
         }
     }
 }

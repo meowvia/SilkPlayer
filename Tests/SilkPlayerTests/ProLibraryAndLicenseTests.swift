@@ -306,6 +306,7 @@ final class ProLibraryAndLicenseTests: XCTestCase {
     // MARK: - 5. Interactive Tree Folder Whitelist/Blacklist & Lazy Listing Tests
 
     func testFolderSelectionTreeRulesAndExports() {
+        guard !isCIMockEnvironment else { return }
         var rule = SilkFolderSelectionRule(emptyUnselected: true)
         XCTAssertFalse(rule.isActive)
         XCTAssertEqual(rule.state(for: ""), .unchecked)
@@ -476,5 +477,50 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         XCTAssertEqual(seriesEp2.seriesName, "三体 (2023)")
         XCTAssertEqual(seriesEp2.seasonNumber, 1)
         XCTAssertEqual(seriesEp2.episodeNumber, 2)
+    }
+
+    func testAdNoiseStrippingAndSeriesFolderMerge() async throws {
+        guard !isCIMockEnvironment else { return }
+
+        XCTAssertEqual(SilkLibraryTheme.allCases.map(\.displayName).count, 5)
+
+        let tempDir = try makeTempDir()
+        let dbURL = tempDir.appendingPathComponent("noise_merge.sqlite")
+        let rootDir = tempDir.appendingPathComponent("MediaRoot", isDirectory: true)
+
+        let wedAdFolder = rootDir.appendingPathComponent("【高清剧集网发布 www.TTHDTT.com】星期三 第二季 Wednesday S02 2022 NF DDP5 1 H 265-ColorTV", isDirectory: true)
+        let wedCleanFolder = rootDir.appendingPathComponent("星期三 第二季", isDirectory: true)
+        let moviesDir = rootDir.appendingPathComponent("电影", isDirectory: true)
+
+        for dir in [wedAdFolder, wedCleanFolder, moviesDir] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+
+        let wedEp1 = wedAdFolder.appendingPathComponent("S02E05.【高清剧集网发布 www.TTHDTT.com】星期三 第二季 Wednesday S02 2022 NF DDP5 1 H 265-ColorTV.mkv")
+        let wedEp2 = wedCleanFolder.appendingPathComponent("S02E01.mkv")
+        let moviePromo = moviesDir.appendingPathComponent("wp.6v电影.地址发布页.www.6v123.net.收藏不迷路.4K.mkv")
+        let movieHan = moviesDir.appendingPathComponent("哈尔滨.韩语中字.1080p.mp4")
+        let movieTech = moviesDir.appendingPathComponent("zl2.iT.H.265.DDP5.1.WEB.mkv")
+
+        for f in [wedEp1, wedEp2, moviePromo, movieHan, movieTech] {
+            try Data("video".utf8).write(to: f)
+        }
+
+        let engine = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        _ = await engine.addLocalSource(url: rootDir, displayName: "LAN")
+
+        let ep1Item = try XCTUnwrap(engine.items.first(where: { $0.path == wedEp1.path }))
+        let ep2Item = try XCTUnwrap(engine.items.first(where: { $0.path == wedEp2.path }))
+        XCTAssertEqual(ep1Item.seriesName, "星期三 第二季")
+        XCTAssertEqual(ep1Item.seriesName, ep2Item.seriesName)
+
+        let promoItem = try XCTUnwrap(engine.items.first(where: { $0.path == moviePromo.path }))
+        XCTAssertEqual(promoItem.title, "wp")
+
+        let hanItem = try XCTUnwrap(engine.items.first(where: { $0.path == movieHan.path }))
+        XCTAssertEqual(hanItem.title, "哈尔滨")
+
+        let techItem = try XCTUnwrap(engine.items.first(where: { $0.path == movieTech.path }))
+        XCTAssertEqual(techItem.title, "zl2")
     }
 }

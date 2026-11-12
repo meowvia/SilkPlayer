@@ -2,6 +2,7 @@ import Observation
 import SwiftUI
 import AppKit
 import Combine
+import SilkCoreKit
 
 extension Notification.Name {
     public static let openExternalFileNotification = Notification.Name("com.silkplayer.openExternalFile")

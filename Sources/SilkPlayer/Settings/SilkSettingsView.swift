@@ -18,6 +18,7 @@ public struct SilkSettingsView: View {
     @State private var showHistoryClearedAlert: Bool = false
     @State private var licenseKeyInput: String = ""
     @State private var showPurchasePendingAlert: Bool = false
+    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var proLibraryThemeId: String = SilkLibraryTheme.moyu.rawValue
 
     public init() {}
 
@@ -543,7 +544,56 @@ public struct SilkSettingsView: View {
                 .disabled(!licenseEngine.isProActive)
                 .opacity(licenseEngine.isProActive ? 1.0 : 0.72)
 
-                // Group 2: Protocols & Index Summary
+                // Group 2: Media Library Theme
+                VStack(spacing: 6) {
+                    sectionTitle(L10n.tr("Media Library Appearance", "媒体库外观主题"))
+                    settingsFormCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(L10n.tr("Theme Palette", "配色方案"))
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundColor(.primary)
+
+                            HStack(spacing: 8) {
+                                ForEach(SilkLibraryTheme.allCases) { theme in
+                                    let isSelected = proLibraryThemeId == theme.rawValue
+                                    Button {
+                                        proLibraryThemeId = theme.rawValue
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Circle()
+                                                .fill(theme.swatchColor)
+                                                .frame(width: 11, height: 11)
+                                                .overlay(
+                                                    Circle()
+                                                        .stroke(Color.primary.opacity(0.22), lineWidth: 0.6)
+                                                )
+                                            Text(theme.displayName)
+                                                .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
+                                                .lineLimit(1)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                        .padding(.horizontal, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                                .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.05))
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                                .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.10), lineWidth: isSelected ? 1.2 : 0.7)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 24)
+                .disabled(!licenseEngine.isProActive)
+                .opacity(licenseEngine.isProActive ? 1.0 : 0.72)
+
+                // Group 3: Protocols & Index Summary
                 VStack(spacing: 6) {
                     sectionTitle(L10n.tr("Protocols & Index Status", "协议支持与索引状态"))
                     settingsFormCard {
@@ -613,6 +663,28 @@ public struct SilkSettingsView: View {
         .controlSize(.small)
     }
 
+    private var runtimeArchitectureLabel: String {
+        let archs = Bundle.main.executableArchitectures?.map(\.intValue) ?? []
+        let hasArm64 = archs.contains(NSBundleExecutableArchitectureARM64)
+        let hasX86 = archs.contains(NSBundleExecutableArchitectureX86_64)
+        if hasArm64 && hasX86 {
+            return L10n.tr("Universal Binary", "双架构通用二进制")
+        }
+        if hasArm64 {
+            return "Apple Silicon (arm64)"
+        }
+        if hasX86 {
+            return "Intel (x86_64)"
+        }
+        #if arch(arm64)
+        return "Apple Silicon (arm64)"
+        #elseif arch(x86_64)
+        return "Intel (x86_64)"
+        #else
+        return L10n.tr("Native Binary", "原生二进制")
+        #endif
+    }
+
     private func triggerActivation() {
         let key = licenseKeyInput
         Task {
@@ -637,7 +709,7 @@ public struct SilkSettingsView: View {
                 HStack(spacing: 6) {
                     Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.8.0-pro")
                     Text("·")
-                    Text(L10n.tr("Universal Binary", "双架构通用二进制"))
+                    Text(runtimeArchitectureLabel)
                 }
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundColor(.secondary)

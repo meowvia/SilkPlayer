@@ -1,6 +1,7 @@
 import Observation
 import Foundation
 import Combine
+import SilkCoreKit
 
 public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     case video = "video"

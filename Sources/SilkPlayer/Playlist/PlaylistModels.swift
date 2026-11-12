@@ -1,4 +1,5 @@
 import Foundation
+import SilkCoreKit
 
 public struct PlaylistItem: Identifiable, Hashable, Sendable, Codable {
     public let id: UUID
@@ -33,6 +34,8 @@ public struct PlaylistItem: Identifiable, Hashable, Sendable, Codable {
         self.mediaItemId = mediaItem.id
     }
 }
+
+extension PlaylistItem: SilkAudioTrackItem {}
 
 public enum PlaybackMode: String, CaseIterable, Codable, Sendable {
     case sequential = "sequential"

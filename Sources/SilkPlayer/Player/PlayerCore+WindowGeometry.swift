@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import QuartzCore
+import SilkCoreKit
 
 extension PlayerCore {
     public func updateRememberedWindowSize(_ contentSize: NSSize) {

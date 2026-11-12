@@ -11,6 +11,7 @@ import Foundation
 import Metal
 import MetalKit
 import QuartzCore
+import SwiftUI
 import VideoToolbox
 
 // MARK: - Playback State & Metadata
@@ -945,3 +946,389 @@ public final class SilkMediaLibraryEngine: ObservableObject {
 }
 
 extension SilkMediaLibraryEngine: @unchecked Sendable {}
+
+// MARK: - Closed-Source Pro Library & Music Mode UI Stubs (CI Only)
+
+public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Codable {
+    case moyu = "moyu"
+    case hupo = "hupo"
+    case yanzi = "yanzi"
+    case sujian = "sujian"
+    case shenghui = "shenghui"
+
+    public var id: String { rawValue }
+    public static let userDefaultsKey = "proLibraryThemeId"
+
+    public static func current() -> SilkLibraryTheme { .moyu }
+
+    public var displayName: String {
+        switch self {
+        case .moyu: return "墨玉"
+        case .hupo: return "琥珀"
+        case .yanzi: return "烟紫"
+        case .sujian: return "素笺"
+        case .shenghui: return "深灰"
+        }
+    }
+
+    public var isLight: Bool { self == .sujian }
+    public var swatchColor: Color { .accentColor }
+    public var accentColor: Color { .accentColor }
+    public var backgroundBase: Color { .black }
+    public var backgroundHighlight: Color { .black }
+    public var surfaceFill: Color { .black }
+    public var surfaceElevatedFill: Color { .black }
+    public var surfaceBorder: Color { .white.opacity(0.1) }
+    public var dividerColor: Color { .white.opacity(0.12) }
+    public var primaryText: Color { .white }
+    public var secondaryText: Color { .white.opacity(0.7) }
+    public var tertiaryText: Color { .white.opacity(0.5) }
+    public var controlFill: Color { .white.opacity(0.08) }
+    public var controlHoverFill: Color { .white.opacity(0.14) }
+    public var colorScheme: ColorScheme { isLight ? .light : .dark }
+}
+
+@MainActor
+public struct SilkProLibraryView: View {
+    public init(
+        onPlayItem: @escaping (SilkMediaLibraryRecord, [SilkMediaLibraryRecord], Bool) -> Void,
+        onOpenFile: @escaping () -> Void,
+        onFilesDropped: @escaping ([URL]) -> Void,
+        onOpenSettings: @escaping (Int) -> Void = { _ in }
+    ) {}
+
+    public var body: some View { EmptyView() }
+}
+
+public enum SilkFolderCheckState: Equatable, Sendable {
+    case checked
+    case mixed
+    case unchecked
+    public var symbolName: String { "square" }
+}
+
+public struct SilkFolderSelectionRule: Equatable, Sendable {
+    public var includedPaths: Set<String> = []
+    public var excludedPaths: Set<String> = []
+    public init(includedRelativePaths: [String] = [], excludedRelativePaths: [String] = []) {}
+    public init(emptyUnselected: Bool) {}
+    public var isActive: Bool { false }
+    public var exportedIncludedRelativePaths: [String] { [] }
+    public var exportedExcludedRelativePaths: [String] { [] }
+    public func state(for rawPath: String) -> SilkFolderCheckState { .unchecked }
+    public mutating func toggle(_ rawPath: String) {}
+}
+
+@MainActor
+public struct SilkLANSourceDrawerView: View {
+    public init(
+        drawerWidth: CGFloat = 300,
+        isInMediaLibrary: Bool = false,
+        onCompletedConfiguration: @escaping () -> Void,
+        onClose: @escaping () -> Void
+    ) {}
+
+    public var body: some View { EmptyView() }
+}
+
+public enum MusicModeGeometry: Sendable {
+    public static let minWidth: CGFloat = 520.0
+    public static let maxWidth: CGFloat = 768.0
+    public static let minHeight: CGFloat = 500.0
+    public static let collapsedStandardHeight: CGFloat = 224.0
+    public static let collapsedExtendedHeight: CGFloat = 232.0
+    public static let collapseDragThreshold: CGFloat = 370.0
+    public static let expandDragThreshold: CGFloat = 330.0
+    public static let extendedQueueWidthThreshold: CGFloat = 680.0
+    public static let compactBottomHUDWidthThreshold: CGFloat = 640.0
+    public static let contentHorizontalPadding: CGFloat = 20.0
+
+    public static func lockedWidth(forScreenWidth visibleWidth: CGFloat) -> CGFloat {
+        minWidth
+    }
+
+    public static func effectiveMinHeight(forScreenHeight visibleHeight: CGFloat) -> CGFloat {
+        guard visibleHeight.isFinite, visibleHeight > 0 else { return minHeight }
+        return min(minHeight, floor(visibleHeight))
+    }
+
+    public static func resolvedHeight(forScreenHeight visibleHeight: CGFloat, rememberedHeight: CGFloat? = nil) -> CGFloat {
+        rememberedHeight ?? max(minHeight, floor(visibleHeight * 0.8))
+    }
+
+    public static func collapsedHeight(forWindowWidth width: CGFloat, screenVisibleHeight: CGFloat? = nil) -> CGFloat {
+        let base = collapsedStandardHeight
+        if let screenVisibleHeight, screenVisibleHeight.isFinite, screenVisibleHeight > 0 {
+            return min(base, floor(screenVisibleHeight))
+        }
+        return base
+    }
+
+    public static func clampedFrame(
+        around currentFrame: NSRect?,
+        targetHeight: CGFloat? = nil,
+        rememberedHeight: CGFloat? = nil,
+        clampToExpandedMin: Bool = true,
+        screenVisibleFrame: NSRect
+    ) -> NSRect {
+        let w = lockedWidth(forScreenWidth: screenVisibleFrame.width)
+        let h = targetHeight ?? resolvedHeight(forScreenHeight: screenVisibleFrame.height, rememberedHeight: rememberedHeight)
+        return NSRect(x: currentFrame?.minX ?? screenVisibleFrame.minX, y: currentFrame?.minY ?? screenVisibleFrame.minY, width: w, height: h)
+    }
+
+    public static func clampedResizeProposal(_ proposedSize: NSSize, screenVisibleFrame: NSRect) -> NSSize {
+        NSSize(
+            width: lockedWidth(forScreenWidth: screenVisibleFrame.width),
+            height: min(screenVisibleFrame.height, max(effectiveMinHeight(forScreenHeight: screenVisibleFrame.height), proposedSize.height))
+        )
+    }
+
+    public static func magneticResizeProposal(
+        _ proposedSize: NSSize,
+        isCollapsed: Bool,
+        collapseThreshold: CGFloat = collapseDragThreshold,
+        expandThreshold: CGFloat = expandDragThreshold,
+        screenVisibleFrame: NSRect
+    ) -> (size: NSSize, isCollapsed: Bool) {
+        (clampedResizeProposal(proposedSize, screenVisibleFrame: screenVisibleFrame), isCollapsed)
+    }
+
+    public static func toggledCollapseFrame(
+        around currentFrame: NSRect,
+        targetCollapsed: Bool,
+        rememberedExpandedHeight: CGFloat?,
+        screenVisibleFrame: NSRect
+    ) -> NSRect {
+        let w = lockedWidth(forScreenWidth: screenVisibleFrame.width)
+        let h = targetCollapsed
+            ? collapsedHeight(forWindowWidth: w, screenVisibleHeight: screenVisibleFrame.height)
+            : (rememberedExpandedHeight ?? minHeight)
+        return NSRect(x: currentFrame.minX, y: currentFrame.minY, width: w, height: h)
+    }
+
+    public static func showsExtendedQueueColumns(width: CGFloat) -> Bool { false }
+    public static func usesCompactBottomControls(width: CGFloat) -> Bool { true }
+    public static func bottomVolumeTrackWidth(forWindowWidth width: CGFloat) -> CGFloat { 60.0 }
+    public static func showsVolumePercentage(forWindowWidth width: CGFloat) -> Bool { false }
+    public static func heroArtworkSize(forWindowWidth width: CGFloat) -> CGFloat { 56.0 }
+}
+
+public protocol SilkAudioTrackItem: Sendable {
+    var id: UUID { get }
+    var path: String { get }
+    var title: String { get }
+    var duration: Double { get }
+}
+
+extension SilkAudioTrackItem {
+    public var url: URL { URL(fileURLWithPath: path) }
+}
+
+public struct SilkAudioTrackDescriptor: SilkAudioTrackItem, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public let path: String
+    public let title: String
+    public let duration: Double
+    public let isAudio: Bool
+
+    public init(id: UUID = UUID(), path: String, title: String, duration: Double = 0, isAudio: Bool = true) {
+        self.id = id
+        self.path = path
+        self.title = title
+        self.duration = duration
+        self.isAudio = isAudio
+    }
+}
+
+public struct AudioTrackMetadata: Sendable, Equatable, Codable {
+    public let path: String
+    public var title: String
+    public var artist: String
+    public var album: String
+    public var formatLabel: String
+    public var sampleRateHz: Double?
+    public var bitDepth: Int?
+    public var duration: Double?
+    public var modificationDate: Date?
+
+    public init(
+        path: String,
+        title: String,
+        artist: String = "",
+        album: String = "",
+        formatLabel: String = "",
+        sampleRateHz: Double? = nil,
+        bitDepth: Int? = nil,
+        duration: Double? = nil,
+        modificationDate: Date? = nil
+    ) {
+        self.path = path
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.formatLabel = formatLabel
+        self.sampleRateHz = sampleRateHz
+        self.bitDepth = bitDepth
+        self.duration = duration
+        self.modificationDate = modificationDate
+    }
+
+    public var heroSpecText: String { formatLabel }
+    public var queueDisplayTitle: String { title }
+}
+
+@MainActor
+public final class AudioTrackMetadataService {
+    public static let shared = AudioTrackMetadataService(cacheURL: defaultDiskCacheURL())
+    public private(set) var cache: [String: AudioTrackMetadata] = [:]
+
+    public init(cacheURL: URL? = nil) {}
+    public nonisolated static func defaultDiskCacheURL() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("mock_audio_cache.json")
+    }
+    public func metadata<T: SilkAudioTrackItem>(for item: T) -> AudioTrackMetadata {
+        Self.fallbackMetadata(for: item)
+    }
+    public func ensureLoaded<T: SilkAudioTrackItem>(for items: [T], priorityPath: String? = nil) {}
+    public func mergeLiveStreamInfo(path: String, rawTitle: String, codec: String?, sampleRateHz: Double?, bitDepth: Int?, duration: Double?, tags: [String: String]?) {}
+    public func clearCache() { cache.removeAll() }
+    public nonisolated static func repairMojibakeIfNeeded(_ raw: String) -> String { raw }
+    public nonisolated static func isCorruptPlaceholderTag(_ text: String) -> Bool { false }
+    public nonisolated static func sanitizeTagValue(_ raw: String) -> String { raw }
+    public nonisolated static func decodeTagData(_ rawData: Data) -> String { "" }
+    public nonisolated static func fallbackMetadata<T: SilkAudioTrackItem>(for item: T) -> AudioTrackMetadata {
+        AudioTrackMetadata(path: item.path, title: item.title, duration: item.duration > 0 ? item.duration : nil)
+    }
+    public nonisolated static func splitArtistAndTitle(from sanitizedName: String) -> (artist: String, title: String) {
+        ("", sanitizedName)
+    }
+    public nonisolated static func extractMetadataFromDisk<T: SilkAudioTrackItem>(item: T) async -> AudioTrackMetadata {
+        fallbackMetadata(for: item)
+    }
+}
+
+extension AudioTrackMetadataService: @unchecked Sendable {}
+
+public enum SilkMusicMediaCategory: String, CaseIterable, Sendable {
+    case video
+    case audio
+
+    public var title: String { self == .video ? "Videos" : "Music" }
+    public var iconName: String { self == .video ? "film" : "music.note" }
+}
+
+public struct SilkMusicSortOptionItem: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let title: String
+    public let iconName: String
+
+    public init(id: String, title: String, iconName: String) {
+        self.id = id
+        self.title = title
+        self.iconName = iconName
+    }
+}
+
+public enum SilkMusicModeScrollPolicy: Sendable {
+    public static func shouldSuppressAutoScroll(
+        suppressedID: UUID?,
+        deadline: Date,
+        selectedID: UUID?,
+        now: Date = Date()
+    ) -> Bool {
+        guard let suppressedID, now < deadline else { return false }
+        if let selectedID { return selectedID == suppressedID }
+        return true
+    }
+}
+
+@MainActor
+public protocol SilkMusicModeHost: ObservableObject {
+    var isPlaying: Bool { get }
+    var isAudioOnly: Bool { get }
+    var isMuted: Bool { get }
+    var volume: Double { get }
+    var maxVolumeLimit: Double { get }
+    var duration: Double { get }
+    var mediaTitle: String { get }
+    var currentFilePath: String? { get }
+    var activeAudioCodec: String? { get }
+    var artworkImage: NSImage? { get }
+    var audioRhythmLevels: [CGFloat] { get }
+    var canRewindToStart: Bool { get }
+    var isFullscreen: Bool { get }
+    var hostWindow: NSWindow? { get }
+    var isMusicQueueCollapsed: Bool { get }
+    var keepWindowOnTop: Bool { get }
+    var dualPlaylistMode: Bool { get }
+    var activeMediaCategory: SilkMusicMediaCategory { get }
+    var audioCount: Int { get }
+    var videoCount: Int { get }
+    var audioCurrentIndex: Int { get }
+    var audioQueueItems: [SilkMusicQueueEntry] { get }
+    var videoQueueItems: [SilkMusicQueueEntry] { get }
+    var unifiedQueueItems: [SilkMusicQueueEntry] { get }
+    var currentPlaylistEntry: SilkMusicQueueEntry? { get }
+    var upcomingQueueEntry: SilkMusicQueueEntry? { get }
+    var hasPreviousTrack: Bool { get }
+    var hasNextTrack: Bool { get }
+    var isSingleLoopMode: Bool { get }
+    var isNonSequentialPlaybackMode: Bool { get }
+    var playbackModeIconName: String { get }
+    var playbackModeTitle: String { get }
+    var sortOptions: [SilkMusicSortOptionItem] { get }
+    var currentSortOptionID: String { get }
+    var isSortAscending: Bool { get }
+
+    func isSettingsWindow(_ window: NSWindow) -> Bool
+    func toggleAlwaysOnTop()
+    func togglePlayPause()
+    func seek(to time: Double)
+    func toggleMute()
+    func setVolume(_ volume: Double, maxLimit: Double, showOSD: Bool)
+    func cyclePlaybackModeAndShowOSD()
+    func toggleMusicQueueCollapsed()
+    func setMusicQueueCollapsed(_ collapsed: Bool, animated: Bool)
+    func openSettings()
+    func dismissAuxiliaryDrawersForClose()
+    func beginWindowDrag(on window: NSWindow, with event: NSEvent)
+    func cleanDisplayTitle(_ raw: String) -> String
+    func switchPlaylistCategory(_ category: SilkMusicMediaCategory)
+    func importMediaPaths(_ paths: [String], onAdded: @escaping @MainActor ([SilkMusicQueueEntry]) -> Void)
+    func clearPlaylist(category: SilkMusicMediaCategory?)
+    func removePlaylistItem(id: UUID, in category: SilkMusicMediaCategory?)
+    func selectQueueItem(id: UUID, in category: SilkMusicMediaCategory)
+    func sortAudioQueue(optionID: String, forceDirectionAscending: Bool?)
+    func toggleAudioSortDirection()
+    func makeProgressSectionView(windowWidth: CGFloat, isCollapsed: Bool) -> AnyView
+    func makeSpeedMenuButtonView() -> AnyView
+    func makeVinylDiscView(diameter: CGFloat, isPlaying: Bool) -> AnyView
+}
+
+public struct SilkMusicQueueEntry: SilkAudioTrackItem, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public let path: String
+    public let title: String
+    public let duration: Double
+    public let isAudio: Bool
+
+    public init(id: UUID, path: String, title: String, duration: Double, isAudio: Bool) {
+        self.id = id
+        self.path = path
+        self.title = title
+        self.duration = duration
+        self.isAudio = isAudio
+    }
+}
+
+@MainActor
+public struct SilkMusicModeView<Host: SilkMusicModeHost>: View {
+    public init(
+        host: Host,
+        onPlayNext: @escaping () -> Void,
+        onPlayPrevious: @escaping () -> Void,
+        onClosePlayback: @escaping () -> Void
+    ) {}
+
+    public var body: some View { EmptyView() }
+}
