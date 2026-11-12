@@ -77,6 +77,52 @@ public struct PlayerContainerView: View {
                     .zIndex(20)
                 }
 
+                // Playback Failure Recovery Overlay (prevents silent black screen on dead paths / decode failure)
+                if !player.isAudioOnly && player.playbackState == .error {
+                    VStack(spacing: 14) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundColor(.orange)
+                        Text(L10n.tr("Playback Failed", "无法播放当前媒体"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text(player.statusMessage)
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.75))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .frame(maxWidth: 360)
+                        HStack(spacing: 10) {
+                            if let failedPath = player.currentFilePath {
+                                Button(L10n.tr("Retry", "重试")) {
+                                    player.loadMediaWithCrossfade(path: failedPath, startTime: player.currentTime, autoPlay: true)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.regular)
+                            }
+                            Button(L10n.tr("Close", "返回")) {
+                                onClosePlayback()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
+                        }
+                        .padding(.top, 2)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.black.opacity(0.78))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.45), radius: 18, x: 0, y: 8)
+                    .environment(\.colorScheme, .dark)
+                    .zIndex(38)
+                }
+
                 // Transient On-Screen Display (OSD) HUD (Seek, Play/Pause, Track, Adjustments, Screenshot)
                 // Centered at Top with uniform margin across windowed & fullscreen modes (macOS standard)
                 if let osd = player.activeOSD {

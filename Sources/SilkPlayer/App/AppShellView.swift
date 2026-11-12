@@ -15,6 +15,10 @@ public struct AppShellView: View {
     @State private var lastPreviousClickTime: Date = .distantPast
     @State private var prePlaybackLibraryFrame: NSRect? = nil
     @State private var isLeftSourceDrawerVisible: Bool = false
+    @State private var playRequestGeneration: UInt64 = 0
+    @State private var inFlightResolveTask: Task<Void, Never>? = nil
+    @State private var resolvingTargetPath: String? = nil
+    @State private var libraryPlaybackErrorMessage: String? = nil
 
     public init(
         player: PlayerCore,
@@ -317,6 +321,19 @@ public struct AppShellView: View {
                 isLeftSourceDrawerVisible = false
             }
         }
+        .alert(
+            L10n.tr("Unable to Open Media", "无法打开媒体文件"),
+            isPresented: Binding(
+                get: { libraryPlaybackErrorMessage != nil },
+                set: { if !$0 { libraryPlaybackErrorMessage = nil } }
+            )
+        ) {
+            Button(L10n.tr("OK", "确定"), role: .cancel) {
+                libraryPlaybackErrorMessage = nil
+            }
+        } message: {
+            Text(libraryPlaybackErrorMessage ?? "")
+        }
         .onChange(of: licenseEngine.isProActive) { _, isActive in
             guard isActive else { return }
             Task { @MainActor in
@@ -376,6 +393,10 @@ public struct AppShellView: View {
 
     // MARK: - Playback Controls & Routing
     private func stopPlayback() {
+        inFlightResolveTask?.cancel()
+        inFlightResolveTask = nil
+        resolvingTargetPath = nil
+        playRequestGeneration &+= 1
         if let currentPath = player.currentFilePath, player.currentTime > 0 {
             AppSettings.shared.recordPlaybackProgress(
                 path: currentPath,
@@ -410,6 +431,16 @@ public struct AppShellView: View {
     }
 
     private func playLibraryRecord(_ target: SilkMediaLibraryRecord, queue: [SilkMediaLibraryRecord], forceFromBeginning: Bool) {
+        // Ignore duplicate rapid double-click on the exact same item while it is still resolving/mounting
+        if inFlightResolveTask != nil && resolvingTargetPath == target.path {
+            return
+        }
+
+        inFlightResolveTask?.cancel()
+        playRequestGeneration &+= 1
+        let requestGen = playRequestGeneration
+        resolvingTargetPath = target.path
+
         if !isPlaying,
            prePlaybackLibraryFrame == nil,
            let w = player.hostWindow,
@@ -418,14 +449,39 @@ public struct AppShellView: View {
         }
 
         let orderedQueue = queue.isEmpty ? [target] : queue
-        let playlistItems = orderedQueue.map {
-            PlaylistItem(path: $0.path, title: $0.title, duration: $0.durationSeconds)
-        }
-        let startIndex = orderedQueue.firstIndex(where: { $0.path == target.path }) ?? 0
 
-        Task { @MainActor in
+        inFlightResolveTask = Task { @MainActor in
+            defer {
+                if requestGen == playRequestGeneration {
+                    inFlightResolveTask = nil
+                    resolvingTargetPath = nil
+                }
+            }
+
             let resolvedURL = await SilkMediaLibraryEngine.shared.resolvePlayableURL(for: target.path)
-            let effectivePath = resolvedURL?.path ?? target.path
+            guard !Task.isCancelled, requestGen == playRequestGeneration else { return }
+
+            guard let resolvedURL else {
+                if !isPlaying {
+                    prePlaybackLibraryFrame = nil
+                }
+                libraryPlaybackErrorMessage = L10n.tr(
+                    "The media file could not be accessed. Please verify the shared drive connection or folder permissions.\n\n\(target.title)",
+                    "当前无法访问该媒体文件，请检查共享挂载连接或目录权限。\n\n\(target.title)"
+                )
+                return
+            }
+
+            let effectivePath = resolvedURL.path
+            let playlistItems = Self.remappedPlaylistItems(
+                from: orderedQueue,
+                originalTargetPath: target.path,
+                resolvedTargetPath: effectivePath
+            )
+            let startIndex = playlistItems.firstIndex(where: { $0.path == effectivePath })
+                ?? orderedQueue.firstIndex(where: { $0.path == target.path })
+                ?? 0
+
             playlistManager.setPlaylist(playlistItems: playlistItems, startingIndex: startIndex)
 
             let resumeTime: Double
@@ -437,6 +493,49 @@ public struct AppShellView: View {
                 resumeTime = AppSettings.shared.getSavedPosition(for: effectivePath)
             }
             startPlayback(path: effectivePath, startTime: resumeTime, autoPlay: true)
+        }
+    }
+
+    private static func remappedPlaylistItems(
+        from queue: [SilkMediaLibraryRecord],
+        originalTargetPath: String,
+        resolvedTargetPath: String
+    ) -> [PlaylistItem] {
+        guard originalTargetPath != resolvedTargetPath else {
+            return queue.map { PlaylistItem(path: $0.path, title: $0.title, duration: $0.durationSeconds) }
+        }
+        let origParts = originalTargetPath.split(separator: "/", omittingEmptySubsequences: false)
+        let resParts = resolvedTargetPath.split(separator: "/", omittingEmptySubsequences: false)
+        var commonTailCount = 0
+        while commonTailCount < origParts.count && commonTailCount < resParts.count {
+            let o = origParts[origParts.count - 1 - commonTailCount]
+            let r = resParts[resParts.count - 1 - commonTailCount]
+            if o != r { break }
+            commonTailCount += 1
+        }
+        guard commonTailCount > 0 else {
+            return queue.map { record in
+                let p = (record.path == originalTargetPath) ? resolvedTargetPath : record.path
+                return PlaylistItem(path: p, title: record.title, duration: record.durationSeconds)
+            }
+        }
+        let oldPrefixParts = origParts.dropLast(commonTailCount)
+        let newPrefixParts = resParts.dropLast(commonTailCount)
+        let oldPrefix = oldPrefixParts.joined(separator: "/")
+        let newPrefix = newPrefixParts.joined(separator: "/")
+        guard !oldPrefix.isEmpty, oldPrefix != newPrefix else {
+            return queue.map { PlaylistItem(path: $0.path, title: $0.title, duration: $0.durationSeconds) }
+        }
+        return queue.map { record in
+            let remappedPath: String
+            if record.path == originalTargetPath {
+                remappedPath = resolvedTargetPath
+            } else if record.path.hasPrefix(oldPrefix + "/") {
+                remappedPath = newPrefix + String(record.path.dropFirst(oldPrefix.count))
+            } else {
+                remappedPath = record.path
+            }
+            return PlaylistItem(path: remappedPath, title: record.title, duration: record.durationSeconds)
         }
     }
 

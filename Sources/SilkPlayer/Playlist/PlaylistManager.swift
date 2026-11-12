@@ -187,6 +187,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     private let indexStorageKey: String
     private let modeStorageKey: String
     private let userDefaults: UserDefaults
+    private var pendingSaveTask: Task<Void, Never>? = nil
 
     public init(
         isPersistenceEnabled: Bool = true,
@@ -1276,53 +1277,106 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
 
     public func saveToStorage() {
         guard isPersistenceEnabled else { return }
-        do {
-            userDefaults.set(playbackMode.rawValue, forKey: modeStorageKey)
-            userDefaults.set(activeCategory.rawValue, forKey: Self.defaultCategoryStorageKey)
-            userDefaults.set(isDualPlaylistMode, forKey: "dualPlaylistMode")
+        pendingSaveTask?.cancel()
+        pendingSaveTask = nil
 
-            let videoData = try JSONEncoder().encode(videoItems)
-            userDefaults.set(videoData, forKey: Self.defaultVideoItemsStorageKey)
-            userDefaults.set(videoCurrentIndex, forKey: Self.defaultVideoIndexStorageKey)
+        let totalItemCount = videoItems.count + audioItems.count
+        let shouldPersistAsync = itemsStorageKey == Self.defaultItemsStorageKey
+            && userDefaults === UserDefaults.standard
+            && totalItemCount >= 200
 
-            let audioData = try JSONEncoder().encode(audioItems)
-            userDefaults.set(audioData, forKey: Self.defaultAudioItemsStorageKey)
-            userDefaults.set(audioCurrentIndex, forKey: Self.defaultAudioIndexStorageKey)
+        let modeRaw = playbackMode.rawValue
+        let activeCatRaw = activeCategory.rawValue
+        let dualMode = isDualPlaylistMode
+        let vItems = videoItems
+        let vIndex = videoCurrentIndex
+        let aItems = audioItems
+        let aIndex = audioCurrentIndex
+        let vShuffleIDs = vItems.isEmpty ? [] : videoShuffleQueue.compactMap { ($0 >= 0 && $0 < vItems.count) ? vItems[$0].id : nil }
+        let aShuffleIDs = aItems.isEmpty ? [] : audioShuffleQueue.compactMap { ($0 >= 0 && $0 < aItems.count) ? aItems[$0].id : nil }
+        let vHistoryIDs = vItems.isEmpty ? [] : videoPlayHistory.compactMap { ($0 >= 0 && $0 < vItems.count) ? vItems[$0].id : nil }
+        let aHistoryIDs = aItems.isEmpty ? [] : audioPlayHistory.compactMap { ($0 >= 0 && $0 < aItems.count) ? aItems[$0].id : nil }
+        let vRecent = videoRecentTrackKeys
+        let aRecent = audioRecentTrackKeys
 
-            if let data = encodedIDs(for: videoShuffleQueue, in: videoItems) {
-                userDefaults.set(data, forKey: Self.defaultVideoShuffleQueueKey)
-            }
-            if let data = encodedIDs(for: audioShuffleQueue, in: audioItems) {
-                userDefaults.set(data, forKey: Self.defaultAudioShuffleQueueKey)
-            }
-            if let data = encodedIDs(for: videoPlayHistory, in: videoItems) {
-                userDefaults.set(data, forKey: Self.defaultVideoPlayHistoryKey)
-            }
-            if let data = encodedIDs(for: audioPlayHistory, in: audioItems) {
-                userDefaults.set(data, forKey: Self.defaultAudioPlayHistoryKey)
-            }
-            if let data = encodedStrings(videoRecentTrackKeys) {
-                userDefaults.set(data, forKey: Self.defaultVideoRecentKeysStorageKey)
-            }
-            if let data = encodedStrings(audioRecentTrackKeys) {
-                userDefaults.set(data, forKey: Self.defaultAudioRecentKeysStorageKey)
-            }
+        let activeItemsSnapshot = items
+        let curIdx = currentIndex
+        let activeShuffleIDs = activeItemsSnapshot.isEmpty ? [] : currentShuffleQueue.compactMap { ($0 >= 0 && $0 < activeItemsSnapshot.count) ? activeItemsSnapshot[$0].id : nil }
+        let activeHistoryIDs = activeItemsSnapshot.isEmpty ? [] : currentPlayHistory.compactMap { ($0 >= 0 && $0 < activeItemsSnapshot.count) ? activeItemsSnapshot[$0].id : nil }
+        let activeRecent = currentRecentTrackKeys
 
-            // Sync active track to itemsStorageKey & indexStorageKey for legacy & custom test key compatibility
-            let activeData = try JSONEncoder().encode(items)
-            userDefaults.set(activeData, forKey: itemsStorageKey)
-            userDefaults.set(currentIndex, forKey: indexStorageKey)
-            if let data = encodedIDs(for: currentShuffleQueue, in: items) {
-                userDefaults.set(data, forKey: customShuffleQueueStorageKey)
+        let modeKey = modeStorageKey
+        let itemsKey = itemsStorageKey
+        let idxKey = indexStorageKey
+        let cShuffleKey = customShuffleQueueStorageKey
+        let cHistoryKey = customPlayHistoryStorageKey
+        let cRecentKey = customRecentKeysStorageKey
+
+        @Sendable func writeAll(to defaults: UserDefaults) {
+            do {
+                let encoder = JSONEncoder()
+                defaults.set(modeRaw, forKey: modeKey)
+                defaults.set(activeCatRaw, forKey: Self.defaultCategoryStorageKey)
+                defaults.set(dualMode, forKey: "dualPlaylistMode")
+
+                let videoData = try encoder.encode(vItems)
+                defaults.set(videoData, forKey: Self.defaultVideoItemsStorageKey)
+                defaults.set(vIndex, forKey: Self.defaultVideoIndexStorageKey)
+
+                let audioData = try encoder.encode(aItems)
+                defaults.set(audioData, forKey: Self.defaultAudioItemsStorageKey)
+                defaults.set(aIndex, forKey: Self.defaultAudioIndexStorageKey)
+
+                if let data = try? encoder.encode(vShuffleIDs) {
+                    defaults.set(data, forKey: Self.defaultVideoShuffleQueueKey)
+                }
+                if let data = try? encoder.encode(aShuffleIDs) {
+                    defaults.set(data, forKey: Self.defaultAudioShuffleQueueKey)
+                }
+                if let data = try? encoder.encode(vHistoryIDs) {
+                    defaults.set(data, forKey: Self.defaultVideoPlayHistoryKey)
+                }
+                if let data = try? encoder.encode(aHistoryIDs) {
+                    defaults.set(data, forKey: Self.defaultAudioPlayHistoryKey)
+                }
+                if let data = try? encoder.encode(vRecent) {
+                    defaults.set(data, forKey: Self.defaultVideoRecentKeysStorageKey)
+                }
+                if let data = try? encoder.encode(aRecent) {
+                    defaults.set(data, forKey: Self.defaultAudioRecentKeysStorageKey)
+                }
+
+                // Reuse encoded track buffer when in dual-playlist mode to avoid double-encoding thousands of items
+                let activeData: Data
+                if dualMode {
+                    activeData = (activeCatRaw == MediaCategory.video.rawValue) ? videoData : audioData
+                } else {
+                    activeData = try encoder.encode(activeItemsSnapshot)
+                }
+                defaults.set(activeData, forKey: itemsKey)
+                defaults.set(curIdx, forKey: idxKey)
+                if let data = try? encoder.encode(activeShuffleIDs) {
+                    defaults.set(data, forKey: cShuffleKey)
+                }
+                if let data = try? encoder.encode(activeHistoryIDs) {
+                    defaults.set(data, forKey: cHistoryKey)
+                }
+                if let data = try? encoder.encode(activeRecent) {
+                    defaults.set(data, forKey: cRecentKey)
+                }
+            } catch {
+                // Silently fail-safe
             }
-            if let data = encodedIDs(for: currentPlayHistory, in: items) {
-                userDefaults.set(data, forKey: customPlayHistoryStorageKey)
+        }
+
+        if shouldPersistAsync {
+            pendingSaveTask = Task.detached(priority: .utility) {
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                guard !Task.isCancelled else { return }
+                writeAll(to: UserDefaults.standard)
             }
-            if let data = encodedStrings(currentRecentTrackKeys) {
-                userDefaults.set(data, forKey: customRecentKeysStorageKey)
-            }
-        } catch {
-            // Silently fail-safe
+        } else {
+            writeAll(to: userDefaults)
         }
     }
 

@@ -523,4 +523,112 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         let techItem = try XCTUnwrap(engine.items.first(where: { $0.path == movieTech.path }))
         XCTAssertEqual(techItem.title, "zl2")
     }
+
+    // MARK: - 6. Mount-Index-Playback Stability Tests
+
+    func testLargeScale4000FileIndexingAndImmediateResolve() async throws {
+        guard !isCIMockEnvironment else { return }
+
+        let tempDir = try makeTempDir()
+        let dbURL = tempDir.appendingPathComponent("scale4k.sqlite")
+        let rootDir = tempDir.appendingPathComponent("ScaleRoot", isDirectory: true)
+        try FileManager.default.createDirectory(at: rootDir, withIntermediateDirectories: true)
+
+        let totalFiles = 4050
+        let batchFolders = 20
+        for b in 0..<batchFolders {
+            let sub = rootDir.appendingPathComponent(String(format: "ClipFolder_%02d", b), isDirectory: true)
+            try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+        }
+        let emptyData = Data()
+        for idx in 0..<totalFiles {
+            let folderIdx = idx % batchFolders
+            let fileURL = rootDir
+                .appendingPathComponent(String(format: "ClipFolder_%02d", folderIdx), isDirectory: true)
+                .appendingPathComponent(String(format: "SampleClip_%04d.mp4", idx))
+            _ = FileManager.default.createFile(atPath: fileURL.path, contents: emptyData)
+        }
+
+        let engine = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        let added = await engine.addLocalSource(url: rootDir, displayName: "Scale4K")
+        XCTAssertNotNil(added)
+        XCTAssertEqual(engine.items.count, totalFiles)
+
+        // Immediately resolve first, middle, and last items cleanly without stalling
+        for checkIdx in [0, totalFiles / 2, totalFiles - 1] {
+            let target = engine.items[checkIdx]
+            let resolved = await engine.resolvePlayableURL(for: target.path)
+            XCTAssertNotNil(resolved)
+            XCTAssertEqual(resolved?.standardizedFileURL.path, URL(fileURLWithPath: target.path).standardizedFileURL.path)
+        }
+    }
+
+    func testRemoveSourceMidScanDoesNotResurrectRecords() async throws {
+        guard !isCIMockEnvironment else { return }
+
+        let tempDir = try makeTempDir()
+        let dbURL = tempDir.appendingPathComponent("remove_race.sqlite")
+        let rootDir = tempDir.appendingPathComponent("RaceRoot", isDirectory: true)
+        try FileManager.default.createDirectory(at: rootDir, withIntermediateDirectories: true)
+
+        for idx in 0..<400 {
+            let f = rootDir.appendingPathComponent("Clip_\(idx).mp4")
+            _ = FileManager.default.createFile(atPath: f.path, contents: Data())
+        }
+
+        let engine = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        let addedSource = await engine.addLocalSource(url: rootDir, displayName: "RaceSource")
+        let source = try XCTUnwrap(addedSource)
+        XCTAssertEqual(engine.items.count, 400)
+
+        engine.enqueueBackgroundRescan(sourceIds: [source.id])
+        await engine.removeSource(id: source.id)
+        await engine.rescanAll()
+
+        XCTAssertTrue(engine.sources.isEmpty)
+        XCTAssertTrue(engine.items.isEmpty)
+
+        let reloaded = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        await reloaded.loadFromDatabase()
+        XCTAssertTrue(reloaded.sources.isEmpty)
+        XCTAssertTrue(reloaded.items.isEmpty)
+    }
+
+    func testResolvePlayableURLReturnsNilForMissingFile() async throws {
+        guard !isCIMockEnvironment else { return }
+
+        let tempDir = try makeTempDir()
+        let dbURL = tempDir.appendingPathComponent("missing_file.sqlite")
+        let rootDir = tempDir.appendingPathComponent("MissingRoot", isDirectory: true)
+        try FileManager.default.createDirectory(at: rootDir, withIntermediateDirectories: true)
+
+        let mediaFile = rootDir.appendingPathComponent("TemporaryClip.mkv")
+        try Data("video".utf8).write(to: mediaFile)
+
+        let engine = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        _ = await engine.addLocalSource(url: rootDir, displayName: "MissingRoot")
+        XCTAssertEqual(engine.items.count, 1)
+
+        try FileManager.default.removeItem(at: mediaFile)
+        let resolved = await engine.resolvePlayableURL(for: mediaFile.path)
+        XCTAssertNil(resolved)
+    }
+
+    func testPlaylistManager4000ItemSetPlaylistThroughput() {
+        let items = (0..<4050).map { idx in
+            PlaylistItem(
+                path: String(format: "/tmp/silk_scale/Clip_%04d.mp4", idx),
+                title: "Clip \(idx)",
+                duration: 120.0
+            )
+        }
+        let manager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+        let start = CFAbsoluteTimeGetCurrent()
+        manager.setPlaylist(playlistItems: items, startingIndex: 2025)
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
+
+        XCTAssertEqual(manager.count, 4050)
+        XCTAssertEqual(manager.currentIndex, 2025)
+        XCTAssertLessThan(elapsed, 0.5)
+    }
 }
