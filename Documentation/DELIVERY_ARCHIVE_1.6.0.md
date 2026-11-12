@@ -120,21 +120,19 @@
 - **测试套件**: 全量回归测试通过（100% PASS，编译零告警）；
 - **基准固化**:
   - `GeometryAndTransformTests`（7/7 通过）：几何边界约束、画幅自适应及右键百分比缩放（`50% / 75% / 100%`）与边界/全屏/纯音频门控测试（`testWindowPresetContentSizeAndBoundaryMenuGating`、`testFitWindowPercentageAndContextMenuStateGating`）；
-  - `PlaylistRegressionTests`（Test 1-63 全部断言通过）：播放列表、双轨分流、自然排序、Metal 容错、`UpdateService` 校验、HUD 实时尺寸及 `.minimal` 音量隐藏断言；
+  - `PlaylistRegressionTests`（Test 1-63 全部断言通过）：播放列表、双轨分流、自然排序、Metal 容错、`UpdateService` Universal 资产解析与校验、HUD 实时尺寸及 `.minimal` 音量隐藏断言；
   - `SwiftTestingSanityTests`（1/1 通过）：基础断言测试通过。
 
 ---
 
 ## 3. 正式发布安装镜像与 SHA-256 校验和
 - **工程 Git 基准**:
-  - 开源前端: `SilkPlayer`（应用构建源码 Commit `a0dcdf5`，分支 `feature/v1.6.0`）
+  - 开源前端: `SilkPlayer`（应用构建源码 Commit `e751dd4`，分支 `feature/v1.6.0`）
   - 闭源内核: `SilkCoreKit`（Commit `1e49d6f`）
 - **发布安装镜像**:
-  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构): `1a1e199eaa80384dd32bb729dbb0686362376bba3a52dac2307638a94b8775ef`
-  - `SilkPlayer-1.6.0-arm64.dmg` (Apple Silicon 专用): `73de02afa870031da8d0b40cc36fbc79b2b9d989f57a4b8a564238428b7879c7`
-  - `SilkPlayer-1.6.0-x86_64.dmg` (Intel 64 位专用): `d6d0ee5588088c3fdbf6eb159131bf962f85cb098a169a30c8e8c7ed65d65f49`
+  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构，Apple Silicon + Intel 64 位单镜像交付): `c332d4fa6f7cc56952a858eafeecce68885acd8bc69c031f8fcd09fd8cefe388`
 - **动态库依赖审计 (@rpath)**:
-  - 零宿主绝对路径泄漏，所有动态库严格限定在 `@rpath/` 与系统库路径，通过 `package_app.sh` 自动化签名与 Hardened Runtime 校验，三架构打包完成。
+  - 零宿主绝对路径泄漏，所有动态库严格限定在 `@rpath/` 与系统库路径，通过 `package_app.sh` 自动化签名与 Hardened Runtime 校验，Universal 单镜像打包完成。
 - **本地应用状态**:
   - `/Applications/SilkPlayer.app` 经全新清理安装为 `1.6.0` Universal 双架构发行版本。
 
