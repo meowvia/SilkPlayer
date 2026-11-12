@@ -1,18 +1,23 @@
 import SwiftUI
 import AppKit
+import SilkCoreKit
 
-/// Native macOS Settings View for SilkPlayer (Proposal 018 & 020).
-/// Strictly conforms to macOS Human Interface Guidelines (HIG) and Professional Design System.
-/// Generous 520 × 490 pt zero-scroll architecture organized into 3 standard tabs:
-/// 1. 通用 (General) - Appearance, Language, Window Mode, Screenshots (Directory & Format)
-/// 2. 播放 (Playback) - Auto-play, Continuous Playback, Dual Playlist, Resume Playback, History, Step Duration, Scroll Wheel, Gestures, Clock
-/// 3. 关于 (About) - Native AppIcon, Version Info, Spec Overview, Action Links, Legal Copyright
+/// Native macOS Settings View for SilkPlayer.
+/// 560 × 540 pt clean architecture organized into 4 tabs:
+/// 1. 通用 (General) - Appearance, Language, Window Mode, Screenshots
+/// 2. 播放 (Playback) - Auto-play, Continuous Playback, Dual Playlist, Resume, History, Gestures
+/// 3. 局域网 (LAN) - Media Library Switches, Protocol Overview, Local Index Status
+/// 4. 关于 (About) - Version Info, Slogan, License Activation & Purchase, Spec Overview, Action Links
 public struct SilkSettingsView: View {
     @Bindable var settings = AppSettings.shared
     @Bindable var updateService = UpdateService.shared
+    @ObservedObject var licenseEngine = SilkProLicenseEngine.shared
+    @ObservedObject var libraryEngine = SilkMediaLibraryEngine.shared
 
     @State private var selectedTab: Int = 0
     @State private var showHistoryClearedAlert: Bool = false
+    @State private var licenseKeyInput: String = ""
+    @State private var showPurchasePendingAlert: Bool = false
 
     public init() {}
 
@@ -24,14 +29,14 @@ public struct SilkSettingsView: View {
             VStack(spacing: 0) {
                 // Centered macOS Segmented Toolbar Header
                 topTabBar
-                    .frame(width: 320)
+                    .frame(width: 452)
                     .padding(.top, 16)
                     .padding(.bottom, 12)
 
                 Divider()
                     .opacity(0.25)
 
-                // Tab Content Body (Zero Scrollbar, Fixed 520 × 422 pt)
+                // Tab Content Body (Fixed 520 × 422 pt)
                 tabContent
                     .frame(width: 520, height: 422)
             }
@@ -39,6 +44,12 @@ public struct SilkSettingsView: View {
         .frame(width: 520, height: 490)
         .preferredColorScheme(settings.appearanceMode.colorScheme)
         .id(settings.appLanguage)
+        .onAppear {
+            consumeRequestedTab()
+        }
+        .onChange(of: settings.requestedSettingsTab) { _, _ in
+            consumeRequestedTab()
+        }
         .alert(L10n.tr("Playback History Cleared", "播放历史已清除"), isPresented: $showHistoryClearedAlert) {
             Button(L10n.tr("OK", "好"), role: .cancel) {}
         } message: {
@@ -69,17 +80,36 @@ public struct SilkSettingsView: View {
                 "SilkPlayer \(updateService.currentAppVersion) 当前已是最新版本。"
             ))
         }
+        .alert(
+            L10n.tr("Purchase Page Pending", "购买页面尚未配置"),
+            isPresented: $showPurchasePendingAlert
+        ) {
+            Button(L10n.tr("OK", "好"), role: .cancel) {}
+        } message: {
+            Text(L10n.tr(
+                "The purchase link has not been configured yet. If you already have an activation key, enter it above to activate.",
+                "购买跳转链接暂未配置。如您已获取激活码，可直接在上方输入框完成激活。"
+            ))
+        }
     }
 
-    // MARK: - Top Tab Bar (3 Standard Tabs + Red Dot)
+    private func consumeRequestedTab() {
+        if let requested = settings.requestedSettingsTab, (0...3).contains(requested) {
+            selectedTab = requested
+            settings.requestedSettingsTab = nil
+        }
+    }
+
+    // MARK: - Top Tab Bar (4 Standard Tabs + Red Dot)
     private var topTabBar: some View {
         HStack(spacing: 0) {
             tabButton(title: L10n.tr("General", "通用"), icon: "gearshape", tag: 0)
             tabButton(title: L10n.playback, icon: "play.circle", tag: 1)
+            tabButton(title: L10n.tr("LAN", "局域网"), icon: "network", tag: 2)
             tabButton(
                 title: L10n.tr("About", "关于"),
                 icon: "info.circle",
-                tag: 2,
+                tag: 3,
                 showRedDot: updateService.hasPendingUpdate
             )
         }
@@ -138,6 +168,8 @@ public struct SilkSettingsView: View {
         case 1:
             playbackSection
         case 2:
+            lanSettingsSection
+        case 3:
             aboutSection
         default:
             generalSection
@@ -458,45 +490,261 @@ public struct SilkSettingsView: View {
         .padding(.bottom, 12)
     }
 
-    // MARK: - 3. About Tab (关于) - Commercial Grade Native Presentation
+    // MARK: - 3. LAN Tab (局域网)
+    private var lanSettingsSection: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 14) {
+                Spacer().frame(height: 2)
+
+                // Group 1: Media Library Behavior Switches
+                VStack(spacing: 6) {
+                    sectionTitle(L10n.tr("LAN Media Library", "局域网媒体库"))
+                    settingsFormCard {
+                        lanToggleRow(
+                            title: L10n.tr("Enable LAN Media Library", "启用局域网媒体库"),
+                            subtitle: L10n.tr(
+                                "Turn off to use the standard minimal playback home screen. Configured sources and playback history are preserved.",
+                                "关闭后切回标准极简播放主页；已接入的局域网目录和播放记录保留不删。"
+                            ),
+                            isOn: $settings.proLibraryHomeEnabled
+                        )
+                        Divider().opacity(0.12).padding(.vertical, 4)
+                        lanToggleRow(
+                            title: L10n.tr("Auto-Scan Sources on Launch", "启动时自动更新媒体源"),
+                            subtitle: L10n.tr(
+                                "Incrementally scan enabled SMB 2/3, NFS, and local folders in the background at startup.",
+                                "应用启动后在后台扫描已启用自动更新的 SMB 2/3、NFS 与本地目录变更。"
+                            ),
+                            isOn: $settings.proAutoScanOnLaunch
+                        )
+
+                        if !licenseEngine.isProActive {
+                            Divider().opacity(0.12).padding(.vertical, 4)
+                            HStack(spacing: 6) {
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                                Text(L10n.tr(
+                                    "Activate LAN features in Settings → About to enable media library.",
+                                    "请在「设置 → 关于」完成激活后使用局域网与媒体库功能。"
+                                ))
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                Spacer()
+                                Button(L10n.tr("Go to About", "前往激活")) {
+                                    selectedTab = 3
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 24)
+                .disabled(!licenseEngine.isProActive)
+                .opacity(licenseEngine.isProActive ? 1.0 : 0.72)
+
+                // Group 2: Protocols & Index Summary
+                VStack(spacing: 6) {
+                    sectionTitle(L10n.tr("Protocols & Index Status", "协议支持与索引状态"))
+                    settingsFormCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(L10n.tr("Supported Protocols", "支持协议"))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("SMB 2/3 · NFS · Local Folders")
+                                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.primary)
+                            }
+
+                            Divider().opacity(0.12)
+
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(L10n.tr(
+                                        "\(libraryEngine.sources.count) sources · \(libraryEngine.items.count) items indexed",
+                                        "已接入 \(libraryEngine.sources.count) 个目录源 · 共 \(libraryEngine.items.count) 条索引"
+                                    ))
+                                    .font(.system(size: 12.5, weight: .medium))
+                                    .foregroundColor(.primary)
+
+                                    Text(libraryEngine.isScanning
+                                         ? L10n.tr("Scanning \(libraryEngine.scanningSourceName ?? "")...", "正在扫描 \(libraryEngine.scanningSourceName ?? "")…")
+                                         : L10n.tr("Local SQLite index. Cached metadata remains available when NAS is offline.", "采用本地 SQLite 索引，局域网设备离线时保留已缓存记录。"))
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                Button(L10n.tr("Scan Now", "立即扫描")) {
+                                    Task {
+                                        await libraryEngine.rescanAll()
+                                    }
+                                }
+                                .controlSize(.small)
+                                .disabled(libraryEngine.sources.isEmpty || libraryEngine.isScanning || !licenseEngine.isProActive)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 24)
+
+                Spacer(minLength: 8)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func lanToggleRow(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundColor(.primary)
+                Text(subtitle)
+                    .font(.system(size: 10.5))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+    }
+
+    private func triggerActivation() {
+        let key = licenseKeyInput
+        Task {
+            let result = await licenseEngine.activate(licenseKey: key)
+            if case .success = result {
+                licenseKeyInput = ""
+            }
+        }
+    }
+
+    // MARK: - 4. About Tab (关于)
     private var aboutSection: some View {
         VStack(spacing: 0) {
-            Spacer().frame(height: 14)
+            Spacer().frame(height: 12)
 
-            // Header: Vector Brand Logo + Title + Version Badge + Slogan
-            VStack(spacing: 8) {
-                SilkBrandLogoView(size: 76, isInteractive: false)
+            // Header: Title + Version Badge + Slogan (Logo removed to reserve space for activation & purchase below slogan)
+            VStack(spacing: 6) {
+                Text("SilkPlayer")
+                    .font(.system(size: 21, weight: .bold))
+                    .foregroundColor(.primary)
 
-                VStack(spacing: 5) {
-                    Text("SilkPlayer")
-                        .font(.system(size: 21, weight: .bold))
-                        .foregroundColor(.primary)
-
-                    HStack(spacing: 6) {
-                        Text("1.6.0 (Build 2026.11)")
-                        Text("·")
-                        Text(L10n.tr("Universal Binary", "双架构通用二进制"))
-                    }
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule()
-                            .fill(Color.primary.opacity(0.06))
-                    )
-
-                    Text(L10n.tr(
-                        "Native · Minimal · Ultra-light · Effortless",
-                        "原生 · 极简 · 极轻 · 易用"
-                    ))
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundColor(.secondary.opacity(0.9))
-                    .padding(.top, 2)
+                HStack(spacing: 6) {
+                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.8.0-pro")
+                    Text("·")
+                    Text(L10n.tr("Universal Binary", "双架构通用二进制"))
                 }
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(Color.primary.opacity(0.06))
+                )
+
+                Text(L10n.tr(
+                    "Native · Minimal · Ultra-light · Effortless",
+                    "原生 · 极简 · 极轻 · 易用"
+                ))
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundColor(.secondary.opacity(0.9))
+                .padding(.top, 2)
             }
 
-            Spacer().frame(height: 16)
+            Spacer().frame(height: 12)
+
+            // License Activation & Purchase (directly below Slogan; unbinding intentionally disabled)
+            settingsFormCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: licenseEngine.isProActive ? "checkmark.seal.fill" : "key.horizontal")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(licenseEngine.isProActive ? Color.green : Color.accentColor)
+
+                        VStack(alignment: .leading, spacing: 1.5) {
+                            Text(licenseEngine.isProActive
+                                 ? L10n.tr("LAN Features Activated", "局域网功能已激活")
+                                 : L10n.tr("Activate LAN Media Features", "激活局域网功能"))
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundColor(.primary)
+
+                            if let receipt = licenseEngine.activeReceipt {
+                                Text("\(receipt.licenseKeyMask) · \(receipt.hardwareId.prefix(8))")
+                                    .font(.system(size: 10.5, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text(L10n.tr(
+                                    "Enter an activation key for SMB 2/3, NFS, and LAN media library.",
+                                    "激活后可使用 SMB 2/3、NFS 共享挂载与局域网媒体库。"
+                                ))
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.secondary)
+                            }
+                        }
+
+                        Spacer()
+                    }
+
+                    if !licenseEngine.isProActive {
+                        HStack(spacing: 8) {
+                            TextField(
+                                L10n.tr("Enter activation key...", "输入激活码…"),
+                                text: $licenseKeyInput
+                            )
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 12, design: .monospaced))
+                            .onSubmit {
+                                triggerActivation()
+                            }
+
+                            Button {
+                                triggerActivation()
+                            } label: {
+                                if licenseEngine.isProcessing {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .frame(width: 44)
+                                } else {
+                                    Text(L10n.tr("Activate", "激活"))
+                                        .font(.system(size: 12, weight: .medium))
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(licenseKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || licenseEngine.isProcessing)
+
+                            Button(L10n.tr("Buy", "购买")) {
+                                if let url = licenseEngine.purchaseURL {
+                                    NSWorkspace.shared.open(url)
+                                } else {
+                                    showPurchasePendingAlert = true
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+
+                        if let err = licenseEngine.lastErrorMessage, !err.isEmpty {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.orange)
+                                Text(err)
+                                    .font(.system(size: 10.5))
+                                    .foregroundColor(.orange)
+                                    .lineLimit(2)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 24)
+
+            Spacer().frame(height: 12)
 
             // Core Specs Inset Card
             settingsFormCard {
@@ -520,7 +768,7 @@ public struct SilkSettingsView: View {
             }
             .padding(.horizontal, 24)
 
-            Spacer().frame(height: 18)
+            Spacer().frame(height: 14)
 
             // Action Links & Updates
             HStack(spacing: 14) {

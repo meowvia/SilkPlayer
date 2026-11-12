@@ -1,15 +1,20 @@
 import SwiftUI
 import AppKit
+import SilkCoreKit
 
 @MainActor
 public struct AppShellView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var player: PlayerCore
+    @ObservedObject private var licenseEngine = SilkProLicenseEngine.shared
+    @ObservedObject private var libraryEngine = SilkMediaLibraryEngine.shared
     @State private var navigationModel = AppNavigationModel.shared
     var playlistManager: PlaylistManager
     private var settings = AppSettings.shared
     public let sessionId: UUID
     @State private var lastPreviousClickTime: Date = .distantPast
+    @State private var prePlaybackLibraryFrame: NSRect? = nil
+    @State private var isLeftSourceDrawerVisible: Bool = false
 
     public init(
         player: PlayerCore,
@@ -32,6 +37,18 @@ public struct AppShellView: View {
             return true
         }
         return player.isLoaded || player.playbackState == .loading
+    }
+
+    private var canUseLANFeatures: Bool {
+        licenseEngine.isProActive && settings.proLibraryHomeEnabled
+    }
+
+    private var isProLibraryActive: Bool {
+        canUseLANFeatures && !libraryEngine.sources.isEmpty
+    }
+
+    private var shouldHidePlaylistDrawerForPro: Bool {
+        isProLibraryActive && settings.proHideLegacyPlaylistDrawer
     }
 
     private var rootMinWidth: CGFloat {
@@ -87,24 +104,41 @@ public struct AppShellView: View {
                     .edgesIgnoringSafeArea(.all)
                     .transition(.opacity)
                 } else {
-                    VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                    if isProLibraryActive {
+                        SilkProLibraryView(
+                            onPlayItem: { target, queue, forceFromBeginning in
+                                playLibraryRecord(target, queue: queue, forceFromBeginning: forceFromBeginning)
+                            },
+                            onOpenFile: {
+                                openSingleFile()
+                            },
+                            onFilesDropped: { urls in
+                                let paths = urls.map(\.path)
+                                openExternalPaths(paths)
+                            }
+                        )
                         .edgesIgnoringSafeArea(.all)
-                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                    } else {
+                        VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                            .edgesIgnoringSafeArea(.all)
+                            .allowsHitTesting(false)
 
-                    EmptyPlaybackView(
-                        onOpenFile: {
-                            openSingleFile()
-                        },
-                        onFilesDropped: { urls in
-                            let paths = urls.map(\.path)
-                            openExternalPaths(paths)
-                        }
-                    )
-                    .edgesIgnoringSafeArea(.all)
-                    .transition(.opacity)
+                        EmptyPlaybackView(
+                            onOpenFile: {
+                                openSingleFile()
+                            },
+                            onFilesDropped: { urls in
+                                let paths = urls.map(\.path)
+                                openExternalPaths(paths)
+                            }
+                        )
+                        .edgesIgnoringSafeArea(.all)
+                        .transition(.opacity)
+                    }
 
-                    // Right-Edge Floating Side Triangle Pull Tab (omitted in Music Mode, which embeds its own queue)
-                    if !(isPlaying && player.isAudioOnly) {
+                    // Right-Edge Floating Side Triangle Pull Tab (omitted in Music Mode or Pro Library Drawer-Hidden Mode)
+                    if !(isPlaying && player.isAudioOnly) && !shouldHidePlaylistDrawerForPro {
                         if !player.isPlaylistDrawerVisible {
                             PlaylistDrawerHandleTab(
                                 isDrawerVisible: player.isPlaylistDrawerVisible,
@@ -157,6 +191,61 @@ public struct AppShellView: View {
                             .zIndex(17)
                         }
                     }
+
+                    // Left-Edge Floating LAN Sources Handle & Manual Frosted Sidebar
+                    if canUseLANFeatures {
+                        if !isLeftSourceDrawerVisible {
+                            LeftLANSourceHandleTab(
+                                isDrawerVisible: isLeftSourceDrawerVisible,
+                                drawerWidth: max(290, drawerWidth)
+                            ) {
+                                withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                    isLeftSourceDrawerVisible.toggle()
+                                }
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .edgesIgnoringSafeArea(.all)
+                            .allowsHitTesting(true)
+                            .zIndex(18)
+                        }
+
+                        if isLeftSourceDrawerVisible {
+                            Color.black.opacity(0.001)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .edgesIgnoringSafeArea(.all)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                        isLeftSourceDrawerVisible = false
+                                    }
+                                }
+                                .zIndex(19)
+
+                            HStack(spacing: 0) {
+                                SilkLANSourceDrawerView(
+                                    drawerWidth: max(290, drawerWidth),
+                                    onCompletedConfiguration: {
+                                        withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                            isLeftSourceDrawerVisible = false
+                                        }
+                                    },
+                                    onClose: {
+                                        withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                            isLeftSourceDrawerVisible = false
+                                        }
+                                    }
+                                )
+                                .environment(\.colorScheme, .dark)
+                                .transition(SilkAnimation.transition(reduceMotion: reduceMotion, standard: .move(edge: .leading)))
+                                Spacer()
+                            }
+                            .padding(.top, 36)
+                            .padding(.bottom, 16)
+                            .padding(.leading, 8)
+                            .edgesIgnoringSafeArea(.all)
+                            .zIndex(20)
+                        }
+                    }
                 }
 
 
@@ -175,6 +264,7 @@ public struct AppShellView: View {
         .onChange(of: isPlaying) { _, playing in
             updateAppTrafficLights()
             if playing {
+                isLeftSourceDrawerVisible = false
                 player.hostWindow?.isMovableByWindowBackground = false
                 player.hostWindow?.isOpaque = false
                 player.hostWindow?.backgroundColor = .clear
@@ -198,14 +288,19 @@ public struct AppShellView: View {
                     let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
                     w.maxSize = screenFrame.size
                     w.contentMaxSize = screenFrame.size
-                    // If current window is smaller than emptyMin, expand smoothly so trailing pull tab is never clipped offscreen
-                    let currentFrame = w.frame
-                    if currentFrame.width < emptyMin.width || currentFrame.height < emptyMin.height {
-                        let newWidth = max(currentFrame.width, emptyMin.width)
-                        let newHeight = max(currentFrame.height, emptyMin.height)
-                        let newY = currentFrame.origin.y - (newHeight - currentFrame.height)
-                        let newFrame = NSRect(x: currentFrame.origin.x, y: newY, width: newWidth, height: newHeight)
-                        w.setFrame(newFrame, display: true, animate: true)
+                    if let savedLibraryFrame = prePlaybackLibraryFrame, isProLibraryActive {
+                        prePlaybackLibraryFrame = nil
+                        w.setFrame(savedLibraryFrame, display: true, animate: true)
+                    } else {
+                        // If current window is smaller than emptyMin, expand smoothly so trailing pull tab is never clipped offscreen
+                        let currentFrame = w.frame
+                        if currentFrame.width < emptyMin.width || currentFrame.height < emptyMin.height {
+                            let newWidth = max(currentFrame.width, emptyMin.width)
+                            let newHeight = max(currentFrame.height, emptyMin.height)
+                            let newY = currentFrame.origin.y - (newHeight - currentFrame.height)
+                            let newFrame = NSRect(x: currentFrame.origin.x, y: newY, width: newWidth, height: newHeight)
+                            w.setFrame(newFrame, display: true, animate: true)
+                        }
                     }
                 }
             }
@@ -213,10 +308,34 @@ public struct AppShellView: View {
         .onChange(of: settings.keepWindowOnTop) { _, newValue in
             PlayerWindowManager.shared.applyAlwaysOnTop(newValue)
         }
+        .onChange(of: canUseLANFeatures) { _, enabled in
+            if !enabled {
+                isLeftSourceDrawerVisible = false
+            }
+        }
+        .onChange(of: licenseEngine.isProActive) { _, isActive in
+            guard isActive else { return }
+            Task { @MainActor in
+                if settings.proAutoScanOnLaunch {
+                    await SilkMediaLibraryEngine.shared.rescanAutoSourcesOnLaunch()
+                } else {
+                    await SilkMediaLibraryEngine.shared.loadFromDatabase()
+                }
+            }
+        }
         .onAppear {
             registerSession()
             setupHooks()
             checkPendingFiles()
+            if licenseEngine.isProActive {
+                Task { @MainActor in
+                    if settings.proAutoScanOnLaunch {
+                        await SilkMediaLibraryEngine.shared.rescanAutoSourcesOnLaunch()
+                    } else {
+                        await SilkMediaLibraryEngine.shared.loadFromDatabase()
+                    }
+                }
+            }
         }
         .onDisappear {
             if let currentPath = player.currentFilePath, player.currentTime > 0 {
@@ -272,11 +391,49 @@ public struct AppShellView: View {
     }
 
     private func startPlayback(path: String, startTime: Double = 0.0, autoPlay: Bool? = nil) {
+        if !isPlaying,
+           isProLibraryActive,
+           prePlaybackLibraryFrame == nil,
+           let w = player.hostWindow,
+           !w.styleMask.contains(.fullScreen) {
+            prePlaybackLibraryFrame = w.frame
+        }
         let url = URL(fileURLWithPath: path)
         withAnimation(appSpringAnimation) {
             navigationModel.state = .playing(url: url)
         }
         player.loadMediaWithCrossfade(path: path, startTime: startTime, autoPlay: autoPlay)
+    }
+
+    private func playLibraryRecord(_ target: SilkMediaLibraryRecord, queue: [SilkMediaLibraryRecord], forceFromBeginning: Bool) {
+        if !isPlaying,
+           prePlaybackLibraryFrame == nil,
+           let w = player.hostWindow,
+           !w.styleMask.contains(.fullScreen) {
+            prePlaybackLibraryFrame = w.frame
+        }
+
+        let orderedQueue = queue.isEmpty ? [target] : queue
+        let playlistItems = orderedQueue.map {
+            PlaylistItem(path: $0.path, title: $0.title, duration: $0.durationSeconds)
+        }
+        let startIndex = orderedQueue.firstIndex(where: { $0.path == target.path }) ?? 0
+
+        Task { @MainActor in
+            let resolvedURL = await SilkMediaLibraryEngine.shared.resolvePlayableURL(for: target.path)
+            let effectivePath = resolvedURL?.path ?? target.path
+            playlistManager.setPlaylist(playlistItems: playlistItems, startingIndex: startIndex)
+
+            let resumeTime: Double
+            if forceFromBeginning || target.kind == .audio {
+                resumeTime = 0.0
+            } else if target.watchState == .inProgress && target.positionSeconds >= 1.0 {
+                resumeTime = target.positionSeconds
+            } else {
+                resumeTime = AppSettings.shared.getSavedPosition(for: effectivePath)
+            }
+            startPlayback(path: effectivePath, startTime: resumeTime, autoPlay: true)
+        }
     }
 
     private func playMediaItem(_ item: MediaItem, in contextItems: [MediaItem] = []) {

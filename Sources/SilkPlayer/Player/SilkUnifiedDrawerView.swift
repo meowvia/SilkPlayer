@@ -993,12 +993,26 @@ public struct PlaylistDrawerHandleTab: View {
 
 public struct SilkDrawerHandleRepresentable: NSViewRepresentable {
     public let isDrawerVisible: Bool
+    public var isLeadingEdge: Bool = false
     public var onHoverChange: ((Bool) -> Void)?
     public let action: () -> Void
+
+    public init(
+        isDrawerVisible: Bool,
+        isLeadingEdge: Bool = false,
+        onHoverChange: ((Bool) -> Void)? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.isDrawerVisible = isDrawerVisible
+        self.isLeadingEdge = isLeadingEdge
+        self.onHoverChange = onHoverChange
+        self.action = action
+    }
 
     public func makeNSView(context: Context) -> SilkDrawerHandleNSView {
         let v = SilkDrawerHandleNSView()
         v.isDrawerVisible = isDrawerVisible
+        v.isLeadingEdge = isLeadingEdge
         v.onAction = action
         v.onHoverChange = onHoverChange
         return v
@@ -1006,6 +1020,7 @@ public struct SilkDrawerHandleRepresentable: NSViewRepresentable {
 
     public func updateNSView(_ nsView: SilkDrawerHandleNSView, context: Context) {
         nsView.isDrawerVisible = isDrawerVisible
+        nsView.isLeadingEdge = isLeadingEdge
         nsView.onAction = action
         nsView.onHoverChange = onHoverChange
     }
@@ -1016,6 +1031,11 @@ public final class SilkDrawerHandleNSView: NSView {
         didSet {
             needsDisplay = true
             window?.invalidateCursorRects(for: self)
+        }
+    }
+    public var isLeadingEdge: Bool = false {
+        didSet {
+            needsDisplay = true
         }
     }
     public var onAction: (() -> Void)?
@@ -1136,36 +1156,56 @@ public final class SilkDrawerHandleNSView: NSView {
         let handleH: CGFloat = 112.0
         let handleW: CGFloat = 5.0
         let handleY = (b.height - handleH) * 0.5
-        let handleX = b.width - handleW
-
-        // 3-sided border path (top, left, bottom, right open)
-        let borderPath = CGMutablePath()
         let r: CGFloat = 3.0
-        borderPath.move(to: CGPoint(x: b.width, y: handleY))
-        borderPath.addLine(to: CGPoint(x: handleX + r, y: handleY))
-        borderPath.addArc(tangent1End: CGPoint(x: handleX, y: handleY), tangent2End: CGPoint(x: handleX, y: handleY + r), radius: r)
-        borderPath.addLine(to: CGPoint(x: handleX, y: handleY + handleH - r))
-        borderPath.addArc(tangent1End: CGPoint(x: handleX, y: handleY + handleH), tangent2End: CGPoint(x: handleX + r, y: handleY + handleH), radius: r)
-        borderPath.addLine(to: CGPoint(x: b.width, y: handleY + handleH))
 
-        // Draw shadow & stroke
-        ctx.setShadow(offset: CGSize(width: -0.5, height: 0), blur: 0.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
+        let borderPath = CGMutablePath()
+        let triPath = CGMutablePath()
+        let triH: CGFloat = 9.5
+        let triW: CGFloat = 2.0
+        let triY = (b.height - triH) * 0.5
+
+        if isLeadingEdge {
+            // 3-sided border path (top, right, bottom, left open)
+            borderPath.move(to: CGPoint(x: 0, y: handleY))
+            borderPath.addLine(to: CGPoint(x: handleW - r, y: handleY))
+            borderPath.addArc(tangent1End: CGPoint(x: handleW, y: handleY), tangent2End: CGPoint(x: handleW, y: handleY + r), radius: r)
+            borderPath.addLine(to: CGPoint(x: handleW, y: handleY + handleH - r))
+            borderPath.addArc(tangent1End: CGPoint(x: handleW, y: handleY + handleH), tangent2End: CGPoint(x: handleW - r, y: handleY + handleH), radius: r)
+            borderPath.addLine(to: CGPoint(x: 0, y: handleY + handleH))
+
+            ctx.setShadow(offset: CGSize(width: 0.5, height: 0), blur: 0.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
+
+            // Flattened indicator triangle pointing right
+            let triX: CGFloat = 1.5
+            triPath.move(to: CGPoint(x: triX + triW, y: triY + triH * 0.5)) // Right tip
+            triPath.addLine(to: CGPoint(x: triX, y: triY)) // Top left
+            triPath.addLine(to: CGPoint(x: triX, y: triY + triH)) // Bottom left
+            triPath.closeSubpath()
+        } else {
+            let handleX = b.width - handleW
+            // 3-sided border path (top, left, bottom, right open)
+            borderPath.move(to: CGPoint(x: b.width, y: handleY))
+            borderPath.addLine(to: CGPoint(x: handleX + r, y: handleY))
+            borderPath.addArc(tangent1End: CGPoint(x: handleX, y: handleY), tangent2End: CGPoint(x: handleX, y: handleY + r), radius: r)
+            borderPath.addLine(to: CGPoint(x: handleX, y: handleY + handleH - r))
+            borderPath.addArc(tangent1End: CGPoint(x: handleX, y: handleY + handleH), tangent2End: CGPoint(x: handleX + r, y: handleY + handleH), radius: r)
+            borderPath.addLine(to: CGPoint(x: b.width, y: handleY + handleH))
+
+            ctx.setShadow(offset: CGSize(width: -0.5, height: 0), blur: 0.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
+
+            // Flattened indicator triangle pointing left (height: 9.5, width: 2.0)
+            let triX = b.width - 1.5 - triW
+            triPath.move(to: CGPoint(x: triX, y: triY + triH * 0.5)) // Left tip
+            triPath.addLine(to: CGPoint(x: triX + triW, y: triY)) // Top right
+            triPath.addLine(to: CGPoint(x: triX + triW, y: triY + triH)) // Bottom right
+            triPath.closeSubpath()
+        }
+
+        // Stroke 3-sided border
         ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.75).cgColor)
         ctx.setLineWidth(1.0)
         ctx.addPath(borderPath)
         ctx.strokePath()
-
-        // Flattened indicator triangle pointing left (height: 9.5, width: 2.0)
-        let triH: CGFloat = 9.5
-        let triW: CGFloat = 2.0
-        let triY = (b.height - triH) * 0.5
-        let triX = b.width - 1.5 - triW
-
-        let triPath = CGMutablePath()
-        triPath.move(to: CGPoint(x: triX, y: triY + triH * 0.5)) // Left tip
-        triPath.addLine(to: CGPoint(x: triX + triW, y: triY)) // Top right
-        triPath.addLine(to: CGPoint(x: triX + triW, y: triY + triH)) // Bottom right
-        triPath.closeSubpath()
 
         ctx.setFillColor(NSColor.white.withAlphaComponent(0.85).cgColor)
         ctx.addPath(triPath)

@@ -80,6 +80,10 @@ let package = Package(
                 .linkedFramework("CoreMedia"),
                 .linkedFramework("CoreVideo"),
                 .linkedFramework("Security"),
+                .linkedFramework("IOKit"),
+                .linkedFramework("NetFS"),
+                .linkedFramework("Network"),
+                .linkedLibrary("sqlite3"),
                 .linkedLibrary("z"),
                 .linkedLibrary("bz2"),
                 .linkedLibrary("iconv")

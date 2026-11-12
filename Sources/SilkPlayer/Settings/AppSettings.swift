@@ -2,6 +2,7 @@ import Observation
 import SwiftUI
 import Combine
 import AppKit
+import SilkCoreKit
 
 public enum AppearanceMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case system = "System"
@@ -314,6 +315,34 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    // MARK: - 5. Pro & Unified Library (Pro 与片库)
+    /// Enables replacing the idle startup dropzone with the unified Pro Media Library.
+    public var proLibraryHomeEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(proLibraryHomeEnabled, forKey: "proLibraryHomeEnabled")
+        }
+    }
+    /// Automatically suppresses the legacy right-side playlist drawer while Pro Library Mode is active.
+    public var proHideLegacyPlaylistDrawer: Bool {
+        didSet {
+            UserDefaults.standard.set(proHideLegacyPlaylistDrawer, forKey: "proHideLegacyPlaylistDrawer")
+        }
+    }
+    /// Separates audio extensions cleanly into the dedicated Audio / Album Library tab.
+    public var proDedicatedAudioLibrary: Bool {
+        didSet {
+            UserDefaults.standard.set(proDedicatedAudioLibrary, forKey: "proDedicatedAudioLibrary")
+        }
+    }
+    /// Runs Stat-Only incremental indexing on auto-scan sources on startup when Pro is active.
+    public var proAutoScanOnLaunch: Bool {
+        didSet {
+            UserDefaults.standard.set(proAutoScanOnLaunch, forKey: "proAutoScanOnLaunch")
+        }
+    }
+    /// Transient navigation signal allowing Pro UI actions to open a specific Settings tab.
+    @ObservationIgnored public var requestedSettingsTab: Int? = nil
+
     // MARK: - Playback History Dictionary
     private var progressHistory: [String: Double] = [:]
 
@@ -369,6 +398,12 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         let rawScroll = UserDefaults.standard.string(forKey: "scrollWheelAction") ?? ScrollWheelAction.volume.rawValue
         self.scrollWheelAction = ScrollWheelAction(rawValue: rawScroll) ?? .volume
 
+        // 5. Pro & Unified Library
+        self.proLibraryHomeEnabled = UserDefaults.standard.object(forKey: "proLibraryHomeEnabled") as? Bool ?? true
+        self.proHideLegacyPlaylistDrawer = UserDefaults.standard.object(forKey: "proHideLegacyPlaylistDrawer") as? Bool ?? true
+        self.proDedicatedAudioLibrary = UserDefaults.standard.object(forKey: "proDedicatedAudioLibrary") as? Bool ?? true
+        self.proAutoScanOnLaunch = UserDefaults.standard.object(forKey: "proAutoScanOnLaunch") as? Bool ?? true
+
         // Load progress history dictionary
         if let dict = UserDefaults.standard.dictionary(forKey: "playbackProgressHistory") as? [String: Double] {
             self.progressHistory = dict
@@ -417,6 +452,18 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         lastPersistedProgressTime = CFAbsoluteTimeGetCurrent()
         lastPersistedProgressPath = path
         lastPersistedProgressPosition = position
+
+        if SilkProLicenseEngine.shared.isProActive, !norm.isEmpty {
+            let capturedDuration = duration
+            let capturedPos = position
+            Task { @MainActor in
+                await SilkMediaLibraryEngine.shared.recordPlaybackProgress(
+                    path: norm,
+                    position: capturedPos,
+                    duration: capturedDuration
+                )
+            }
+        }
     }
 
     /// Persists continuous playback progress at a throttled cadence (~3s) while flushing immediately on track changes, seeks, pause, or explicit force.
@@ -454,5 +501,10 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         UserDefaults.standard.removeObject(forKey: "lastPlayedFilePath")
         UserDefaults.standard.removeObject(forKey: "lastPlayedPosition")
         UserDefaults.standard.removeObject(forKey: "lastPlayedDuration")
+        if SilkProLicenseEngine.shared.isProActive {
+            Task { @MainActor in
+                await SilkMediaLibraryEngine.shared.clearAllWatchMemory()
+            }
+        }
     }
 }

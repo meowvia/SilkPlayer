@@ -538,3 +538,410 @@ extension SilkPlayerWrapper: @unchecked Sendable {}
 extension SilkPlayerLayer: @unchecked Sendable {}
 extension SilkSubtitleModel: @unchecked Sendable {}
 extension SilkThumbnailEngine: @unchecked Sendable {}
+
+// MARK: - Pro Licensing & Unified Library API Mocks (CI Only)
+
+public struct SilkProReceipt: Codable, Sendable, Equatable {
+    public let keyId: String
+    public let licenseKeyMask: String
+    public let planName: String
+    public let maxDevices: Int
+    public let deviceCount: Int
+    public let hardwareId: String
+    public let issuedAt: Date
+    public let expiresAt: Date?
+    public let rawToken: String
+
+    public init(
+        keyId: String,
+        licenseKeyMask: String,
+        planName: String = "SilkPlayer Pro",
+        maxDevices: Int = 3,
+        deviceCount: Int = 1,
+        hardwareId: String,
+        issuedAt: Date = Date(),
+        expiresAt: Date? = nil,
+        rawToken: String
+    ) {
+        self.keyId = keyId
+        self.licenseKeyMask = licenseKeyMask
+        self.planName = planName
+        self.maxDevices = maxDevices
+        self.deviceCount = deviceCount
+        self.hardwareId = hardwareId
+        self.issuedAt = issuedAt
+        self.expiresAt = expiresAt
+        self.rawToken = rawToken
+    }
+}
+
+public enum SilkProLicenseStatus: Sendable, Equatable {
+    case unlicensed
+    case activated(SilkProReceipt)
+    case invalid(String)
+
+    public var isProActive: Bool {
+        if case .activated = self { return true }
+        return false
+    }
+
+    public var receipt: SilkProReceipt? {
+        if case let .activated(r) = self { return r }
+        return nil
+    }
+}
+
+public enum SilkProActivationResult: Sendable, Equatable {
+    case success(SilkProReceipt)
+    case failure(String)
+}
+
+public enum SilkLicenseVerificationError: Error, Sendable, Equatable {
+    case malformedToken
+    case malformedEncoding
+    case invalidPublicKey
+    case invalidSignature
+    case malformedPayload
+    case expired
+    case hardwareMismatch
+
+    public var localizedMessage: String { "Mock license verification error." }
+}
+
+@MainActor
+public final class SilkProLicenseEngine: ObservableObject {
+    public static let shared = SilkProLicenseEngine()
+    public static let defaultPublicKeyBase64 = ""
+    public static let defaultEndpointBase = "https://license.1999909.xyz/v1/silkplayer/licenses"
+
+    @Published public private(set) var status: SilkProLicenseStatus = .unlicensed
+    @Published public private(set) var isProcessing: Bool = false
+    @Published public private(set) var lastErrorMessage: String? = nil
+    @Published public var purchaseURLString: String = ""
+
+    public var activationEndpoint: String
+    public let hardwareId: String
+
+    public var isProActive: Bool { status.isProActive }
+    public var activeReceipt: SilkProReceipt? { status.receipt }
+    public var purchaseURL: URL? {
+        let trimmed = purchaseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let url = URL(string: trimmed), url.scheme?.hasPrefix("http") == true else { return nil }
+        return url
+    }
+
+    public init(
+        publicKeyBase64: String = "",
+        endpointBase: String = SilkProLicenseEngine.defaultEndpointBase,
+        hardwareId: String? = nil,
+        usePersistentStorage: Bool? = nil
+    ) {
+        self.activationEndpoint = endpointBase
+        self.hardwareId = hardwareId ?? "mock-hw-id"
+    }
+
+    public static func resolveHardwareFingerprint() -> String { "mock-hw-id" }
+
+    public func verifySignedToken(_ token: String) -> Result<SilkProReceipt, SilkLicenseVerificationError> {
+        .failure(.malformedToken)
+    }
+
+    @discardableResult
+    public func activate(licenseKey rawInput: String) async -> SilkProActivationResult {
+        let msg = "Mock license engine in CI build."
+        lastErrorMessage = msg
+        return .failure(msg)
+    }
+
+    public func deactivate() async {
+        status = .unlicensed
+        lastErrorMessage = nil
+    }
+
+    public func clearError() {
+        lastErrorMessage = nil
+    }
+}
+
+extension SilkProLicenseEngine: @unchecked Sendable {}
+
+public enum SilkNetworkShareProtocol: String, Codable, Sendable, CaseIterable {
+    case smb
+    case nfs
+
+    public var displayName: String {
+        switch self {
+        case .smb: return "SMB 2/3"
+        case .nfs: return "NFS"
+        }
+    }
+}
+
+public enum SilkLibrarySourceKind: String, Codable, Sendable, CaseIterable {
+    case local
+    case smb
+    case nfs
+}
+
+public struct SilkLibrarySource: Identifiable, Codable, Sendable, Equatable {
+    public let id: String
+    public var kind: SilkLibrarySourceKind
+    public var displayName: String
+    public var path: String
+    public var smbHost: String?
+    public var smbShare: String?
+    public var smbUsername: String?
+    public var bookmarkData: Data?
+    public var autoScan: Bool
+    public var includedRelativePaths: [String]
+    public var excludedRelativePaths: [String]
+    public var lastScannedAt: Date?
+    public var itemCount: Int
+
+    public init(
+        id: String = UUID().uuidString,
+        kind: SilkLibrarySourceKind,
+        displayName: String,
+        path: String,
+        smbHost: String? = nil,
+        smbShare: String? = nil,
+        smbUsername: String? = nil,
+        bookmarkData: Data? = nil,
+        autoScan: Bool = true,
+        includedRelativePaths: [String] = [],
+        excludedRelativePaths: [String] = [],
+        lastScannedAt: Date? = nil,
+        itemCount: Int = 0
+    ) {
+        self.id = id
+        self.kind = kind
+        self.displayName = displayName
+        self.path = path
+        self.smbHost = smbHost
+        self.smbShare = smbShare
+        self.smbUsername = smbUsername
+        self.bookmarkData = bookmarkData
+        self.autoScan = autoScan
+        self.includedRelativePaths = includedRelativePaths
+        self.excludedRelativePaths = excludedRelativePaths
+        self.lastScannedAt = lastScannedAt
+        self.itemCount = itemCount
+    }
+}
+
+public enum SilkLibraryMediaKind: String, Codable, Sendable, CaseIterable {
+    case movie
+    case seriesEpisode
+    case audio
+}
+
+public enum SilkWatchState: String, Codable, Sendable, CaseIterable {
+    case unwatched
+    case inProgress
+    case watched
+}
+
+public struct SilkMediaLibraryRecord: Identifiable, Codable, Sendable, Equatable {
+    public var id: String { path }
+    public let sourceId: String
+    public let path: String
+    public let fileName: String
+    public var title: String
+    public var pinyinTokens: String
+    public var kind: SilkLibraryMediaKind
+    public var seriesName: String?
+    public var seasonNumber: Int?
+    public var episodeNumber: Int?
+    public var albumName: String?
+    public var artistName: String?
+    public var trackNumber: Int?
+    public var resolutionTag: String
+    public var videoCodecTag: String
+    public var audioSpecTag: String
+    public var durationSeconds: Double
+    public var fileSizeBytes: Int64
+    public var modifiedTimestamp: Double
+    public var positionSeconds: Double
+    public var watchState: SilkWatchState
+    public var lastPlayedAt: Double?
+    public var posterPath: String?
+    public var isHDR: Bool
+    public var isDolbyVision: Bool
+
+    public init(
+        sourceId: String,
+        path: String,
+        fileName: String,
+        title: String,
+        pinyinTokens: String = "",
+        kind: SilkLibraryMediaKind,
+        seriesName: String? = nil,
+        seasonNumber: Int? = nil,
+        episodeNumber: Int? = nil,
+        albumName: String? = nil,
+        artistName: String? = nil,
+        trackNumber: Int? = nil,
+        resolutionTag: String = "",
+        videoCodecTag: String = "",
+        audioSpecTag: String = "",
+        durationSeconds: Double = 0,
+        fileSizeBytes: Int64 = 0,
+        modifiedTimestamp: Double = 0,
+        positionSeconds: Double = 0,
+        watchState: SilkWatchState = .unwatched,
+        lastPlayedAt: Double? = nil,
+        posterPath: String? = nil,
+        isHDR: Bool = false,
+        isDolbyVision: Bool = false
+    ) {
+        self.sourceId = sourceId
+        self.path = path
+        self.fileName = fileName
+        self.title = title
+        self.pinyinTokens = pinyinTokens
+        self.kind = kind
+        self.seriesName = seriesName
+        self.seasonNumber = seasonNumber
+        self.episodeNumber = episodeNumber
+        self.albumName = albumName
+        self.artistName = artistName
+        self.trackNumber = trackNumber
+        self.resolutionTag = resolutionTag
+        self.videoCodecTag = videoCodecTag
+        self.audioSpecTag = audioSpecTag
+        self.durationSeconds = durationSeconds
+        self.fileSizeBytes = fileSizeBytes
+        self.modifiedTimestamp = modifiedTimestamp
+        self.positionSeconds = positionSeconds
+        self.watchState = watchState
+        self.lastPlayedAt = lastPlayedAt
+        self.posterPath = posterPath
+        self.isHDR = isHDR
+        self.isDolbyVision = isDolbyVision
+    }
+
+    public var progressFraction: Double {
+        guard durationSeconds > 1 else { return 0 }
+        return min(1.0, max(0.0, positionSeconds / durationSeconds))
+    }
+}
+
+public struct SilkSMBBrowseHost: Identifiable, Codable, Sendable, Equatable {
+    public var id: String { "\(shareProtocol.rawValue):\(host):\(port)" }
+    public let name: String
+    public let host: String
+    public let port: Int
+    public let isMounted: Bool
+    public let shareProtocol: SilkNetworkShareProtocol
+
+    public init(name: String, host: String, port: Int = 445, isMounted: Bool = false, shareProtocol: SilkNetworkShareProtocol = .smb) {
+        self.name = name
+        self.host = host
+        self.port = port
+        self.isMounted = isMounted
+        self.shareProtocol = shareProtocol
+    }
+}
+
+public struct SilkSMBShareEntry: Identifiable, Codable, Sendable, Equatable {
+    public var id: String { name.lowercased() }
+    public let name: String
+    public let comment: String
+    public let mountedPath: String?
+
+    public init(name: String, comment: String = "", mountedPath: String? = nil) {
+        self.name = name
+        self.comment = comment
+        self.mountedPath = mountedPath
+    }
+}
+
+public enum SilkSMBShareListResult: Sendable, Equatable {
+    case shares([SilkSMBShareEntry])
+    case failure(String)
+}
+
+public enum SilkSMBMountResult: Sendable, Equatable {
+    case mounted(mountPath: String)
+    case failure(String)
+}
+
+public struct SilkFolderEntry: Identifiable, Codable, Sendable, Equatable {
+    public var id: String { relativePath }
+    public let name: String
+    public let relativePath: String
+
+    public init(name: String, relativePath: String) {
+        self.name = name
+        self.relativePath = relativePath
+    }
+}
+
+@MainActor
+public final class SilkSMBMountService: ObservableObject {
+    public static let shared = SilkSMBMountService()
+    @Published public private(set) var discoveredHosts: [SilkSMBBrowseHost] = []
+    @Published public private(set) var isScanning: Bool = false
+    private init() {}
+    public func startDiscovery() {}
+    public func stopDiscovery() {}
+    nonisolated public static func parseNetworkInput(_ rawInput: String, defaultProtocol: SilkNetworkShareProtocol = .smb) -> (shareProtocol: SilkNetworkShareProtocol, host: String, share: String?, username: String?, password: String?) {
+        (defaultProtocol, "", nil, nil, nil)
+    }
+    nonisolated public static func parseSMBInput(_ rawInput: String) -> (host: String, share: String?, username: String?, password: String?) {
+        ("", nil, nil, nil)
+    }
+    nonisolated public static func listMountedSMBHosts() -> [SilkSMBBrowseHost] { [] }
+    nonisolated public static func listMountedShares(forHost rawHost: String, shareProtocol: SilkNetworkShareProtocol = .smb) -> [SilkSMBShareEntry] { [] }
+    public func listShares(host: String, shareProtocol: SilkNetworkShareProtocol = .smb, username: String = "", password: String = "", isGuest: Bool = false) async -> SilkSMBShareListResult {
+        .failure("Mock LAN share list in CI build.")
+    }
+    nonisolated public static func parseSmbutilViewOutput(_ output: String) -> [SilkSMBShareEntry] { [] }
+    nonisolated public static func parseShowmountOutput(_ output: String) -> [SilkSMBShareEntry] { [] }
+    nonisolated public static func listImmediateSubfolders(rootPath: String, relativePath: String = "") -> [SilkFolderEntry] { [] }
+    public func listSubfolders(host: String, share: String, shareProtocol: SilkNetworkShareProtocol = .smb, relativePath: String = "", username: String = "", password: String = "", isGuest: Bool = false) async -> Result<[SilkFolderEntry], Error> {
+        .failure(NSError(domain: "SilkCoreKitMock", code: 0))
+    }
+    public static func saveCredential(host: String, share: String, username: String, password: String) {}
+    public static func loadCredential(host: String, share: String, username: String) -> String? { nil }
+    public static func deleteCredential(host: String, share: String, username: String) {}
+    nonisolated public static func findExistingMountPath(host: String, share: String, shareProtocol: SilkNetworkShareProtocol = .smb) -> String? { nil }
+    public func mountShare(host: String, share: String, shareProtocol: SilkNetworkShareProtocol = .smb, username: String = "", password: String = "", isGuest: Bool = false) async -> SilkSMBMountResult {
+        .failure("Mock LAN mount in CI build.")
+    }
+}
+
+extension SilkSMBMountService: @unchecked Sendable {}
+
+@MainActor
+public final class SilkMediaLibraryEngine: ObservableObject {
+    public static let shared = SilkMediaLibraryEngine()
+    @Published public private(set) var sources: [SilkLibrarySource] = []
+    @Published public private(set) var items: [SilkMediaLibraryRecord] = []
+    @Published public private(set) var isScanning: Bool = false
+    @Published public private(set) var scanningSourceName: String? = nil
+    @Published public private(set) var scanningDiscoveredCount: Int = 0
+    @Published public private(set) var lastScanError: String? = nil
+
+    public init(databaseURL: URL? = nil, usePersistentBookmarkStorage: Bool = true) {}
+    public func loadFromDatabase() async {}
+    @discardableResult
+    public func addLocalSource(url: URL, displayName: String? = nil, autoScan: Bool = true, includedRelativePaths: [String] = [], excludedRelativePaths: [String] = [], scanImmediately: Bool = true) async -> SilkLibrarySource? { nil }
+    public func addSMBSource(host: String, share: String, shareProtocol: SilkNetworkShareProtocol = .smb, username: String = "", password: String = "", isGuest: Bool = false, displayName: String? = nil, autoScan: Bool = true, includedRelativePaths: [String] = [], excludedRelativePaths: [String] = [], scanImmediately: Bool = true) async -> Result<SilkLibrarySource, Error> {
+        .failure(NSError(domain: "SilkCoreKitMock", code: 0))
+    }
+    public func updateSourceFolderFilters(id: String, includedRelativePaths: [String], excludedRelativePaths: [String], rescan: Bool = true) async {}
+    public func removeSource(id: String) async { sources.removeAll { $0.id == id } }
+    public func updateSourceAutoScan(id: String, enabled: Bool) async {}
+    public func enqueueBackgroundRescan(sourceIds: [String]) {}
+    public func rescanAll() async {}
+    public func rescanAutoSourcesOnLaunch() async {}
+    public func rescanSource(id: String) async {}
+    public func search(query: String) async -> [SilkMediaLibraryRecord] { items }
+    public func recordPlaybackProgress(path: String, position: Double, duration: Double) async {}
+    public func setWatchState(path: String, state: SilkWatchState) async {}
+    public func clearAllWatchMemory() async {}
+    public func resolvePlayableURL(for path: String) async -> URL? { URL(fileURLWithPath: path) }
+}
+
+extension SilkMediaLibraryEngine: @unchecked Sendable {}

@@ -1,12 +1,19 @@
 import SwiftUI
 import AppKit
+import SilkCoreKit
 
 @MainActor
 public struct PlayerContainerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var player: PlayerCore
+    @ObservedObject private var licenseEngine = SilkProLicenseEngine.shared
+    private var settings = AppSettings.shared
     var playlist: PlaylistManager
     @State private var navigationModel = AppNavigationModel.shared
+
+    private var shouldHidePlaylistDrawer: Bool {
+        licenseEngine.isProActive && settings.proLibraryHomeEnabled && settings.proHideLegacyPlaylistDrawer
+    }
     @State private var isHoveringRightEdge: Bool = false
     @State private var isHoveringHandle: Bool = false
     @State private var drawerDismissTask: Task<Void, Never>? = nil
@@ -63,6 +70,7 @@ public struct PlayerContainerView: View {
                         playlist: playlist,
                         onPlayNext: onPlayNext,
                         onPlayPrevious: onPlayPrevious,
+                        onSelectPlaylistItem: onSelectPlaylistItem,
                         onClosePlayback: onClosePlayback
                     )
                     .environment(\.colorScheme, .dark)
@@ -99,7 +107,7 @@ public struct PlayerContainerView: View {
                     .zIndex(40)
                 }
 
-                if !player.isAudioOnly {
+                if !player.isAudioOnly && !shouldHidePlaylistDrawer {
                     // Right-Edge Invisible Hover Trigger Zone (within 28pt of right edge)
                     // Strictly active in FULLSCREEN mode only; in windowed mode, user must click the side triangle tab.
                     if player.isFullscreen {
@@ -162,7 +170,7 @@ public struct PlayerContainerView: View {
                 // Interactive Backdrop for Drawer Dismissal:
                 // Tapping anywhere outside the drawer closes the drawer without pausing playback.
                 // Avoids top 60pt region so top bar quick action buttons (Close, Pin, Inspector) are never obstructed.
-                if (!player.isAudioOnly && player.isPlaylistDrawerVisible) || player.isInspectorVisible {
+                if (!player.isAudioOnly && !shouldHidePlaylistDrawer && player.isPlaylistDrawerVisible) || player.isInspectorVisible {
                     Color.black.opacity(0.001)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
@@ -180,7 +188,7 @@ public struct PlayerContainerView: View {
                 // Right-Side Slide-In Pure Playlist Drawer
                 // Strictly framed within playback area with vertical avoidance (+64pt top, -96pt bottom)
                 // to never obstruct top-right Pin / Inspector buttons or bottom scrubber timeline.
-                if !player.isAudioOnly && player.isPlaylistDrawerVisible {
+                if !player.isAudioOnly && !shouldHidePlaylistDrawer && player.isPlaylistDrawerVisible {
                     HStack(spacing: 0) {
                         Spacer()
                         HStack(spacing: 0) {

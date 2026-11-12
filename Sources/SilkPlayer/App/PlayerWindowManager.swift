@@ -489,12 +489,15 @@ extension Notification.Name {
         self.settingsWindow = nil
     }
 
-    public func openSettings() {
+    public func openSettings(initialTab: Int? = nil) {
         // Strictly NEVER pause active playback when opening preferences:
         // Allows the user to preview subtitle size, HDR tone mapping, and audio levels in real time.
+        if let initialTab {
+            AppSettings.shared.requestedSettingsTab = initialTab
+        }
 
         if let existing = settingsWindow {
-            if existing.isKeyWindow {
+            if existing.isKeyWindow && initialTab == nil {
                 closeSettings()
                 return
             }
