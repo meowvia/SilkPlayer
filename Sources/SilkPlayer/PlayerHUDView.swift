@@ -297,77 +297,30 @@ public struct PlayerHUDView: View {
                 }
             }
 
-            // 2. Center Overlay: Active Media Title (Sanitized title; interactive episode/queue menu when multi-item)
+            // 2. Center Overlay: Active Media Title (Pure static capsule; episode navigation handled via right drawer)
             if !player.mediaTitle.isEmpty && !player.isAudioOnly {
                 let sanitized = MediaFilenameSanitizer.sanitize(player.mediaTitle)
-                let multiItems = playlist.items
-                if multiItems.count > 1, let onSelect = onSelectPlaylistItem {
-                    Menu {
-                        ForEach(multiItems.indices, id: \.self) { idx in
-                            let item = multiItems[idx]
-                            Button {
-                                onSelect(item)
-                            } label: {
-                                if idx == playlist.currentIndex {
-                                    Label(item.title, systemImage: "checkmark")
-                                } else {
-                                    Text(item.title)
-                                }
-                            }
+                Text(sanitized.headerTitle)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.90))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        ZStack {
+                            Capsule().fill(.ultraThinMaterial)
+                            Capsule().fill(Color.black.opacity(0.28))
                         }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text(sanitized.headerTitle)
-                                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                                .foregroundColor(.white.opacity(0.92))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white.opacity(0.72))
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(
-                            ZStack {
-                                Capsule().fill(.ultraThinMaterial)
-                                Capsule().fill(Color.black.opacity(0.28))
-                            }
-                        )
-                        .overlay(
-                            Capsule().strokeBorder(Color.white.opacity(0.20), lineWidth: 0.6)
-                        )
-                        .shadow(color: Color.black.opacity(0.30), radius: 6, x: 0, y: 2)
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    .frame(maxWidth: max(180, tier == .expanded ? 480 : 300))
-                    .help(L10n.tr("Switch Episode / Queue (\(playlist.currentIndex + 1)/\(multiItems.count))", "切换剧集 / 队列 (\(playlist.currentIndex + 1)/\(multiItems.count))"))
+                    )
+                    .overlay(
+                        Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
+                    )
+                    .shadow(color: Color.black.opacity(0.30), radius: 6, x: 0, y: 2)
+                    .frame(maxWidth: max(160, tier == .expanded ? 460 : 280))
+                    .help(player.mediaTitle)
                     .opacity(isHUDActive ? 1.0 : 0.0)
-                    .allowsHitTesting(isHUDActive)
-                } else {
-                    Text(sanitized.headerTitle)
-                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.90))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(
-                            ZStack {
-                                Capsule().fill(.ultraThinMaterial)
-                                Capsule().fill(Color.black.opacity(0.28))
-                            }
-                        )
-                        .overlay(
-                            Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
-                        )
-                        .shadow(color: Color.black.opacity(0.30), radius: 6, x: 0, y: 2)
-                        .frame(maxWidth: max(160, tier == .expanded ? 460 : 280))
-                        .help(player.mediaTitle)
-                        .opacity(isHUDActive ? 1.0 : 0.0)
-                        .allowsHitTesting(false)
-                }
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -1030,9 +983,9 @@ struct HUDInteractiveButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.93 : 1.0)
+            .opacity(configuration.isPressed ? 0.86 : 1.0)
+            .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.68), value: configuration.isPressed)
     }
 }
 

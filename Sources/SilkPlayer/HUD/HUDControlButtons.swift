@@ -97,6 +97,24 @@ extension View {
 }
 
 @MainActor
+public struct SilkFluidSpringButtonStyle: ButtonStyle {
+    var pressedScale: CGFloat = 0.94
+    var pressedOpacity: CGFloat = 0.88
+
+    public init(pressedScale: CGFloat = 0.94, pressedOpacity: CGFloat = 0.88) {
+        self.pressedScale = pressedScale
+        self.pressedOpacity = pressedOpacity
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? pressedScale : 1.0)
+            .opacity(configuration.isPressed ? pressedOpacity : 1.0)
+            .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.68), value: configuration.isPressed)
+    }
+}
+
+@MainActor
 struct HUDTransportButton: View {
     let icon: String
     var size: CGFloat = 14
@@ -121,7 +139,7 @@ struct HUDTransportButton: View {
                 )
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SilkFluidSpringButtonStyle(pressedScale: 0.93, pressedOpacity: 0.86))
         .frame(width: 28, height: 28)
         .disabled(disabled)
         .opacity(disabled ? 0.35 : (isHovered ? 1.0 : 0.88))
@@ -305,7 +323,7 @@ struct HUDCircleButton: View {
                 .scaleEffect(isHovered ? 1.06 : 1.0)
                 .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isHovered)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SilkFluidSpringButtonStyle(pressedScale: 0.93, pressedOpacity: 0.88))
         .onHover { hovering in
             isHovered = hovering
         }

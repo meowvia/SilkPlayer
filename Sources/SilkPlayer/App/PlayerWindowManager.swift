@@ -1050,7 +1050,11 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         // 1. 【最大化模式：锁定窗口尺寸】
         // 最大化占据可用工作区期间严格锁定尺寸，禁止边框拖拽缩小或变形
         if currentInteractiveMode == .maximized {
-            return screenFrame.size
+            if player?.isPlaying != true {
+                resetInteractiveModeToNormal()
+            } else {
+                return screenFrame.size
+            }
         }
 
         // 如果非用户手动拖拽且传入的是整个物理屏幕尺寸（AppKit 全屏调用首帧），直接放行

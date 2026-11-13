@@ -109,6 +109,8 @@ public class SilkMetalRenderView: NSView {
 public final class SilkPlayerEngine: ObservableObject {
     public let renderView = SilkMetalRenderView()
     @Published public private(set) var isPlaying: Bool = false
+    public var preferredAudioOutputChannels: Int = 0
+    public var currentAudioChannels: Int = 2
     public weak var delegate: (any SilkEngineDelegate)?
     public var duration: TimeInterval = 0.0
     @Published public private(set) var currentTime: TimeInterval = 0.0
@@ -627,7 +629,7 @@ public final class SilkProLicenseEngine: ObservableObject {
     public var activeReceipt: SilkProReceipt? { status.receipt }
     public var purchaseURL: URL? {
         let trimmed = purchaseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let url = URL(string: trimmed), url.scheme?.hasPrefix("http") == true else { return nil }
+        guard !trimmed.isEmpty, let url = URL(string: trimmed), url.scheme?.lowercased() == "https" else { return nil }
         return url
     }
 
@@ -761,6 +763,7 @@ public struct SilkMediaLibraryRecord: Identifiable, Codable, Sendable, Equatable
     public var audioSpecTag: String
     public var durationSeconds: Double
     public var fileSizeBytes: Int64
+    public var createdTimestamp: Double
     public var modifiedTimestamp: Double
     public var positionSeconds: Double
     public var watchState: SilkWatchState
@@ -787,6 +790,7 @@ public struct SilkMediaLibraryRecord: Identifiable, Codable, Sendable, Equatable
         audioSpecTag: String = "",
         durationSeconds: Double = 0,
         fileSizeBytes: Int64 = 0,
+        createdTimestamp: Double = 0,
         modifiedTimestamp: Double = 0,
         positionSeconds: Double = 0,
         watchState: SilkWatchState = .unwatched,
@@ -812,6 +816,7 @@ public struct SilkMediaLibraryRecord: Identifiable, Codable, Sendable, Equatable
         self.audioSpecTag = audioSpecTag
         self.durationSeconds = durationSeconds
         self.fileSizeBytes = fileSizeBytes
+        self.createdTimestamp = createdTimestamp
         self.modifiedTimestamp = modifiedTimestamp
         self.positionSeconds = positionSeconds
         self.watchState = watchState
@@ -942,6 +947,12 @@ public final class SilkMediaLibraryEngine: ObservableObject {
     public func recordPlaybackProgress(path: String, position: Double, duration: Double) async {}
     public func setWatchState(path: String, state: SilkWatchState) async {}
     public func clearAllWatchMemory() async {}
+    public func renameMediaItem(path: String, newTitle: String) async {}
+    public func renameSeriesGroup(sourceId: String?, oldSeriesName: String, newSeriesName: String) async {}
+    public func removeMediaItemFromLibrary(path: String) async {}
+    public func removeSeriesFromLibrary(seriesName: String, sourceId: String?) async {}
+    public func deleteMediaItemFile(path: String) async -> Result<Void, Error> { .success(()) }
+    public func deleteSeriesFiles(paths: [String]) async -> Result<Int, Error> { .success(0) }
     public func resolvePlayableURL(for path: String) async -> URL? { URL(fileURLWithPath: path) }
 }
 
@@ -950,28 +961,22 @@ extension SilkMediaLibraryEngine: @unchecked Sendable {}
 // MARK: - Closed-Source Pro Library & Music Mode UI Stubs (CI Only)
 
 public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Codable {
-    case moyu = "moyu"
-    case hupo = "hupo"
-    case yanzi = "yanzi"
-    case sujian = "sujian"
     case shenghui = "shenghui"
+    case nuanbai = "nuanbai"
 
     public var id: String { rawValue }
     public static let userDefaultsKey = "proLibraryThemeId"
 
-    public static func current() -> SilkLibraryTheme { .moyu }
+    public static func current() -> SilkLibraryTheme { .shenghui }
 
     public var displayName: String {
         switch self {
-        case .moyu: return "墨玉"
-        case .hupo: return "琥珀"
-        case .yanzi: return "烟紫"
-        case .sujian: return "素笺"
         case .shenghui: return "深灰"
+        case .nuanbai: return "暖白"
         }
     }
 
-    public var isLight: Bool { self == .sujian }
+    public var isLight: Bool { self == .nuanbai }
     public var swatchColor: Color { .accentColor }
     public var accentColor: Color { .accentColor }
     public var backgroundBase: Color { .black }
@@ -1331,4 +1336,34 @@ public struct SilkMusicModeView<Host: SilkMusicModeHost>: View {
     ) {}
 
     public var body: some View { EmptyView() }
+}
+
+public struct SilkCloudSyncRecord: Codable, Sendable, Equatable {
+    public let key: String
+    public let fileName: String
+    public let positionSeconds: Double
+    public let durationSeconds: Double
+    public let watchState: String
+    public let lastPlayedAt: Double
+
+    public init(key: String, fileName: String, positionSeconds: Double, durationSeconds: Double, watchState: String, lastPlayedAt: Double) {
+        self.key = key
+        self.fileName = fileName
+        self.positionSeconds = positionSeconds
+        self.durationSeconds = durationSeconds
+        self.watchState = watchState
+        self.lastPlayedAt = lastPlayedAt
+    }
+}
+
+@MainActor
+public final class SilkCloudSyncService: ObservableObject {
+    public static let shared = SilkCloudSyncService()
+    public var onRemoteRecordsMerged: (([SilkCloudSyncRecord]) -> Void)?
+    public init() {}
+    public static func makeSyncKey(fileName: String, durationSeconds: Double) -> String {
+        "\(fileName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())::\(Int(durationSeconds))"
+    }
+    public func publish(record: SilkCloudSyncRecord) {}
+    public func pullRemoteChanges() {}
 }

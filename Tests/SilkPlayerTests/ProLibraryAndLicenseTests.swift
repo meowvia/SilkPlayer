@@ -126,7 +126,9 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         )
         XCTAssertEqual(engine.verifySignedToken(expiredToken), .failure(.expired))
 
-        // 6. Configurable checkout URL parsing
+        // 6. Configurable checkout URL parsing (enforces HTTPS)
+        engine.purchaseURLString = "http://insecure.1999909.xyz/buy/silkplayer-pro"
+        XCTAssertNil(engine.purchaseURL, "Non-HTTPS URL must be rejected")
         engine.purchaseURLString = "https://checkout.1999909.xyz/buy/silkplayer-pro"
         XCTAssertEqual(engine.purchaseURL?.absoluteString, "https://checkout.1999909.xyz/buy/silkplayer-pro")
     }
@@ -482,7 +484,9 @@ final class ProLibraryAndLicenseTests: XCTestCase {
     func testAdNoiseStrippingAndSeriesFolderMerge() async throws {
         guard !isCIMockEnvironment else { return }
 
-        XCTAssertEqual(SilkLibraryTheme.allCases.map(\.displayName).count, 5)
+        XCTAssertEqual(SilkLibraryTheme.allCases.map(\.displayName).count, 2)
+        XCTAssertTrue(SilkLibraryTheme.allCases.contains(.shenghui))
+        XCTAssertTrue(SilkLibraryTheme.allCases.contains(.nuanbai))
 
         let tempDir = try makeTempDir()
         let dbURL = tempDir.appendingPathComponent("noise_merge.sqlite")
@@ -630,5 +634,71 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         XCTAssertEqual(manager.count, 4050)
         XCTAssertEqual(manager.currentIndex, 2025)
         XCTAssertLessThan(elapsed, 0.5)
+    }
+
+    func testCardOnlyRenameAndLibraryRemovalPersistAcrossRescans() async throws {
+        guard !isCIMockEnvironment else { return }
+
+        let tempDir = try makeTempDir()
+        let dbURL = tempDir.appendingPathComponent("rename_remove.sqlite")
+        let rootDir = tempDir.appendingPathComponent("MediaRoot", isDirectory: true)
+        try FileManager.default.createDirectory(at: rootDir, withIntermediateDirectories: true)
+
+        let movieA = rootDir.appendingPathComponent("Movie.Alpha.2024.1080p.mkv")
+        let movieB = rootDir.appendingPathComponent("Movie.Beta.2024.1080p.mkv")
+        try Data("alpha".utf8).write(to: movieA)
+        try Data("beta".utf8).write(to: movieB)
+
+        let engine = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        _ = await engine.addLocalSource(url: rootDir, displayName: "MediaRoot")
+        XCTAssertEqual(engine.items.count, 2)
+        XCTAssertTrue(engine.items.allSatisfy { $0.createdTimestamp > 0 })
+
+        await engine.renameMediaItem(path: movieA.path, newTitle: "Custom Alpha Display")
+        XCTAssertEqual(engine.items.first(where: { $0.path == movieA.path })?.title, "Custom Alpha Display")
+
+        await engine.removeMediaItemFromLibrary(path: movieB.path)
+        XCTAssertEqual(engine.items.count, 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: movieB.path))
+
+        // Rescan & reload must preserve custom card title and keep removed-from-library item hidden
+        await engine.rescanAll()
+        XCTAssertEqual(engine.items.count, 1)
+        XCTAssertEqual(engine.items.first?.title, "Custom Alpha Display")
+
+        let reloaded = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        await reloaded.loadFromDatabase()
+        XCTAssertEqual(reloaded.items.count, 1)
+        XCTAssertEqual(reloaded.items.first?.title, "Custom Alpha Display")
+        XCTAssertTrue(reloaded.items.first?.createdTimestamp ?? 0 > 0)
+    }
+
+    func testSilkCloudSyncRecordSerializationAndKeyGeneration() {
+        let key = SilkCloudSyncService.makeSyncKey(fileName: "Inception.2010.2160p.mkv", durationSeconds: 8880.4)
+        XCTAssertEqual(key, "inception.2010.2160p.mkv::8880")
+
+        let record = SilkCloudSyncRecord(
+            key: key,
+            fileName: "Inception.2010.2160p.mkv",
+            positionSeconds: 4200.5,
+            durationSeconds: 8880.4,
+            watchState: "inProgress",
+            lastPlayedAt: 1731500000.0
+        )
+        let data = try? JSONEncoder().encode(record)
+        XCTAssertNotNil(data)
+        if let data {
+            let decoded = try? JSONDecoder().decode(SilkCloudSyncRecord.self, from: data)
+            XCTAssertEqual(decoded, record)
+        }
+    }
+
+    func testMultiChannelAudioOutputChannelsPreference() {
+        let engine = SilkPlayerEngine()
+        XCTAssertEqual(engine.preferredAudioOutputChannels, 0)
+        engine.preferredAudioOutputChannels = 8
+        XCTAssertEqual(engine.preferredAudioOutputChannels, 8)
+        engine.preferredAudioOutputChannels = 6
+        XCTAssertEqual(engine.preferredAudioOutputChannels, 6)
     }
 }

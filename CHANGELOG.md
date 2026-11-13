@@ -5,6 +5,35 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 1.8.0-pro (`feature/v1.8.0-pro`)
+
+### Added
+- **Multi-Channel LPCM Lossless Output**:
+  - Overhauled CoreAudio rendering pipeline to dynamically match stream channel counts (5.1 six channels, 7.1 eight channels) via `AudioStreamBasicDescription` and `AudioChannelLayoutTag`.
+  - Configured `setupSwrIfNeeded` for Float32 interleaved multi-channel buffers, enabling full TrueHD, Dolby Atmos, and DTS-HD MA lossless LPCM output without downmixing to 2.0 stereo.
+- **Dolby Vision Profile 7 / Profile 8 Dynamic Tone Mapping**:
+  - Implemented industry-standard Profile 7 to Profile 8.1 mapping by extracting RPU dynamic metadata (`source_max_pq`, ST 2084 inverse EOTF peak luminance).
+  - Implemented dual-branch fragment shader rendering in Metal: Profile 5 executes IPTPQc2 polynomial reshape, while Profile 7 / Profile 8 executes scene peak luminance roll-off and dynamic tonemapping on the Base Layer.
+- **Apple iCloud Watch Memory & Playback Progress Sync**:
+  - Added lightweight `SilkCloudSyncService` using `NSUbiquitousKeyValueStore` and container storage for cross-device playback progress and watch state sync.
+- **Collapsible Media Section Headers**:
+  - Added three-stage expandable/collapsible headers on Movies and TV Series dividers with theme-adaptive trailing capsule toggles (`SilkSectionCollapseToggle`).
+  - Added independent collapse state persistence (`@AppStorage`); collapsing movies allows TV series to move to the top fold without scrolling.
+  - Added intelligent auto-expansion during search query input and category filter switching.
+- **LAN Discovery Dual-Column Grid**:
+  - Redesigned Bonjour/NetBIOS discovered devices into a symmetrical two-column grid (`LazyVGrid(columns: 2)`) with clean micro badges and vertical scrolling (>4 devices).
+
+### Changed
+- **Playback Context Scope & Drawer Isolation**:
+  - Enforced strict hiding of the right-edge playlist drawer while browsing the Pro Media Library, re-enabling it during playback.
+  - Locked movie playback strictly to single-item mode (`[movie]`), and TV series playback to full episode sequences (`group.episodes`).
+- **HUD Title Simplification**:
+  - Streamlined top HUD title into a non-intrusive static capsule, removing the center dropdown popup menu.
+
+### Fixed
+- **Playback Exit Window Geometry & Content Scaling**:
+  - Fixed issue where exiting playback back to the media library caused window content to shrink into the bottom-left corner `(0, 0)`; eliminated manual hardcoded `contentView.frame` manipulation, enforced `autoresizingMask = [.width, .height]` against `superview.bounds`, and verified geometry via deferred runloop validation.
+
 ## [Unreleased] - 1.7.0-music-preview (`feature/music-mode-revamp`)
 
 ### Added

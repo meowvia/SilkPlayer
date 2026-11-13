@@ -994,17 +994,29 @@ public struct PlaylistDrawerHandleTab: View {
 public struct SilkDrawerHandleRepresentable: NSViewRepresentable {
     public let isDrawerVisible: Bool
     public var isLeadingEdge: Bool = false
+    public var customHandleWidth: CGFloat? = nil
+    public var customFillColor: NSColor? = nil
+    public var customStrokeColor: NSColor? = nil
+    public var customArrowColor: NSColor? = nil
     public var onHoverChange: ((Bool) -> Void)?
     public let action: () -> Void
 
     public init(
         isDrawerVisible: Bool,
         isLeadingEdge: Bool = false,
+        customHandleWidth: CGFloat? = nil,
+        customFillColor: NSColor? = nil,
+        customStrokeColor: NSColor? = nil,
+        customArrowColor: NSColor? = nil,
         onHoverChange: ((Bool) -> Void)? = nil,
         action: @escaping () -> Void
     ) {
         self.isDrawerVisible = isDrawerVisible
         self.isLeadingEdge = isLeadingEdge
+        self.customHandleWidth = customHandleWidth
+        self.customFillColor = customFillColor
+        self.customStrokeColor = customStrokeColor
+        self.customArrowColor = customArrowColor
         self.onHoverChange = onHoverChange
         self.action = action
     }
@@ -1013,6 +1025,10 @@ public struct SilkDrawerHandleRepresentable: NSViewRepresentable {
         let v = SilkDrawerHandleNSView()
         v.isDrawerVisible = isDrawerVisible
         v.isLeadingEdge = isLeadingEdge
+        v.customHandleWidth = customHandleWidth
+        v.customFillColor = customFillColor
+        v.customStrokeColor = customStrokeColor
+        v.customArrowColor = customArrowColor
         v.onAction = action
         v.onHoverChange = onHoverChange
         return v
@@ -1021,6 +1037,10 @@ public struct SilkDrawerHandleRepresentable: NSViewRepresentable {
     public func updateNSView(_ nsView: SilkDrawerHandleNSView, context: Context) {
         nsView.isDrawerVisible = isDrawerVisible
         nsView.isLeadingEdge = isLeadingEdge
+        nsView.customHandleWidth = customHandleWidth
+        nsView.customFillColor = customFillColor
+        nsView.customStrokeColor = customStrokeColor
+        nsView.customArrowColor = customArrowColor
         nsView.onAction = action
         nsView.onHoverChange = onHoverChange
     }
@@ -1037,6 +1057,18 @@ public final class SilkDrawerHandleNSView: NSView {
         didSet {
             needsDisplay = true
         }
+    }
+    public var customHandleWidth: CGFloat? {
+        didSet { needsDisplay = true }
+    }
+    public var customFillColor: NSColor? {
+        didSet { needsDisplay = true }
+    }
+    public var customStrokeColor: NSColor? {
+        didSet { needsDisplay = true }
+    }
+    public var customArrowColor: NSColor? {
+        didSet { needsDisplay = true }
     }
     public var onAction: (() -> Void)?
     public var onHoverChange: ((Bool) -> Void)?
@@ -1154,14 +1186,14 @@ public final class SilkDrawerHandleNSView: NSView {
 
         let b = bounds
         let handleH: CGFloat = 112.0
-        let handleW: CGFloat = 5.0
+        let handleW: CGFloat = customHandleWidth ?? 5.0
         let handleY = (b.height - handleH) * 0.5
-        let r: CGFloat = 3.0
+        let r: CGFloat = customHandleWidth != nil ? 4.0 : 3.0
 
         let borderPath = CGMutablePath()
         let triPath = CGMutablePath()
         let triH: CGFloat = 9.5
-        let triW: CGFloat = 2.0
+        let triW: CGFloat = customHandleWidth != nil ? 3.0 : 2.0
         let triY = (b.height - triH) * 0.5
 
         if isLeadingEdge {
@@ -1173,10 +1205,14 @@ public final class SilkDrawerHandleNSView: NSView {
             borderPath.addArc(tangent1End: CGPoint(x: handleW, y: handleY + handleH), tangent2End: CGPoint(x: handleW - r, y: handleY + handleH), radius: r)
             borderPath.addLine(to: CGPoint(x: 0, y: handleY + handleH))
 
-            ctx.setShadow(offset: CGSize(width: 0.5, height: 0), blur: 0.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
+            if customFillColor == nil {
+                ctx.setShadow(offset: CGSize(width: 0.5, height: 0), blur: 0.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
+            } else {
+                ctx.setShadow(offset: CGSize(width: 0.5, height: 0), blur: 1.5, color: NSColor(calibratedRed: 0.17, green: 0.12, blue: 0.07, alpha: 0.14).cgColor)
+            }
 
             // Flattened indicator triangle pointing right
-            let triX: CGFloat = 1.5
+            let triX: CGFloat = max(1.5, (handleW - triW) * 0.5)
             triPath.move(to: CGPoint(x: triX + triW, y: triY + triH * 0.5)) // Right tip
             triPath.addLine(to: CGPoint(x: triX, y: triY)) // Top left
             triPath.addLine(to: CGPoint(x: triX, y: triY + triH)) // Bottom left
@@ -1194,20 +1230,29 @@ public final class SilkDrawerHandleNSView: NSView {
             ctx.setShadow(offset: CGSize(width: -0.5, height: 0), blur: 0.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
 
             // Flattened indicator triangle pointing left (height: 9.5, width: 2.0)
-            let triX = b.width - 1.5 - triW
+            let triX = b.width - max(1.5, (handleW - triW) * 0.5) - triW
             triPath.move(to: CGPoint(x: triX, y: triY + triH * 0.5)) // Left tip
             triPath.addLine(to: CGPoint(x: triX + triW, y: triY)) // Top right
             triPath.addLine(to: CGPoint(x: triX + triW, y: triY + triH)) // Bottom right
             triPath.closeSubpath()
         }
 
+        if let customFillColor {
+            ctx.setFillColor(customFillColor.cgColor)
+            ctx.addPath(borderPath)
+            ctx.closePath()
+            ctx.fillPath()
+        }
+
         // Stroke 3-sided border
-        ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.75).cgColor)
-        ctx.setLineWidth(1.0)
+        let strokeColor = customStrokeColor ?? NSColor.white.withAlphaComponent(0.75)
+        ctx.setStrokeColor(strokeColor.cgColor)
+        ctx.setLineWidth(customFillColor != nil ? 1.2 : 1.0)
         ctx.addPath(borderPath)
         ctx.strokePath()
 
-        ctx.setFillColor(NSColor.white.withAlphaComponent(0.85).cgColor)
+        let arrowColor = customArrowColor ?? NSColor.white.withAlphaComponent(0.85)
+        ctx.setFillColor(arrowColor.cgColor)
         ctx.addPath(triPath)
         ctx.fillPath()
 

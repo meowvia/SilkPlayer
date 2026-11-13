@@ -400,7 +400,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
 
         // 5. Pro & Unified Library
         self.proLibraryHomeEnabled = UserDefaults.standard.object(forKey: "proLibraryHomeEnabled") as? Bool ?? true
-        self.proHideLegacyPlaylistDrawer = UserDefaults.standard.object(forKey: "proHideLegacyPlaylistDrawer") as? Bool ?? true
+        self.proHideLegacyPlaylistDrawer = UserDefaults.standard.object(forKey: "proHideLegacyPlaylistDrawer") as? Bool ?? false
         self.proDedicatedAudioLibrary = UserDefaults.standard.object(forKey: "proDedicatedAudioLibrary") as? Bool ?? true
         self.proAutoScanOnLaunch = UserDefaults.standard.object(forKey: "proAutoScanOnLaunch") as? Bool ?? true
 

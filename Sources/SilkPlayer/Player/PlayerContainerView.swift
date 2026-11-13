@@ -12,7 +12,7 @@ public struct PlayerContainerView: View {
     @State private var navigationModel = AppNavigationModel.shared
 
     private var shouldHidePlaylistDrawer: Bool {
-        licenseEngine.isProActive && settings.proLibraryHomeEnabled && settings.proHideLegacyPlaylistDrawer
+        false
     }
     @State private var isHoveringRightEdge: Bool = false
     @State private var isHoveringHandle: Bool = false

@@ -19,6 +19,7 @@ public struct AppShellView: View {
     @State private var inFlightResolveTask: Task<Void, Never>? = nil
     @State private var resolvingTargetPath: String? = nil
     @State private var libraryPlaybackErrorMessage: String? = nil
+    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var proLibraryThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
 
     public init(
         player: PlayerCore,
@@ -52,7 +53,11 @@ public struct AppShellView: View {
     }
 
     private var shouldHidePlaylistDrawerForPro: Bool {
-        isProLibraryActive && settings.proHideLegacyPlaylistDrawer
+        isProLibraryActive
+    }
+
+    private var useWarmLightEdgeHandle: Bool {
+        !isPlaying && isProLibraryActive && SilkLibraryTheme(rawValue: proLibraryThemeRaw) == .nuanbai
     }
 
     private var rootMinWidth: CGFloat {
@@ -204,7 +209,8 @@ public struct AppShellView: View {
                         if !isLeftSourceDrawerVisible {
                             LeftLANSourceHandleTab(
                                 isDrawerVisible: isLeftSourceDrawerVisible,
-                                drawerWidth: max(290, drawerWidth)
+                                drawerWidth: max(290, drawerWidth),
+                                useWarmLightStyle: useWarmLightEdgeHandle
                             ) {
                                 withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
                                     isLeftSourceDrawerVisible.toggle()
@@ -289,26 +295,52 @@ public struct AppShellView: View {
                 player.hostWindow?.contentResizeIncrements = NSSize(width: 1, height: 1)
                 let emptyMin = NSSize(width: 640, height: 360)
                 if let w = player.hostWindow, !w.styleMask.contains(.fullScreen), !player.isFullscreen {
+                    (w.delegate as? PlayerWindowDelegate)?.resetInteractiveModeToNormal()
                     player.restoreStandardWindowChrome(on: w)
-                    w.minSize = emptyMin
-                    w.contentMinSize = emptyMin
                     let screen = w.screen ?? NSScreen.main
                     let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-                    w.maxSize = screenFrame.size
-                    w.contentMaxSize = screenFrame.size
+
+                    let targetFrame: NSRect
                     if let savedLibraryFrame = prePlaybackLibraryFrame, isProLibraryActive {
                         prePlaybackLibraryFrame = nil
-                        w.setFrame(savedLibraryFrame, display: true, animate: true)
+                        let targetW = max(emptyMin.width, min(screenFrame.width, savedLibraryFrame.width))
+                        let targetH = max(emptyMin.height, min(screenFrame.height, savedLibraryFrame.height))
+                        let targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, savedLibraryFrame.origin.x))
+                        let targetY = max(screenFrame.minY, min(screenFrame.maxY - targetH, savedLibraryFrame.origin.y))
+                        targetFrame = NSRect(x: targetX, y: targetY, width: targetW, height: targetH)
                     } else {
-                        // If current window is smaller than emptyMin, expand smoothly so trailing pull tab is never clipped offscreen
+                        prePlaybackLibraryFrame = nil
                         let currentFrame = w.frame
-                        if currentFrame.width < emptyMin.width || currentFrame.height < emptyMin.height {
-                            let newWidth = max(currentFrame.width, emptyMin.width)
-                            let newHeight = max(currentFrame.height, emptyMin.height)
-                            let newY = currentFrame.origin.y - (newHeight - currentFrame.height)
-                            let newFrame = NSRect(x: currentFrame.origin.x, y: newY, width: newWidth, height: newHeight)
-                            w.setFrame(newFrame, display: true, animate: true)
+                        let targetW = max(currentFrame.width, emptyMin.width)
+                        let targetH = max(currentFrame.height, emptyMin.height)
+                        let targetY = currentFrame.origin.y - (targetH - currentFrame.height)
+                        let targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, currentFrame.origin.x))
+                        targetFrame = NSRect(x: targetX, y: max(screenFrame.minY, targetY), width: targetW, height: targetH)
+                    }
+
+                    w.minSize = NSSize(width: 100, height: 100)
+                    w.contentMinSize = w.minSize
+                    w.setFrame(targetFrame, display: true, animate: false)
+                    w.minSize = emptyMin
+                    w.contentMinSize = emptyMin
+                    w.maxSize = screenFrame.size
+                    w.contentMaxSize = screenFrame.size
+                    if let cv = w.contentView {
+                        cv.autoresizingMask = [.width, .height]
+                        if let superview = cv.superview {
+                            cv.frame = superview.bounds
                         }
+                        cv.needsLayout = true
+                    }
+                    w.layoutIfNeeded()
+                    DispatchQueue.main.async { [weak w] in
+                        guard let w = w, let cv = w.contentView else { return }
+                        cv.autoresizingMask = [.width, .height]
+                        if let superview = cv.superview {
+                            cv.frame = superview.bounds
+                        }
+                        cv.needsLayout = true
+                        w.layoutIfNeeded()
                     }
                 }
             }
@@ -393,6 +425,9 @@ public struct AppShellView: View {
 
     // MARK: - Playback Controls & Routing
     private func stopPlayback() {
+        if player.isFullscreen, let w = player.hostWindow, w.styleMask.contains(.fullScreen) {
+            player.toggleFullscreen()
+        }
         inFlightResolveTask?.cancel()
         inFlightResolveTask = nil
         resolvingTargetPath = nil
@@ -890,17 +925,20 @@ public struct AppShellView: View {
 public struct LeftLANSourceHandleTab: View {
     public let isDrawerVisible: Bool
     public let drawerWidth: CGFloat
+    public var useWarmLightStyle: Bool = false
     public var onHoverChange: ((Bool) -> Void)? = nil
     public let action: () -> Void
 
     public init(
         isDrawerVisible: Bool,
         drawerWidth: CGFloat,
+        useWarmLightStyle: Bool = false,
         onHoverChange: ((Bool) -> Void)? = nil,
         action: @escaping () -> Void
     ) {
         self.isDrawerVisible = isDrawerVisible
         self.drawerWidth = drawerWidth
+        self.useWarmLightStyle = useWarmLightStyle
         self.onHoverChange = onHoverChange
         self.action = action
     }
@@ -910,6 +948,16 @@ public struct LeftLANSourceHandleTab: View {
             SilkDrawerHandleRepresentable(
                 isDrawerVisible: isDrawerVisible,
                 isLeadingEdge: true,
+                customHandleWidth: useWarmLightStyle ? 8.0 : nil,
+                customFillColor: useWarmLightStyle
+                    ? NSColor(calibratedRed: 0.941, green: 0.902, blue: 0.839, alpha: 0.96)
+                    : nil,
+                customStrokeColor: useWarmLightStyle
+                    ? NSColor(calibratedRed: 0.784, green: 0.408, blue: 0.180, alpha: 0.85)
+                    : nil,
+                customArrowColor: useWarmLightStyle
+                    ? NSColor(calibratedRed: 0.784, green: 0.408, blue: 0.180, alpha: 0.95)
+                    : nil,
                 onHoverChange: onHoverChange,
                 action: action
             )

@@ -18,7 +18,6 @@ public struct SilkSettingsView: View {
     @State private var showHistoryClearedAlert: Bool = false
     @State private var licenseKeyInput: String = ""
     @State private var showPurchasePendingAlert: Bool = false
-    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var proLibraryThemeId: String = SilkLibraryTheme.moyu.rawValue
 
     public init() {}
 
@@ -544,56 +543,7 @@ public struct SilkSettingsView: View {
                 .disabled(!licenseEngine.isProActive)
                 .opacity(licenseEngine.isProActive ? 1.0 : 0.72)
 
-                // Group 2: Media Library Theme
-                VStack(spacing: 6) {
-                    sectionTitle(L10n.tr("Media Library Appearance", "媒体库外观主题"))
-                    settingsFormCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(L10n.tr("Theme Palette", "配色方案"))
-                                .font(.system(size: 12.5, weight: .medium))
-                                .foregroundColor(.primary)
-
-                            HStack(spacing: 8) {
-                                ForEach(SilkLibraryTheme.allCases) { theme in
-                                    let isSelected = proLibraryThemeId == theme.rawValue
-                                    Button {
-                                        proLibraryThemeId = theme.rawValue
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Circle()
-                                                .fill(theme.swatchColor)
-                                                .frame(width: 11, height: 11)
-                                                .overlay(
-                                                    Circle()
-                                                        .stroke(Color.primary.opacity(0.22), lineWidth: 0.6)
-                                                )
-                                            Text(theme.displayName)
-                                                .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
-                                                .lineLimit(1)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 6)
-                                        .padding(.horizontal, 6)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                                .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.05))
-                                        )
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                                .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.10), lineWidth: isSelected ? 1.2 : 0.7)
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 24)
-                .disabled(!licenseEngine.isProActive)
-                .opacity(licenseEngine.isProActive ? 1.0 : 0.72)
-
-                // Group 3: Protocols & Index Summary
+                // Group 2: Protocols & Index Summary
                 VStack(spacing: 6) {
                     sectionTitle(L10n.tr("Protocols & Index Status", "协议支持与索引状态"))
                     settingsFormCard {
@@ -663,28 +613,6 @@ public struct SilkSettingsView: View {
         .controlSize(.small)
     }
 
-    private var runtimeArchitectureLabel: String {
-        let archs = Bundle.main.executableArchitectures?.map(\.intValue) ?? []
-        let hasArm64 = archs.contains(NSBundleExecutableArchitectureARM64)
-        let hasX86 = archs.contains(NSBundleExecutableArchitectureX86_64)
-        if hasArm64 && hasX86 {
-            return L10n.tr("Universal Binary", "双架构通用二进制")
-        }
-        if hasArm64 {
-            return "Apple Silicon (arm64)"
-        }
-        if hasX86 {
-            return "Intel (x86_64)"
-        }
-        #if arch(arm64)
-        return "Apple Silicon (arm64)"
-        #elseif arch(x86_64)
-        return "Intel (x86_64)"
-        #else
-        return L10n.tr("Native Binary", "原生二进制")
-        #endif
-    }
-
     private func triggerActivation() {
         let key = licenseKeyInput
         Task {
@@ -696,29 +624,19 @@ public struct SilkSettingsView: View {
     }
 
     // MARK: - 4. About Tab (关于)
+    private var appVersionLabel: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.8.0-pro"
+    }
+
     private var aboutSection: some View {
         VStack(spacing: 0) {
-            Spacer().frame(height: 12)
+            Spacer().frame(height: 18)
 
-            // Header: Title + Version Badge + Slogan (Logo removed to reserve space for activation & purchase below slogan)
+            // Header: Title + Slogan
             VStack(spacing: 6) {
                 Text("SilkPlayer")
                     .font(.system(size: 21, weight: .bold))
                     .foregroundColor(.primary)
-
-                HStack(spacing: 6) {
-                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.8.0-pro")
-                    Text("·")
-                    Text(runtimeArchitectureLabel)
-                }
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule()
-                        .fill(Color.primary.opacity(0.06))
-                )
 
                 Text(L10n.tr(
                     "Native · Minimal · Ultra-light · Effortless",
@@ -729,7 +647,7 @@ public struct SilkSettingsView: View {
                 .padding(.top, 2)
             }
 
-            Spacer().frame(height: 12)
+            Spacer().frame(height: 16)
 
             // License Activation & Purchase (directly below Slogan; unbinding intentionally disabled)
             settingsFormCard {
@@ -739,18 +657,22 @@ public struct SilkSettingsView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(licenseEngine.isProActive ? Color.green : Color.accentColor)
 
-                        VStack(alignment: .leading, spacing: 1.5) {
+                        VStack(alignment: .leading, spacing: 2) {
                             Text(licenseEngine.isProActive
-                                 ? L10n.tr("LAN Features Activated", "局域网功能已激活")
-                                 : L10n.tr("Activate LAN Media Features", "激活局域网功能"))
+                                 ? L10n.tr("Pro · Activated", "Pro · 已激活")
+                                 : L10n.tr("Activate Pro Features", "激活 Pro 功能"))
                                 .font(.system(size: 12.5, weight: .semibold))
                                 .foregroundColor(.primary)
+
+                            Text(L10n.tr("Version \(appVersionLabel)", "版本 \(appVersionLabel)"))
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.secondary)
 
                             if let receipt = licenseEngine.activeReceipt {
                                 Text("\(receipt.licenseKeyMask) · \(receipt.hardwareId.prefix(8))")
                                     .font(.system(size: 10.5, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                            } else {
+                                    .foregroundColor(.secondary.opacity(0.85))
+                            } else if !licenseEngine.isProActive {
                                 Text(L10n.tr(
                                     "Enter an activation key for SMB 2/3, NFS, and LAN media library.",
                                     "激活后可使用 SMB 2/3、NFS 共享挂载与局域网媒体库。"
@@ -816,7 +738,7 @@ public struct SilkSettingsView: View {
             }
             .padding(.horizontal, 24)
 
-            Spacer().frame(height: 12)
+            Spacer().frame(height: 14)
 
             // Core Specs Inset Card
             settingsFormCard {
@@ -840,9 +762,9 @@ public struct SilkSettingsView: View {
             }
             .padding(.horizontal, 24)
 
-            Spacer().frame(height: 14)
+            Spacer(minLength: 24)
 
-            // Action Links & Updates
+            // Action Links & Updates (pushed cleanly toward lower third)
             HStack(spacing: 14) {
                 Button {
                     updateService.checkManually()
@@ -894,13 +816,12 @@ public struct SilkSettingsView: View {
                 }
             }
 
-            Spacer().frame(height: 18)
+            Spacer().frame(height: 12)
 
             Text("Copyright © 2026 SilkPlayer. All rights reserved.")
                 .font(.system(size: 10.5))
                 .foregroundColor(.secondary.opacity(0.6))
-
-            Spacer(minLength: 10)
+                .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

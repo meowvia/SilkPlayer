@@ -54,6 +54,7 @@
     <key>NSBonjourServices</key>
     <array>
         <string>_smb._tcp</string>
+        <string>_nfs._tcp</string>
     </array>
 
     <key>CFBundleDocumentTypes</key>
