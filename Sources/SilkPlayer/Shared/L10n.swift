@@ -122,9 +122,9 @@ public enum L10n {
     public static var aspectRatio235_1: String { tr("2.35:1", "2.35:1") }
 
     public static var floatOnTop: String { tr("Float on Top", "置顶浮动") }
-    public static var fitToVideo: String { tr("Fit to Video", "贴合画面尺寸") }
-    public static var fitToVideo100: String { tr("Actual Size (1:1 / 100%)", "原始尺寸 (1:1 / 100%)") }
-    public static var fitToVideo200: String { tr("Double Size (2:1 / 200%)", "双倍尺寸 (2:1 / 200%)") }
+    public static var windowSizeMenu: String { tr("Window Size", "窗口大小") }
+    public static var windowSizeReset: String { tr("Reset to Default", "恢复默认") }
+    public static var windowSizeDefaultShort: String { tr("Default", "默认") }
 
     // MARK: - Canvas & Dialogs
     public static var dragVideoHerePrompt: String { tr("Drag media files here to play, or open from disk", "拖拽媒体文件至此处播放，或从磁盘打开") }

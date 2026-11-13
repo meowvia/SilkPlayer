@@ -25,6 +25,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if !validFiles.isEmpty {
             PlayerWindowManager.shared.openExternalFiles(validFiles)
         }
+
+        // Proposal 020: Quiet cold-start update check with 7-day cadence (delayed 1.5s)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            UpdateService.shared.performColdStartCheckIfNeeded()
+        }
     }
 
     public func application(_ sender: NSApplication, openFiles filenames: [String]) {

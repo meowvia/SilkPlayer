@@ -5,6 +5,56 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-11-12
+
+### Added
+- **Context Menu Window Size Presets (Proposal 027 / GitHub Issue #6)**:
+  - Added a `Window Size` submenu (`50%`, `75%`, `100%`, and `Reset to Default`) to the video canvas context menu (`MetalPlayerContainerView`), with dynamic boundary state/enablement gating and automatic disablement in fullscreen, audio-only, or unloaded states.
+  - Refactored window geometry helpers (`PlayerGeometry.adaptiveVideoContentSize`, `windowPresetContentSize`, `windowPresetMenuState`) and `PlayerCore.fitWindow(scale:)` / `resetWindowSize()` with aspect-locked uncropped bounding inside desktop visible limits, temporary `minSize` relaxation, maximized-state reset, and percentage OSD feedback.
+- **Window Live-Resize Precision Dimension HUD (Proposal 023)**:
+  - Dynamically displays a translucent, monospaced dimension badge top-centered inside the window (`12 pt` from top) during manual window edge resizing.
+  - Reports exact physical pixel dimensions (`width × height`) and standard aspect ratios (`16:9`, `16:10`, `4:3`, `21:9`, `2.39:1`, `1:1`).
+  - Automatically identifies native resolution with `100%` badge for pixel-perfect promotional screenshots and professional viewing, smoothly fading out 0.35s after resize ends.
+- **Dynamic EDR Tone-Mapping & Rational Highlight Roll-off (Proposal 013)**:
+  - Injected dynamic display physical headroom (`cachedEDRHeadroom`) into Metal fragment shaders for HDR10 and Dolby Vision pipelines.
+  - Standardized on ITU-R BT.2408 diffuse white reference level ($Y \le 1.0$) for 1:1 uncompressed absolute fidelity.
+  - Implemented $C^1$-continuous rational shoulder roll-off for extreme highlights, scaling RGB channels proportionately to prevent solarization, cloud blowout, and chromaticity shift on both Apple XDR and SDR screens.
+- **Smart Silent Update & Lossless In-Place Overwrite Installer (Proposal 020)**:
+  - Built-in `UpdateService` providing asynchronous background release checking against GitHub API, resolving `-universal.dmg` release assets first via `resolveDownloadURLString` (with architecture fallback).
+  - Cold-start prompt displays target latest version number with minimal binary choice ("Yes" / "No") and 7-day quiet cadence gatekeeper upon dismissal.
+  - Persistent 6pt red dot indicator on the Settings "About" tab when an update is pending.
+  - End-to-end in-place lossless updater replacing `/Applications/SilkPlayer.app` cleanly while 100% preserving all user history, playlists, and preferences.
+- **Playlist Drawer Handle Border-Flush Redesign (Proposal 019)**:
+  - Replaced solid pill handle with a 100% transparent cutout, eliminating visual blockage.
+  - 1.0pt delicate three-sided border with open right edge and 0pt margin flush against the window border.
+  - Replaced standard triangle with an ultra-slender 9.5pt flattened indicator triangle.
+  - AppKit native view implementation with explicit hit-test lock, permanently preventing NSThemeFrame from triggering window resize dragging.
+- **Playback History Retention Toggle**:
+  - Added the `Playback History` (`keepRecentHistory`) toggle under Settings -> Playback alongside the existing history clear control.
+
+### Changed
+- **Settings Architecture macOS HIG Overhaul (Proposal 018)**:
+  - Consolidated settings into 3 standard top-level tabs: General, Playback, and About (`520 × 490 pt` fixed dimensions with zero vertical scrollbars and native macOS form controls), replacing `Single Window Mode` with the `Startup Window` picker (`Remember Last Position` / `Center on Screen`).
+  - Embedded official high-resolution vector brand emblem and Universal Binary architecture information (`AboutAppIconView`).
+  - Simplified secondary toggles by applying automated defaults for hardware decoding, pop-guard, and subtitle styling/loading.
+- **Core Demuxer Buffering & Seek Pipeline (`SilkCoreKit`)**:
+  - Added resolution-adaptive packet queue sizing, texture cache flushing on seek (`flushTextureCache`), and backward-flash frame filtering to improve seek smoothness.
+- **Music Mode Bottom HUD Streamlining**:
+  - Simplified pure audio mode bottom-right controls to `Settings` and `Fullscreen` while keeping speed control visible across widths to prevent control overlap.
+- **Policy & Architecture Narrative Alignment**:
+  - Removed obsolete absolute claims across codebase and documentation, standardizing on: "Native, lightweight, and minimal design with zero built-in ads and no redundant background processes."
+
+### Fixed
+- **Automated Testing Focus Isolation (ISSUE-014)**:
+  - Guarded window activation and foreground ordering checks behind `PlayerWindowManager.isRunningTests` so running test suites no longer steals focus or disturbs active player windows.
+- **HUD Narrow Window Volume Control Overlap (ISSUE-019)**:
+  - Hid the inline bottom volume slider in `.minimal` layout tier (`< 480 pt` narrow/portrait windows) while keeping a mute/unmute toggle inside the overflow menu;
+  - Added width-aware vertical volume popover expansion in `HUDVolumeSlider` for narrow windows (`< 950 pt` windowed / `< 930 pt` fullscreen) and tightened wing margins/spacing in `.compact` and `.standard` tiers so hovering or dragging volume never overlaps the centered Next track button across portrait and compact sizes.
+- **Top Menu Bar Duplicate Window Menu & Fit-to-Video Cleanup (ISSUE-020)**:
+  - Replaced the duplicate `Window` `CommandMenu` with `CommandGroup(before: .windowList)` so Media Inspector, Playlist, and Float on Top integrate into the standard macOS Window menu, and removed the redundant `Fit to Video (100% / 200%)` menu item.
+
+---
+
 ## [1.5.1] - 2026-11-08
 
 ### Fixed

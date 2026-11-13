@@ -548,8 +548,8 @@ final class PlaylistRegressionTests: XCTestCase {
     let windowMgr = PlayerWindowManager.shared
     windowMgr.openSettings()
     XCTAssert(windowMgr.settingsWindow != nil, "Settings window is instantiated")
-    XCTAssert(windowMgr.settingsWindow?.frame.width == 540, "Settings window width is 540")
-    XCTAssert(windowMgr.settingsWindow?.frame.height == 680, "Settings window height is 680")
+    XCTAssert(windowMgr.settingsWindow?.frame.width == 520, "Settings window width is 520")
+    XCTAssert(windowMgr.settingsWindow?.frame.height == 490, "Settings window height is 490")
     XCTAssert(windowMgr.settingsWindow?.collectionBehavior.contains(.fullScreenAuxiliary) == true, "Settings window has .fullScreenAuxiliary behavior")
     XCTAssert(windowMgr.settingsWindow?.collectionBehavior.contains(.canJoinAllSpaces) == true, "Settings window has .canJoinAllSpaces behavior")
     windowMgr.closeSettings()
@@ -594,8 +594,8 @@ final class PlaylistRegressionTests: XCTestCase {
     windowMgr.openSettings()
     XCTAssert(windowMgr.settingsWindow != nil, "Settings window opened successfully")
     XCTAssert(windowMgr.settingsWindow?.level == .floating, "Settings window is permanently floating above player canvas")
-    XCTAssert(windowMgr.settingsWindow?.frame.width == 540, "Settings window width is 540")
-    XCTAssert(windowMgr.settingsWindow?.frame.height == 680, "Settings window height is 680 for full General tab visibility")
+    XCTAssert(windowMgr.settingsWindow?.frame.width == 520, "Settings window width is 520")
+    XCTAssert(windowMgr.settingsWindow?.frame.height == 490, "Settings window height is 490 for macOS HIG zero-scroll standard")
     windowMgr.closeSettings()
     XCTAssert(windowMgr.settingsWindow == nil, "Settings window closed cleanly")
 
@@ -1776,5 +1776,142 @@ final class PlaylistRegressionTests: XCTestCase {
     let sortedSeasons = mixedSeasonEpisodes.sorted(by: MediaFilenameSanitizer.compareNaturalOrder)
     let expectedSeasonNames = ["Show.S01E01.mkv", "Show.S01E02.mkv", "Show.S01E10.mkv", "Show.S02E01.mkv"]
     XCTAssertEqual(sortedSeasons.map { URL(fileURLWithPath: $0).lastPathComponent }, expectedSeasonNames, "Multi-season episodes strictly prioritize season then episode number")
+
+    // 61. UpdateService Semantic Comparison & Cadence Invariants (Proposal 020)
+    print("\n--- Test 61: UpdateService Semantic Comparison & Cadence Invariants ---")
+    XCTAssert(UpdateService.compareVersions("1.6.0", "1.5.1") == .orderedDescending, "1.6.0 is newer than 1.5.1")
+    XCTAssert(UpdateService.compareVersions("v1.6.0", "1.6.0") == .orderedSame, "v prefix is cleanly stripped")
+    XCTAssert(UpdateService.compareVersions("1.6.1", "1.6.0") == .orderedDescending, "1.6.1 is newer than 1.6.0")
+    XCTAssert(UpdateService.compareVersions("1.5.0", "1.6.0") == .orderedAscending, "1.5.0 is older than 1.6.0")
+    XCTAssert(UpdateService.compareVersions("1.6.0", "1.6.0") == .orderedSame, "Identical versions compare as equal")
+    XCTAssertEqual(
+        UpdateService.resolveDownloadURLString(version: "1.6.1"),
+        "https://github.com/meowvia/SilkPlayer/releases/download/1.6.1/SilkPlayer-1.6.1-universal.dmg",
+        "Default update URL targets the Universal DMG asset"
+    )
+    XCTAssertEqual(
+        UpdateService.resolveDownloadURLString(
+            version: "1.6.1",
+            assets: [
+                ["name": "SilkPlayer-1.6.1-arm64.dmg", "browser_download_url": "https://example.com/arm64.dmg"],
+                ["name": "SilkPlayer-1.6.1-universal.dmg", "browser_download_url": "https://example.com/universal.dmg"]
+            ],
+            preferredArch: "arm64"
+        ),
+        "https://example.com/universal.dmg",
+        "Universal DMG asset takes priority over single-arch packages when available"
+    )
+    XCTAssertEqual(
+        UpdateService.resolveDownloadURLString(
+            version: "1.6.1",
+            assets: [
+                ["name": "SilkPlayer-1.6.1-arm64.dmg", "browser_download_url": "https://example.com/arm64.dmg"]
+            ],
+            preferredArch: "arm64"
+        ),
+        "https://example.com/arm64.dmg",
+        "Falls back to matching architecture DMG if only arch-specific assets exist"
+    )
+
+    let updateService = UpdateService.shared
+    updateService.latestVersion = "1.6.1"
+    updateService.userDeclinedUpdate()
+    let lastDate = UserDefaults.standard.double(forKey: "SilkPlayer.Update.LastColdStartReminderDate")
+    XCTAssert(lastDate > 0, "Decline update persists last cold start reminder timestamp")
+    XCTAssert(updateService.isShowingUpdateAlert == false, "Declining update cleanly dismisses prompt")
+
+    // 62. Window Live-Resize Precision Dimension HUD & Formatter Invariants (Proposal 023)
+    print("\n--- Test 62: Window Live-Resize Precision Dimension HUD & Formatter Invariants ---")
+    let res169 = WindowDimensionFormatter.format(size: CGSize(width: 1280, height: 720))
+    XCTAssertEqual(res169.dimensions, "1280 × 720", "Exact dimensions formatted with multiplication symbol")
+    XCTAssertEqual(res169.ratio, "16:9", "1280x720 recognized as standard 16:9")
+
+    let res1610 = WindowDimensionFormatter.format(size: CGSize(width: 1920, height: 1200))
+    XCTAssertEqual(res1610.dimensions, "1920 × 1200", "Dimensions match 1920x1200")
+    XCTAssertEqual(res1610.ratio, "16:10", "Recognized as standard 16:10")
+
+    let res43 = WindowDimensionFormatter.format(size: CGSize(width: 800, height: 600))
+    XCTAssertEqual(res43.dimensions, "800 × 600", "Dimensions match 800x600")
+    XCTAssertEqual(res43.ratio, "4:3", "Recognized as standard 4:3")
+
+    let res239 = WindowDimensionFormatter.format(size: CGSize(width: 1920, height: 803))
+    XCTAssertEqual(res239.dimensions, "1920 × 803", "Dimensions match 1920x803")
+    XCTAssertEqual(res239.ratio, "2.39:1", "Recognized as Cinemascope 2.39:1")
+
+    let resAudio = WindowDimensionFormatter.format(size: CGSize(width: 520, height: 520), isAudioOnly: true)
+    XCTAssertEqual(resAudio.dimensions, "520 × 520", "Audio dimensions match 520x520")
+    XCTAssertEqual(resAudio.ratio, "1:1", "Audio mode strictly forces 1:1 aspect ratio")
+
+    let resNative = WindowDimensionFormatter.format(size: CGSize(width: 1920, height: 1080), videoWidth: 1920, videoHeight: 1080)
+    XCTAssertEqual(resNative.dimensions, "1920 × 1080", "Native 1080p dimensions")
+    XCTAssertTrue(resNative.ratio.contains("100%"), "Native resolution matches 100% badge: \(resNative.ratio)")
+
+    // Verify WindowResizeHUDView instantiation, update, and mouse transparency
+    let hud = WindowResizeHUDView(frame: NSRect(x: 0, y: 0, width: 220, height: 40))
+    hud.update(size: CGSize(width: 1920, height: 1080), videoWidth: 1920, videoHeight: 1080, isAudioOnly: false)
+    XCTAssertNil(hud.hitTest(NSPoint(x: 50, y: 20)), "HUD must be completely click-through to allow seamless window interaction")
+
+    // 63. Music Mode vs Video Mode Bottom HUD Control Visibility Invariants
+    print("\n--- Test 63: Music Mode vs Video Mode Bottom HUD Control Visibility Invariants ---")
+    let allTiers: [HUDLayoutTier] = [.minimal, .compact, .standard, .expanded]
+    for tier in allTiers {
+        // Music mode: strip volume slider, audio/subtitle tracks, and more menu; preserve speed and settings across all tiers
+        XCTAssert(tier.showsSpeedButton(isAudioOnly: true) == true, "Music mode always shows speed button in \(tier)")
+        XCTAssert(tier.showsDirectSettingsButton(isAudioOnly: true) == true, "Music mode always shows settings button in \(tier)")
+        XCTAssert(tier.showsVolumeSlider(isAudioOnly: true) == false, "Music mode hides bottom volume slider in \(tier)")
+        XCTAssert(tier.showsAudioTrackButton(isAudioOnly: true) == false, "Music mode hides audio track menu in \(tier)")
+        XCTAssert(tier.showsSubtitleTrackButton(isAudioOnly: true) == false, "Music mode hides subtitle track menu in \(tier)")
+        XCTAssert(tier.showsMoreMenuButton(isAudioOnly: true) == false, "Music mode hides more menu in \(tier)")
+        XCTAssert(tier.retainsPrevNextButtons == true, "Music mode retains prev/next buttons in \(tier)")
+    }
+
+    // Video mode remains completely unaffected across non-minimal tiers; minimal hides inline volume slider (ISSUE-019)
+    XCTAssert(HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false, "Video minimal hides inline volume slider")
+    XCTAssert(HUDLayoutTier.compact.showsVolumeSlider(isAudioOnly: false) == true, "Video compact shows volume slider")
+    XCTAssert(HUDLayoutTier.standard.showsVolumeSlider(isAudioOnly: false) == true, "Video standard shows volume slider")
+    XCTAssert(HUDLayoutTier.expanded.showsVolumeSlider(isAudioOnly: false) == true, "Video expanded shows volume slider")
+    XCTAssert(HUDLayoutTier.minimal.showsSpeedButton(isAudioOnly: false) == false, "Video minimal hides speed button")
+    XCTAssert(HUDLayoutTier.minimal.showsSubtitleTrackButton(isAudioOnly: false) == false, "Video minimal hides subtitle button")
+    XCTAssert(HUDLayoutTier.minimal.showsMoreMenuButton(isAudioOnly: false) == true, "Video minimal shows more menu")
+    XCTAssert(HUDLayoutTier.minimal.showsDirectSettingsButton(isAudioOnly: false) == false, "Video minimal hides direct settings button")
+
+    XCTAssert(HUDLayoutTier.compact.showsSpeedButton(isAudioOnly: false) == true, "Video compact shows speed button")
+    XCTAssert(HUDLayoutTier.compact.showsSubtitleTrackButton(isAudioOnly: false) == true, "Video compact shows subtitle button")
+    XCTAssert(HUDLayoutTier.compact.showsAudioTrackButton(isAudioOnly: false) == false, "Video compact folds audio track button")
+    XCTAssert(HUDLayoutTier.compact.showsMoreMenuButton(isAudioOnly: false) == true, "Video compact shows more menu")
+
+    XCTAssert(HUDLayoutTier.standard.showsAudioTrackButton(isAudioOnly: false) == true, "Video standard shows audio track button")
+    XCTAssert(HUDLayoutTier.standard.showsMoreMenuButton(isAudioOnly: false) == true, "Video standard shows more menu")
+    XCTAssert(HUDLayoutTier.standard.showsDirectSettingsButton(isAudioOnly: false) == false, "Video standard hides direct settings button")
+
+    XCTAssert(HUDLayoutTier.expanded.showsMoreMenuButton(isAudioOnly: false) == false, "Video expanded hides more menu")
+    XCTAssert(HUDLayoutTier.expanded.showsDirectSettingsButton(isAudioOnly: false) == true, "Video expanded shows direct settings button")
+
+    // Vertical/narrow HUD volume layout & clearance invariants across compact/standard/expanded windows
+    XCTAssertFalse(HUDLayoutTier.minimal.supportsInlineHorizontalVolumeExpansion(width: 400, isFullscreen: false))
+    XCTAssertFalse(HUDLayoutTier.compact.supportsInlineHorizontalVolumeExpansion(width: 493, isFullscreen: false), "Default 4:5 portrait compact width uses vertical volume popup")
+    XCTAssertFalse(HUDLayoutTier.compact.supportsInlineHorizontalVolumeExpansion(width: 578, isFullscreen: false), "100% 9:16 portrait compact width uses vertical volume popup")
+    XCTAssertFalse(HUDLayoutTier.standard.supportsInlineHorizontalVolumeExpansion(width: 770, isFullscreen: false), "Standard width < 950pt uses vertical volume popup")
+    XCTAssertFalse(HUDLayoutTier.expanded.supportsInlineHorizontalVolumeExpansion(width: 860, isFullscreen: false), "Narrow expanded width < 950pt avoids colliding with centered controls")
+    XCTAssertTrue(HUDLayoutTier.expanded.supportsInlineHorizontalVolumeExpansion(width: 960, isFullscreen: false), "Wide desktop window expands volume slider inline horizontally")
+    XCTAssertTrue(HUDLayoutTier.expanded.supportsInlineHorizontalVolumeExpansion(width: 930, isFullscreen: true), "Fullscreen window has zero outer padding and supports inline volume expansion at 930pt+")
+
+    // Verify right-wing non-overlap clearance across all tier minimum widths (outer window inset 8pt per side)
+    let windowOuterPadding: CGFloat = 8
+    let minimalAvailable = 280.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.minimal.outerBottomHorizontalPadding + HUDLayoutTier.minimal.wingHorizontalPadding) - 57.0
+    let minimalRightWing = 28.0 * 2.0 + HUDLayoutTier.minimal.wingItemSpacing
+    XCTAssertGreaterThanOrEqual(minimalAvailable, minimalRightWing, "Minimal 280pt min portrait width clears Next button")
+
+    let compactAvailable = 480.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.compact.outerBottomHorizontalPadding + HUDLayoutTier.compact.wingHorizontalPadding) - 61.0
+    let compactRightWingFixed = 28.0 * 4.0 + HUDLayoutTier.compact.wingItemSpacing * 3.0
+    XCTAssertGreaterThanOrEqual(compactAvailable, compactRightWingFixed, "Compact 480pt right wing with fixed 28pt volume icon clears Next button")
+
+    let standardAvailable = 660.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.standard.outerBottomHorizontalPadding + HUDLayoutTier.standard.wingHorizontalPadding) - 103.0
+    let standardRightWingFixed = 28.0 * 5.0 + HUDLayoutTier.standard.wingItemSpacing * 4.0
+    XCTAssertGreaterThanOrEqual(standardAvailable, standardRightWingFixed, "Standard 660pt right wing with fixed 28pt volume icon clears Next button")
+
+    let expandedHorizontalAvailable = 950.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.expanded.outerBottomHorizontalPadding + HUDLayoutTier.expanded.wingHorizontalPadding) - 145.0
+    let expandedRightWingInline = 114.0 + 28.0 * 4.0 + HUDLayoutTier.expanded.wingItemSpacing * 4.0
+    XCTAssertGreaterThanOrEqual(expandedHorizontalAvailable, expandedRightWingInline, "Wide expanded >= 950pt clears centered Next even when inline horizontal slider is expanded")
     }
 }

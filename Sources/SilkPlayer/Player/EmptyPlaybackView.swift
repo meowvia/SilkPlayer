@@ -221,7 +221,9 @@ public final class WindowDragCanvasView: NSView {
         let b = bounds
         let margin: CGFloat = 8.0
         // 四周边框与四角（8pt）绝对放行：返回 nil，直通 AppKit 系统 NSThemeFrame，激活原生八向缩放手柄与原生拖拽循环
-        if loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin {
+        // 关键防护：在右侧拉手胶囊区域（宽 28pt，高 128pt，垂直居中），禁止返回 nil，确保在拉手区域只允许展开播放列表，严禁触发窗口拉伸动作
+        let isOverHandle = (loc.x >= b.width - 32.0) && (abs(loc.y - b.height * 0.5) <= 72.0)
+        if !isOverHandle && (loc.x <= margin || loc.x >= b.width - margin || loc.y <= margin || loc.y >= b.height - margin) {
             return nil
         }
         return super.hitTest(point)

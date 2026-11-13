@@ -777,7 +777,7 @@ private struct PlaylistItemRowView: View {
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 8)
-                .padding(.trailing, isHovered ? 52 : 8)
+                .padding(.trailing, 50)
                 .padding(.vertical, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -902,14 +902,75 @@ private struct PlaylistItemRowView: View {
 
 /// Floating Side Triangle Pull Tab Handle for toggling the playlist drawer
 @MainActor
+/// Three-sided border shape for drawer pull tab: top edge, left rounded edge, bottom edge.
+/// Right edge is completely open (0 radius, flush against the window border).
+struct DrawerHandleBorderShape: Shape {
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + cornerRadius, y: rect.minY))
+        path.addArc(
+            center: CGPoint(x: rect.minX + cornerRadius, y: rect.minY + cornerRadius),
+            radius: cornerRadius,
+            startAngle: .degrees(-90),
+            endAngle: .degrees(180),
+            clockwise: true
+        )
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cornerRadius))
+        path.addArc(
+            center: CGPoint(x: rect.minX + cornerRadius, y: rect.maxY - cornerRadius),
+            radius: cornerRadius,
+            startAngle: .degrees(180),
+            endAngle: .degrees(90),
+            clockwise: true
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        return path
+    }
+}
+
+/// Ultra-slender flattened indicator triangle: exactly 9.5pt height, 2.0pt depth
+struct FlattenedIndicatorTriangle: Shape {
+    let pointingLeft: Bool
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let h: CGFloat = 9.5
+        let w: CGFloat = 2.0
+        let cy = rect.midY
+        let cx = rect.midX
+
+        if pointingLeft {
+            path.move(to: CGPoint(x: cx - w / 2, y: cy))
+            path.addLine(to: CGPoint(x: cx + w / 2, y: cy - h / 2))
+            path.addLine(to: CGPoint(x: cx + w / 2, y: cy + h / 2))
+        } else {
+            path.move(to: CGPoint(x: cx + w / 2, y: cy))
+            path.addLine(to: CGPoint(x: cx - w / 2, y: cy - h / 2))
+            path.addLine(to: CGPoint(x: cx - w / 2, y: cy + h / 2))
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
 public struct PlaylistDrawerHandleTab: View {
     public let isDrawerVisible: Bool
     public let drawerWidth: CGFloat
+    public var onHoverChange: ((Bool) -> Void)? = nil
     public let action: () -> Void
 
-    public init(isDrawerVisible: Bool, drawerWidth: CGFloat, action: @escaping () -> Void) {
+    public init(
+        isDrawerVisible: Bool,
+        drawerWidth: CGFloat,
+        onHoverChange: ((Bool) -> Void)? = nil,
+        action: @escaping () -> Void
+    ) {
         self.isDrawerVisible = isDrawerVisible
         self.drawerWidth = drawerWidth
+        self.onHoverChange = onHoverChange
         self.action = action
     }
 
@@ -917,58 +978,200 @@ public struct PlaylistDrawerHandleTab: View {
         HStack(spacing: 0) {
             Spacer()
                 .allowsHitTesting(false)
-            Button(action: action) {
-                ZStack {
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 6,
-                        bottomLeadingRadius: 6,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: 0
-                    )
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: 6,
-                            bottomLeadingRadius: 6,
-                            bottomTrailingRadius: 0,
-                            topTrailingRadius: 0
-                        )
-                        .fill(Color.black.opacity(0.32))
-                    )
-                    .overlay(
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: 6,
-                            bottomLeadingRadius: 6,
-                            bottomTrailingRadius: 0,
-                            topTrailingRadius: 0
-                        )
-                        .strokeBorder(Color.white.opacity(0.24), lineWidth: 0.6)
-                    )
-                    .frame(width: 11, height: 58)
-
-                    Image(systemName: "triangle.fill")
-                        .font(.system(size: 5, weight: .semibold))
-                        .scaleEffect(x: 0.82, y: 1.0)
-                        .foregroundColor(.white.opacity(0.92))
-                        .rotationEffect(.degrees(isDrawerVisible ? 90 : -90))
-                        .offset(x: -0.5)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .focusEffectDisabled()
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.pointingHand.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
+            SilkDrawerHandleRepresentable(
+                isDrawerVisible: isDrawerVisible,
+                onHoverChange: onHoverChange,
+                action: action
+            )
+            .frame(width: 28, height: 128)
             .help(L10n.tr("Expand Playlist (P)", "展开播放列表 (P)"))
             .opacity(isDrawerVisible ? 0.0 : 1.0)
             .allowsHitTesting(!isDrawerVisible)
         }
+    }
+}
+
+public struct SilkDrawerHandleRepresentable: NSViewRepresentable {
+    public let isDrawerVisible: Bool
+    public var onHoverChange: ((Bool) -> Void)?
+    public let action: () -> Void
+
+    public func makeNSView(context: Context) -> SilkDrawerHandleNSView {
+        let v = SilkDrawerHandleNSView()
+        v.isDrawerVisible = isDrawerVisible
+        v.onAction = action
+        v.onHoverChange = onHoverChange
+        return v
+    }
+
+    public func updateNSView(_ nsView: SilkDrawerHandleNSView, context: Context) {
+        nsView.isDrawerVisible = isDrawerVisible
+        nsView.onAction = action
+        nsView.onHoverChange = onHoverChange
+    }
+}
+
+public final class SilkDrawerHandleNSView: NSView {
+    public var isDrawerVisible: Bool = false {
+        didSet {
+            needsDisplay = true
+            window?.invalidateCursorRects(for: self)
+        }
+    }
+    public var onAction: (() -> Void)?
+    public var onHoverChange: ((Bool) -> Void)?
+
+    private var trackingArea: NSTrackingArea?
+
+    override public init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override public func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let existing = trackingArea {
+            removeTrackingArea(existing)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .cursorUpdate, .mouseMoved, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        self.trackingArea = area
+    }
+
+    override public func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.invalidateCursorRects(for: self)
+    }
+
+    override public func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        window?.invalidateCursorRects(for: self)
+    }
+
+    // Explicit Hit-Test Override:
+    // Guarantees this view exclusively captures any click or hover over the handle area,
+    // permanently preventing NSThemeFrame from intercepting and starting a window resize.
+    override public func hitTest(_ point: NSPoint) -> NSView? {
+        guard !isDrawerVisible else { return nil }
+        let loc = (superview != nil) ? convert(point, from: superview) : convert(point, from: nil)
+        if bounds.contains(loc) {
+            return self
+        }
+        return nil
+    }
+
+    // 1. AppKit Native Cursor Rect:
+    // Strictly takes priority over NSThemeFrame resize border in AppKit's cursor rect dispatch hierarchy.
+    override public func resetCursorRects() {
+        super.resetCursorRects()
+        if !isDrawerVisible {
+            addCursorRect(bounds, cursor: .pointingHand)
+        }
+    }
+
+    // 2. Cursor Update & Mouse Moved:
+    // Absolute enforcement: Whenever the mouse touches even a single pixel of this handle,
+    // the cursor is guaranteed to be pointingHand. The horizontal resize arrows can NEVER appear.
+    override public func cursorUpdate(with event: NSEvent) {
+        if !isDrawerVisible {
+            NSCursor.pointingHand.set()
+        }
+    }
+
+    override public func mouseMoved(with event: NSEvent) {
+        if !isDrawerVisible {
+            NSCursor.pointingHand.set()
+        }
+    }
+
+    override public func mouseEntered(with event: NSEvent) {
+        if !isDrawerVisible {
+            NSCursor.pointingHand.set()
+            onHoverChange?(true)
+        }
+    }
+
+    override public func mouseExited(with event: NSEvent) {
+        if !isDrawerVisible {
+            NSCursor.arrow.set()
+            onHoverChange?(false)
+        }
+    }
+
+    // 3. Mouse Down & Dragging:
+    // 100% consume mouseDown & mouseDragged.
+    // NSThemeFrame NEVER receives these events, so window resize dragging is IMPOSSIBLE.
+    override public func mouseDown(with event: NSEvent) {
+        guard !isDrawerVisible else { return }
+        onAction?()
+    }
+
+    override public func mouseDragged(with event: NSEvent) {
+        // Consumed, prevent window resize
+    }
+
+    override public func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        return true
+    }
+
+    // 4. Crisp Native CoreGraphics Drawing:
+    // Draw the 1.0pt 3-sided border and 9.5pt flattened indicator triangle with subtle shadow.
+    override public func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard !isDrawerVisible else { return }
+
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        ctx.saveGState()
+
+        let b = bounds
+        let handleH: CGFloat = 112.0
+        let handleW: CGFloat = 5.0
+        let handleY = (b.height - handleH) * 0.5
+        let handleX = b.width - handleW
+
+        // 3-sided border path (top, left, bottom, right open)
+        let borderPath = CGMutablePath()
+        let r: CGFloat = 3.0
+        borderPath.move(to: CGPoint(x: b.width, y: handleY))
+        borderPath.addLine(to: CGPoint(x: handleX + r, y: handleY))
+        borderPath.addArc(tangent1End: CGPoint(x: handleX, y: handleY), tangent2End: CGPoint(x: handleX, y: handleY + r), radius: r)
+        borderPath.addLine(to: CGPoint(x: handleX, y: handleY + handleH - r))
+        borderPath.addArc(tangent1End: CGPoint(x: handleX, y: handleY + handleH), tangent2End: CGPoint(x: handleX + r, y: handleY + handleH), radius: r)
+        borderPath.addLine(to: CGPoint(x: b.width, y: handleY + handleH))
+
+        // Draw shadow & stroke
+        ctx.setShadow(offset: CGSize(width: -0.5, height: 0), blur: 0.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
+        ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.75).cgColor)
+        ctx.setLineWidth(1.0)
+        ctx.addPath(borderPath)
+        ctx.strokePath()
+
+        // Flattened indicator triangle pointing left (height: 9.5, width: 2.0)
+        let triH: CGFloat = 9.5
+        let triW: CGFloat = 2.0
+        let triY = (b.height - triH) * 0.5
+        let triX = b.width - 1.5 - triW
+
+        let triPath = CGMutablePath()
+        triPath.move(to: CGPoint(x: triX, y: triY + triH * 0.5)) // Left tip
+        triPath.addLine(to: CGPoint(x: triX + triW, y: triY)) // Top right
+        triPath.addLine(to: CGPoint(x: triX + triW, y: triY + triH)) // Bottom right
+        triPath.closeSubpath()
+
+        ctx.setFillColor(NSColor.white.withAlphaComponent(0.85).cgColor)
+        ctx.addPath(triPath)
+        ctx.fillPath()
+
+        ctx.restoreGState()
     }
 }
 

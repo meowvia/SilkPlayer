@@ -1,15 +1,16 @@
 import SwiftUI
 import AppKit
 
-/// Native macOS Settings View for SilkPlayer.
-/// Conforms 100% to macOS Human Interface Guidelines (HIG).
-/// Organized into 4 categories:
-/// 1. 通用 (General) - Appearance & Language unified card, Window Strategy, Screenshots, Privacy & History
-/// 2. 播放 (Playback) - Auto-play, Window Auto-fit, Seeking, Gestures
-/// 3. 音视频与字幕 (Audio & Subtitles) - Hardware Decode, Dialogue Boost, Volume Memory, Subtitle Sizing & Sync
-/// 4. 关于 (About SilkPlayer) - Brand Emblem, Engine Architecture, Privacy Manifesto
+/// Native macOS Settings View for SilkPlayer (Proposal 018 & 020).
+/// Strictly conforms to macOS Human Interface Guidelines (HIG) and Professional Design System.
+/// Generous 520 × 490 pt zero-scroll architecture organized into 3 standard tabs:
+/// 1. 通用 (General) - Appearance, Language, Window Mode, Screenshots (Directory & Format)
+/// 2. 播放 (Playback) - Auto-play, Continuous Playback, Dual Playlist, Resume Playback, History, Step Duration, Scroll Wheel, Gestures, Clock
+/// 3. 关于 (About) - Native AppIcon, Version Info, Spec Overview, Action Links, Legal Copyright
 public struct SilkSettingsView: View {
     @Bindable var settings = AppSettings.shared
+    @Bindable var updateService = UpdateService.shared
+
     @State private var selectedTab: Int = 0
     @State private var showHistoryClearedAlert: Bool = false
 
@@ -17,93 +18,157 @@ public struct SilkSettingsView: View {
 
     public var body: some View {
         ZStack {
-            // 1. Vibrancy Material Base
             VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
                 .edgesIgnoringSafeArea(.all)
 
-            // Ambient Iridescent Tint
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0.04),
-                    Color.cyan.opacity(0.02),
-                    Color.clear
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .edgesIgnoringSafeArea(.all)
-
             VStack(spacing: 0) {
-                // Top Segmented Header
+                // Centered macOS Segmented Toolbar Header
                 topTabBar
-                    .padding(.horizontal, 20)
-                    .padding(.top, 26)
+                    .frame(width: 320)
+                    .padding(.top, 16)
                     .padding(.bottom, 12)
 
                 Divider()
                     .opacity(0.25)
 
-                // Tab Content Container
-                tabContainer
+                // Tab Content Body (Zero Scrollbar, Fixed 520 × 422 pt)
+                tabContent
+                    .frame(width: 520, height: 422)
             }
         }
-        .frame(width: 540, height: 680)
+        .frame(width: 520, height: 490)
         .preferredColorScheme(settings.appearanceMode.colorScheme)
         .id(settings.appLanguage)
         .alert(L10n.tr("Playback History Cleared", "播放历史已清除"), isPresented: $showHistoryClearedAlert) {
-            Button(L10n.tr("OK", "好"), role: .cancel) { }
+            Button(L10n.tr("OK", "好"), role: .cancel) {}
         } message: {
             Text(L10n.tr("All media playback positions and history have been cleared.", "所有媒体的历史进度与断点记忆已被清除。"))
         }
-    }
-
-    // MARK: - Top Tab Bar
-    private var topTabBar: some View {
-        Picker("", selection: $selectedTab) {
-            Label(L10n.tr("General", "通用"), systemImage: "gearshape.fill").tag(0)
-            Label(L10n.playback, systemImage: "play.circle.fill").tag(1)
-            Label(L10n.tr("Audio & Subtitles", "音视频与字幕"), systemImage: "speaker.wave.2.fill").tag(2)
-            Label(L10n.tr("Shortcuts", "快捷键"), systemImage: "command").tag(3)
-            Label(L10n.aboutSilkPlayer, systemImage: "info.circle.fill").tag(4)
-        }
-        .pickerStyle(.segmented)
-        .animation(.snappy(duration: 0.15), value: selectedTab)
-    }
-
-    // MARK: - Tab Content Container
-    private var tabContainer: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            Group {
-                switch selectedTab {
-                case 0:
-                    generalSection
-                case 1:
-                    playbackSection
-                case 2:
-                    audioSubtitleSection
-                case 3:
-                    shortcutsSection
-                case 4:
-                    aboutSection
-                default:
-                    EmptyView()
-                }
+        .alert(
+            L10n.tr(
+                "New version \(updateService.latestVersion ?? "") is available. Update now?",
+                "发现新版本 \(updateService.latestVersion ?? "")，是否立即更新？"
+            ),
+            isPresented: $updateService.isShowingUpdateAlert
+        ) {
+            Button(L10n.tr("Yes", "是")) {
+                updateService.userAcceptedUpdate()
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 16)
+            Button(L10n.tr("No", "否"), role: .cancel) {
+                updateService.userDeclinedUpdate()
+            }
         }
-        .frame(width: 540, height: 585)
+        .alert(
+            L10n.tr("You're up to date", "当前已是最新版本"),
+            isPresented: $updateService.isShowingUpToDateAlert
+        ) {
+            Button(L10n.tr("OK", "好"), role: .cancel) {}
+        } message: {
+            Text(L10n.tr(
+                "SilkPlayer \(updateService.currentAppVersion) is currently the latest version.",
+                "SilkPlayer \(updateService.currentAppVersion) 当前已是最新版本。"
+            ))
+        }
+    }
+
+    // MARK: - Top Tab Bar (3 Standard Tabs + Red Dot)
+    private var topTabBar: some View {
+        HStack(spacing: 0) {
+            tabButton(title: L10n.tr("General", "通用"), icon: "gearshape", tag: 0)
+            tabButton(title: L10n.playback, icon: "play.circle", tag: 1)
+            tabButton(
+                title: L10n.tr("About", "关于"),
+                icon: "info.circle",
+                tag: 2,
+                showRedDot: updateService.hasPendingUpdate
+            )
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.primary.opacity(0.06))
+        )
+    }
+
+    private func tabButton(title: String, icon: String, tag: Int, showRedDot: Bool = false) -> some View {
+        Button {
+            selectedTab = tag
+        } label: {
+            HStack(spacing: 6) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: selectedTab == tag ? .semibold : .regular))
+
+                    if showRedDot {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 6, height: 6)
+                            .offset(x: 4, y: -2)
+                    }
+                }
+
+                Text(title)
+                    .font(.system(size: 12.5, weight: selectedTab == tag ? .medium : .regular))
+            }
+            .foregroundColor(selectedTab == tag ? .primary : .secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(
+                Group {
+                    if selectedTab == tag {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                            .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
+                    } else {
+                        Color.clear
+                    }
+                }
+            )
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .padding(2)
+    }
+
+    // MARK: - Tab Content Switcher
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case 0:
+            generalSection
+        case 1:
+            playbackSection
+        case 2:
+            aboutSection
+        default:
+            generalSection
+        }
+    }
+
+    // MARK: - Section Header Title
+    private func sectionTitle(_ text: String) -> some View {
+        HStack {
+            Text(text)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 4)
     }
 
     // MARK: - 1. General Tab (通用)
     private var generalSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Merged Appearance & Language Card
-            SettingsCard(title: L10n.tr("Appearance & Language", "外观与语言"), icon: "paintbrush.fill") {
-                VStack(spacing: 10) {
+        VStack(spacing: 16) {
+            Spacer().frame(height: 2)
+
+            // Group 1: 界面外观与语言
+            VStack(spacing: 6) {
+                sectionTitle(L10n.tr("Appearance & Language", "外观与语言"))
+                settingsFormCard {
+                    // Appearance Mode
                     HStack {
-                        Text(L10n.tr("Appearance Mode", "外观模式"))
-                            .font(.body)
+                        Text(L10n.tr("Appearance", "外观模式"))
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary)
                         Spacer()
                         Picker("", selection: $settings.appearanceMode) {
                             ForEach(AppearanceMode.allCases) { mode in
@@ -113,643 +178,451 @@ public struct SilkSettingsView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 210)
                     }
+                    .frame(height: 32)
 
-                    Divider().opacity(0.2)
+                    Divider().opacity(0.12).padding(.vertical, 3)
 
+                    // App Language
                     HStack {
-                        Text(L10n.tr("Interface Language", "界面语言"))
-                            .font(.body)
+                        Text(L10n.tr("Language", "界面语言"))
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary)
                         Spacer()
                         Picker("", selection: $settings.appLanguage) {
                             ForEach(AppLanguage.allCases) { lang in
                                 Text(lang.displayName).tag(lang)
                             }
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 210)
+                        .frame(width: 170)
                     }
+                    .frame(height: 32)
                 }
             }
 
-            // Window Strategy Card
-            SettingsCard(title: L10n.tr("Window Strategy", "窗口模式"), icon: "macwindow.on.rectangle") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle(L10n.tr("Single Window Mode (Reuse window for new media)", "单窗口模式 (打开新媒体时复用当前窗口)"), isOn: $settings.singleWindowMode)
-                    Text(L10n.tr("When enabled, always plays media inside a single window; when disabled, opens a new window for each media.", "开启后始终在单一窗口中流畅换片；关闭则每次打开新媒体创建独立窗口。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            // Screenshots Card
-            SettingsCard(title: L10n.tr("Screenshots", "截屏"), icon: "camera.fill") {
-                VStack(alignment: .leading, spacing: 10) {
+            // Group 2: 视窗与存储管理
+            VStack(spacing: 6) {
+                sectionTitle(L10n.tr("Window & Storage", "视窗与存储管理"))
+                settingsFormCard {
+                    // Window Mode
                     HStack {
-                        Text(L10n.tr("Image Format", "图片格式"))
-                            .font(.body)
+                        Text(L10n.tr("Startup Window", "启动视窗行为"))
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Picker("", selection: $settings.windowMode) {
+                            Text(L10n.tr("Remember Last Position", "记忆上次位置")).tag(WindowMode.singleWindow)
+                            Text(L10n.tr("Center on Screen", "屏幕居中打开")).tag(WindowMode.multipleWindows)
+                        }
+                        .frame(width: 170)
+                    }
+                    .frame(height: 32)
+
+                    Divider().opacity(0.12).padding(.vertical, 3)
+
+                    // Fullscreen Clock
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tr("Show Clock in Fullscreen", "全屏右上角显示时钟"))
+                                .font(.system(size: 13))
+                                .foregroundColor(.primary)
+                            Text(L10n.tr("Displays system clock HUD during fullscreen playback", "全屏播放时在右上角常驻显示系统时钟"))
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $settings.showLocalTimeInFullscreen)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                    }
+                    .frame(height: 32)
+
+                    Divider().opacity(0.12).padding(.vertical, 3)
+
+                    // Screenshots Directory
+                    HStack {
+                        Text(L10n.tr("Screenshots Directory", "截图保存目录"))
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        HStack(spacing: 8) {
+                            Text(settings.screenshotDirectory)
+                                .font(.system(size: 11.5))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: 180, alignment: .trailing)
+
+                            Button(L10n.tr("Change…", "更改…")) {
+                                selectFolder()
+                            }
+                            .font(.system(size: 11.5))
+                            .controlSize(.small)
+                        }
+                    }
+                    .frame(height: 32)
+
+                    Divider().opacity(0.12).padding(.vertical, 3)
+
+                    // Screenshot Format
+                    HStack {
+                        Text(L10n.tr("Screenshot Format", "截图保存格式"))
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary)
                         Spacer()
                         Picker("", selection: $settings.screenshotFormat) {
                             Text(L10n.tr("PNG (Lossless)", "PNG (无损原画)")).tag("png")
                             Text(L10n.tr("JPEG (Compact)", "JPEG (紧凑压缩)")).tag("jpeg")
                         }
-                        .pickerStyle(.menu)
-                        .frame(width: 145)
+                        .frame(width: 170)
                     }
-
-                    Divider().opacity(0.2)
-
-                    Text(L10n.tr("Save Location", "存储位置"))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                    Text(settings.screenshotDirectory)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.white.opacity(0.06))
-                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .stroke(Color.white.opacity(0.14), lineWidth: 0.5)
-                        )
-
-                    HStack {
-                        Spacer()
-                        Button(L10n.showInFinder) {
-                            let url = URL(fileURLWithPath: settings.screenshotDirectory)
-                            NSWorkspace.shared.activateFileViewerSelecting([url])
-                        }
-                        .controlSize(.small)
-
-                        Button(L10n.tr("Choose...", "选取…")) {
-                            selectFolder()
-                        }
-                        .controlSize(.small)
-                    }
+                    .frame(height: 32)
                 }
             }
 
-            // History & Privacy Card
-            SettingsCard(title: L10n.tr("Playback History", "播放历史"), icon: "clock.arrow.circlepath") {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.tr("Clear Playback History", "清除播放历史"))
-                            .font(.body)
-                        Text(L10n.tr("Clear all saved positions and progress for local media.", "清除所有本地媒体的历史进度与断点记忆。"))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Button(L10n.tr("Clear History...", "清除历史…")) {
-                        settings.clearAllHistory()
-                        showHistoryClearedAlert = true
-                    }
-                    .controlSize(.small)
-                }
-            }
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
     }
 
     // MARK: - 2. Playback Tab (播放)
     private var playbackSection: some View {
-        VStack(spacing: 14) {
-            // Playback Flow Card
-            SettingsCard(title: L10n.tr("Playback Controls", "播放控制"), icon: "play.circle.fill") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle(L10n.tr("Resume playback on launch", "启动时恢复上次播放"), isOn: $settings.autoResumeOnLaunch)
-                    Text(L10n.tr("Automatically loads the last played file when opening SilkPlayer (paused by default to protect privacy).", "打开 SilkPlayer 时自动载入上次播放的文件（默认保持暂停以保护隐私）。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+        VStack(spacing: 16) {
+            Spacer().frame(height: 2)
 
-                    Divider().opacity(0.2)
-
-                    Toggle(L10n.tr("Auto-play on load", "打开文件时自动播放"), isOn: $settings.autoPlayOnLoad)
-                    Text(L10n.tr("Starts playback immediately when opening or dropping media; otherwise pauses at the first frame.", "打开或拖入媒体文件时立即开始播放；关闭则载入首帧并暂停等待。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Divider().opacity(0.2)
-
-                    Toggle(L10n.tr("Remember playback progress", "记住播放进度"), isOn: $settings.resumePlayback)
-                    Text(L10n.tr("Remembers playback position for each file and resumes seamlessly on reopen.", "为每个媒体记住上次播放位置，再次载入时自动无缝续播。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Divider().opacity(0.2)
-
-                    Toggle(L10n.tr("Auto-play next media in playlist", "自动播放下一个项目"), isOn: $settings.autoPlayNextItem)
-                    Text(L10n.tr("Advances to the next item in the folder or playlist when playback completes.", "当前媒体播放完毕后，自动衔接同目录或播放列表中的下一个项目。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Divider().opacity(0.2)
-
-                    Toggle(L10n.tr("Dual Playlist Mode", "双列表模式"), isOn: $settings.dualPlaylistMode)
-                    Text(L10n.tr("Separates video and music into independent queues in the drawer; disables to use a unified playlist.", "在侧边抽屉中将视频与音乐分列独立管理；关闭则呈现统一极简播放列表。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            // Window Behavior Card
-            SettingsCard(title: L10n.tr("Video & Window", "画面与窗口"), icon: "arrow.up.left.and.arrow.down.right") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle(L10n.tr("Auto-match video aspect ratio", "自动匹配视频原始比例"), isOn: $settings.autoResizeWindow)
-                    Text(L10n.tr("Automatically resizes window to fit native video dimensions without black bars.", "打开媒体时自动调整窗口大小以贴合视频原生宽高比，消除黑边。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Divider().opacity(0.2)
-
-                    Toggle(L10n.tr("Show Local Time in Fullscreen", "全屏显示本地时间"), isOn: $settings.showLocalTimeInFullscreen)
-                    Text(L10n.tr("Displays current system clock in top-right HUD during fullscreen playback.", "在全屏沉浸播放时，于顶部控制栏常驻显示系统实时时钟。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Divider().opacity(0.2)
-
+            // Group 1: 播放与连续性
+            VStack(spacing: 6) {
+                sectionTitle(L10n.tr("Playback & Continuity", "播放与连续性"))
+                settingsFormCard {
+                    // Auto Play on Load
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Double-click Action", "双击画面动作"))
-                                .font(.body)
-                            Text(L10n.tr("Action triggered when double-clicking on the canvas.", "在视频画面任意区域双击鼠标主键时的操作。"))
-                                .font(.caption)
+                            Text(L10n.tr("Auto Play", "自动播放"))
+                                .font(.system(size: 13))
+                            Text(L10n.tr("Automatically start playback when opening media", "载入视频时自动开始播放"))
+                                .font(.system(size: 10.5))
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
-                        Picker("", selection: $settings.doubleClickAction) {
-                            ForEach(DoubleClickAction.allCases) { action in
-                                Text(action.displayName).tag(action)
-                            }
-                        }
-                        .frame(width: 155)
+                        Toggle("", isOn: $settings.autoPlayOnLoad)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
                     }
+                    .frame(height: 34)
+
+                    Divider().opacity(0.12).padding(.vertical, 2)
+
+                    // Continuous Playback
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tr("Continuous Playback", "连续播放"))
+                                .font(.system(size: 13))
+                            Text(L10n.tr("Automatically play next item in playlist", "播放结束时自动连播下一集"))
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $settings.autoPlayNextItem)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                    }
+                    .frame(height: 34)
+
+                    Divider().opacity(0.12).padding(.vertical, 2)
+
+                    // Dual Playlist Mode
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tr("Dual Playlist Mode", "双列表模式"))
+                                .font(.system(size: 13))
+                            Text(L10n.tr("Separates video and music queues in drawer", "在侧边抽屉中分列管理视频与音乐"))
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $settings.dualPlaylistMode)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                    }
+                    .frame(height: 34)
+
+                    Divider().opacity(0.12).padding(.vertical, 2)
+
+                    // Resume Playback Progress
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tr("Resume Playback", "记住播放进度"))
+                                .font(.system(size: 13))
+                            Text(L10n.tr("Resume playback from last saved position", "再次打开同一视频从上次断点恢复"))
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $settings.resumePlayback)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                    }
+                    .frame(height: 34)
+
+                    Divider().opacity(0.12).padding(.vertical, 2)
+
+                    // Playback History
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tr("Playback History", "媒体播放历史"))
+                                .font(.system(size: 13))
+                                .foregroundColor(.primary)
+                            Text(L10n.tr("Remembers progress and breakpoint memories", "记住播放历史记录与断点数据"))
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $settings.keepRecentHistory)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+
+                        Button(role: .destructive) {
+                            settings.clearAllHistory()
+                            showHistoryClearedAlert = true
+                        } label: {
+                            Text(L10n.tr("Clear…", "清除…"))
+                                .font(.system(size: 11.5))
+                        }
+                        .controlSize(.small)
+                    }
+                    .frame(height: 34)
                 }
             }
 
-            // Gestures & Seeking Card
-            SettingsCard(title: L10n.tr("Seeking & Gestures", "快进与手势"), icon: "hand.tap.fill") {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Fast Forward Callout
-                    HStack(spacing: 8) {
-                        Image(systemName: "forward.fill")
-                            .foregroundColor(.cyan)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Hold Right Arrow for 2.0x Fast Forward", "长按右箭头键 2 倍速快进"))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.primary)
-                            Text(L10n.tr("Press and hold the Right Arrow key for 2.0x playback; release to restore instantly.", "按住右方向键以 2.0x 极速快进，松开立即平滑恢复原速。"))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(9)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.cyan.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                    Divider().opacity(0.2)
-
+            // Group 2: 操控交互与导航
+            VStack(spacing: 6) {
+                sectionTitle(L10n.tr("Controls & Navigation", "操控交互与导航"))
+                settingsFormCard {
+                    // Seek Step Duration
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Seek Step Interval", "步进跳转时间"))
-                                .font(.body)
-                            Text(L10n.tr("Seek duration when pressing ← / → arrow keys.", "单击方向键 ← / → 时的跳跃步长。"))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                        Text(L10n.tr("Seek Step Duration", "进度快进步长"))
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary)
                         Spacer()
                         Picker("", selection: $settings.shortSeekStep) {
-                            Text(L10n.tr("3s", "3 秒")).tag(3.0)
-                            Text(L10n.tr("5s (Default)", "5 秒 (默认)")).tag(5.0)
-                            Text(L10n.tr("10s", "10 秒")).tag(10.0)
-                            Text(L10n.tr("15s", "15 秒")).tag(15.0)
+                            Text("5 " + L10n.tr("Seconds", "秒")).tag(5.0)
+                            Text("10 " + L10n.tr("Seconds", "秒")).tag(10.0)
+                            Text("15 " + L10n.tr("Seconds", "秒")).tag(15.0)
+                            Text("30 " + L10n.tr("Seconds", "秒")).tag(30.0)
                         }
-                        .frame(width: 140)
+                        .frame(width: 170)
                     }
+                    .frame(height: 30)
 
-                    Divider().opacity(0.2)
+                    Divider().opacity(0.12).padding(.vertical, 2)
 
+                    // Scroll Wheel Action
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Scroll Wheel Action", "滚轮动作"))
-                                .font(.body)
-                            Text(L10n.tr("Behavior when scrolling vertically on the video canvas.", "在播放画面中垂直滚动鼠标滚轮时的行为。"))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                        Text(L10n.tr("Scroll Wheel Action", "滚轮滚动操作"))
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary)
                         Spacer()
                         Picker("", selection: $settings.scrollWheelAction) {
                             ForEach(ScrollWheelAction.allCases) { action in
                                 Text(action.displayName).tag(action)
                             }
                         }
-                        .frame(width: 140)
+                        .frame(width: 170)
                     }
-                }
-            }
-        }
-    }
+                    .frame(height: 30)
 
-    // MARK: - 3. Audio & Subtitles Tab (音视频与字幕)
-    private var audioSubtitleSection: some View {
-        VStack(spacing: 14) {
-            // Hardware Decoding & Audio Card
-            SettingsCard(title: L10n.tr("Decoding & Audio", "解码与音频"), icon: "bolt.badge.automatic.fill") {
-                VStack(alignment: .leading, spacing: 12) {
+                    Divider().opacity(0.12).padding(.vertical, 2)
+
+                    // Double Click Action
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Hardware Accelerated Direct Rendering", "硬件加速渲染"))
-                                .font(.body)
-                            Text(L10n.tr("VideoToolbox hardware decoding + Metal zero-copy direct display.", "VideoToolbox 硬件解码 + Metal 零拷贝 GPU 直显。"))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                        Text(L10n.tr("Double-Click Action", "双击画面操作"))
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary)
                         Spacer()
-                        Text("Metal Direct")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.green)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(Color.green.opacity(0.12), in: Capsule())
-                    }
-
-                    Divider().opacity(0.2)
-
-                    Toggle(L10n.tr("Remember Volume", "记住音量设置"), isOn: $settings.rememberVolume)
-                    Text(L10n.tr("Retains volume level across app restarts.", "退出并重新启动播放器后，保留上次设置的音量值。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            // Subtitle Presentation Card
-            SettingsCard(title: L10n.tr("Subtitle Settings", "字幕设置"), icon: "captions.bubble.fill") {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Preferred Subtitle Language", "默认字幕语言"))
-                                .font(.body)
-                            Text(L10n.tr("Language prioritized in embedded or multi-track subtitles.", "内嵌或多音轨字幕中优先激活的语言。"))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Picker("", selection: $settings.preferredSubtitleLang) {
-                            Text(L10n.tr("Chinese (Simplified / Traditional)", "中文 (简体 / 繁体)")).tag("zh,chi,zho,zh-Hans,zh-Hant,chs,cht")
-                            Text(L10n.tr("English", "英文")).tag("eng")
-                            Text(L10n.tr("Media Default", "媒体默认")).tag("auto")
-                        }
-                        .frame(width: 155)
-                    }
-
-                    Divider().opacity(0.2)
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Default Font Size", "默认字体大小"))
-                                .font(.body)
-                            Text(L10n.tr("Initial subtitle size preset when opening videos.", "打开视频时的初始字号预设。"))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Picker("", selection: $settings.subtitleSizePreset) {
-                            ForEach(SubtitleSizePreset.allCases) { preset in
-                                Text(preset.displayName).tag(preset)
+                        Picker("", selection: $settings.doubleClickAction) {
+                            ForEach(DoubleClickAction.allCases) { action in
+                                Text(action.displayName).tag(action)
                             }
                         }
-                        .frame(width: 155)
+                        .frame(width: 170)
                     }
-
-                    Divider().opacity(0.2)
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Auto-load Matching Subtitles", "自动载入同名字幕"))
-                                .font(.body)
-                            Text(L10n.tr("Automatically loads companion .srt / .ass / .vtt files in the same folder.", "自动识别并加载同目录同名的 .srt / .ass / .vtt 外挂字幕。"))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Text(L10n.tr("Auto-load", "自动载入"))
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.cyan)
-                    }
-
-                    Divider().opacity(0.2)
-
-                    HStack(spacing: 6) {
-                        Image(systemName: "command")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                        Text(L10n.tr("Press Z / X during playback to fine-tune subtitle sync (±0.5s).", "播放时按快捷键 Z / X 可微调字幕同步时间轴（±0.5s）。"))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    .frame(height: 30)
                 }
             }
+
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
     }
 
-    // MARK: - 4. Shortcuts Tab (快捷键)
-    private var shortcutsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Card 1: 常用播控
-            SettingsCard(title: L10n.tr("Playback Shortcuts", "播控操作"), icon: "play.circle.fill") {
-                VStack(spacing: 6) {
-                    shortcutRow(title: L10n.tr("Play / Pause", "播放 / 暂停"), keys: ["␣ Space"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Seek ±5 Seconds", "快退 / 快进 5 秒"), keys: ["←", "→"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Seek ±30 Seconds", "快退 / 快进 30 秒"), keys: ["⌥", "←", "/", "→"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Step Previous / Next Frame", "上一帧 / 下一帧逐帧微调"), keys: ["[", "]"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Previous / Next Item", "上一个 / 下一个媒体项目"), keys: ["⌘", "←", "/", "→"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Playback Speed (Down / Up)", "减速 / 加速播放倍速"), keys: ["⌘", "[", "/", "]"])
-                }
-            }
-
-            // Card 2: 声音与画面
-            SettingsCard(title: L10n.tr("Audio & Video Shortcuts", "声音与画面"), icon: "speaker.wave.2.fill") {
-                VStack(spacing: 6) {
-                    shortcutRow(title: L10n.tr("Volume Up / Down (±10%)", "调大 / 调小音量 (±10%)"), keys: ["↑", "↓"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Mute / Unmute", "静音 / 取消静音"), keys: ["M"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Cycle Audio Tracks", "切换音频轨道"), keys: ["A"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Cycle Subtitles", "切换字幕轨道"), keys: ["S"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Toggle Fullscreen", "进入 / 退出全屏"), keys: ["F", "/", "⌘", "F"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("HDR Tone Mapping", "HDR / 杜比色调映射开关"), keys: ["H"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Rotate Video (90°)", "画面顺时针旋转 90°"), keys: ["R"])
-                }
-            }
-
-            // Card 3: 窗口与管理
-            SettingsCard(title: L10n.tr("Window & Controls", "窗口与快捷管理"), icon: "macwindow") {
-                VStack(spacing: 6) {
-                    shortcutRow(title: L10n.tr("Open File", "打开媒体文件"), keys: ["⌘", "O"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Toggle Playlist Drawer", "展开 / 收起播放列表"), keys: ["⌘", "P"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Toggle Media Properties", "展开 / 收起媒体属性"), keys: ["⌘", "I"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Take Screenshot", "截取当前画面"), keys: ["⌘", "S"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Close Window / Dialog", "关闭当前窗口 / 面板"), keys: ["Esc", "/", "⌘", "W"])
-                    Divider().opacity(0.15)
-                    shortcutRow(title: L10n.tr("Preferences", "打开偏好设置"), keys: ["⌘", ","])
-                }
-            }
-
-            // Bottom Floating Cheatsheet Entry Button
-            HStack {
-                Spacer()
-                Button(action: {
-                    ShortcutsCheatsheetManager.shared.show()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "command")
-                            .font(.system(size: 11, weight: .bold))
-                        Text(L10n.tr("Open Full Shortcuts Window (Cmd+/)", "在独立窗口中打开完整速查表 (⌘ /)"))
-                            .font(.system(size: 11.5, weight: .medium))
-                    }
-                    .foregroundColor(.accentColor)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.accentColor.opacity(0.12), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                Spacer()
-            }
-            .padding(.top, 4)
-            .padding(.bottom, 8)
-        }
-    }
-
-    private func shortcutRow(title: String, keys: [String]) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 12))
-                .foregroundColor(.primary)
-            Spacer()
-            HStack(spacing: 3) {
-                ForEach(keys, id: \.self) { k in
-                    Text(k)
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.primary.opacity(0.85))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(Color.white.opacity(0.08))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
-                        )
-                }
-            }
-        }
-        .padding(.vertical, 1.5)
-    }
-
-    // MARK: - 5. About Tab (关于 SilkPlayer)
+    // MARK: - 3. About Tab (关于) - Commercial Grade Native Presentation
     private var aboutSection: some View {
-        VStack(spacing: 16) {
-            // Brand Logo & Typography
-            VStack(spacing: 12) {
-                SilkBrandLogoView(size: 68, isInteractive: false)
+        VStack(spacing: 0) {
+            Spacer().frame(height: 14)
 
-                VStack(spacing: 4) {
+            // Header: Vector Brand Logo + Title + Version Badge + Slogan
+            VStack(spacing: 8) {
+                SilkBrandLogoView(size: 76, isInteractive: false)
+
+                VStack(spacing: 5) {
                     Text("SilkPlayer")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(.system(size: 21, weight: .bold))
                         .foregroundColor(.primary)
 
-                    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
-                    Text(L10n.tr("Version \(appVersion) (SilkCoreKit · Apple Silicon)", "版本 \(appVersion) (SilkCoreKit · Apple Silicon)"))
-                        .font(.system(size: 11.5, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 6)
-
-            // High-Visibility GitHub Repository Update Prompt (更新高亮提示)
-            Button(action: {
-                if let url = URL(string: "https://github.com/meowvia/SilkPlayer/releases") {
-                    NSWorkspace.shared.open(url)
-                }
-            }) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.accentColor.opacity(0.85), Color.blue.opacity(0.70)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
+                    HStack(spacing: 6) {
+                        Text("1.6.0 (Build 2026.11)")
+                        Text("·")
+                        Text(L10n.tr("Universal Binary", "双架构通用二进制"))
                     }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(L10n.tr("Check for Updates", "检查更新"))
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(.primary)
-
-                            Text("GitHub")
-                                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.accentColor))
-                        }
-
-                        Text(L10n.tr("Visit GitHub repository for latest releases and changelogs", "前往 GitHub 仓库获取最新版本发布与更新日志"))
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-
-                    Spacer()
-
-                    HStack(spacing: 4) {
-                        Text(L10n.tr("Open", "前往"))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.accentColor)
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.accentColor)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
                     .background(
                         Capsule()
-                            .fill(Color.accentColor.opacity(0.12))
+                            .fill(Color.primary.opacity(0.06))
                     )
+
+                    Text(L10n.tr(
+                        "Native · Minimal · Ultra-light · Effortless",
+                        "原生 · 极简 · 极轻 · 易用"
+                    ))
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundColor(.secondary.opacity(0.9))
+                    .padding(.top, 2)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor).opacity(0.60))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.accentColor.opacity(0.40), lineWidth: 1.2)
-                        )
+            }
+
+            Spacer().frame(height: 16)
+
+            // Core Specs Inset Card
+            settingsFormCard {
+                aboutInfoRow(
+                    icon: "sparkles.tv",
+                    title: L10n.tr("Rendering Pipeline", "渲染管线"),
+                    value: "Apple Silicon Metal Direct (Zero-Copy)"
                 )
-                .shadow(color: Color.accentColor.opacity(0.10), radius: 6, x: 0, y: 2)
+                Divider().opacity(0.12).padding(.vertical, 3)
+                aboutInfoRow(
+                    icon: "cpu",
+                    title: L10n.tr("Decode Core", "解码核心"),
+                    value: "SilkCoreKit · VideoToolbox HW"
+                )
+                Divider().opacity(0.12).padding(.vertical, 3)
+                aboutInfoRow(
+                    icon: "checkmark.seal",
+                    title: L10n.tr("License", "开源协议"),
+                    value: "GNU LGPL v3.0"
+                )
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 24)
 
-            // Architecture Pillars Card
-            SettingsCard(title: L10n.tr("Architecture & Specifications", "技术规格与系统架构"), icon: "cpu") {
-                VStack(alignment: .leading, spacing: 10) {
-                    aboutPillarRow(
-                        icon: "bolt.fill",
-                        color: .yellow,
-                        title: L10n.tr("SilkPlayback Engine · VideoToolbox & Audio", "SilkPlayback Engine 回放引擎"),
-                        desc: L10n.tr("Hardware-accelerated decoding via Apple Silicon media engine with synchronized master clock and zero-latency audio playback.", "基于 Apple Silicon 硬件加速硬解与原生低延迟音频时钟同步管线，提供丝滑流畅的音画回放体验。")
-                    )
-                    Divider().opacity(0.2)
-                    aboutPillarRow(
-                        icon: "sun.max.fill",
-                        color: .orange,
-                        title: L10n.tr("SilkRender Pipeline · Metal 3 & Profile 5", "SilkRender Pipeline 渲染管线"),
-                        desc: L10n.tr("Hardware-accelerated Metal presentation with Dolby Vision Profile 5 tone mapping, preserving natural colors.", "基于 VideoToolbox 与 Metal 色彩映射渲染单层杜比视界（Profile 5），保持色彩自然通透。")
-                    )
-                    Divider().opacity(0.2)
-                    aboutPillarRow(
-                        icon: "sparkles",
-                        color: .cyan,
-                        title: L10n.tr("SilkThumb Engine · Keyframe Scrubbing", "SilkThumb Engine 抽帧引擎"),
-                        desc: L10n.tr("Independent high-speed keyframe extraction and adaptive memory LRU caching for instantaneous timeline hover previews.", "独立高速关键帧解析与自适应内存两级 LRU 缓存，实现鼠标进度条悬停毫秒级无卡顿预览。")
-                    )
-                    Divider().opacity(0.2)
-                    aboutPillarRow(
-                        icon: "lock.shield.fill",
-                        color: .green,
-                        title: L10n.tr("Native Architecture & Privacy Protection", "原生架构与隐私保护"),
-                        desc: L10n.tr("Modular core framework (SilkCoreKit) conforming to LGPL-3.0 dynamic linking standards, running completely offline.", "采用独立内核 (SilkCoreKit) 结合 LGPL-3.0 动态链接标准，完全单机离线运行，无任何网络遥测。")
-                    )
+            Spacer().frame(height: 18)
+
+            // Action Links & Updates
+            HStack(spacing: 14) {
+                Button {
+                    updateService.checkManually()
+                } label: {
+                    HStack(spacing: 5) {
+                        if updateService.isChecking {
+                            ProgressView()
+                                .controlSize(.small)
+                                .scaleEffect(0.65)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 11.5))
+                        }
+                        Text(L10n.tr("Check for Updates", "检查更新"))
+                            .font(.system(size: 12))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4.5)
+                }
+
+                Button {
+                    if let url = URL(string: "https://github.com/meowvia/SilkPlayer") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "safari")
+                            .font(.system(size: 11.5))
+                        Text(L10n.tr("Project Website", "产品官网"))
+                            .font(.system(size: 12))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4.5)
+                }
+
+                Button {
+                    if let url = URL(string: "https://github.com/meowvia/SilkPlayer/blob/main/LICENSE") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 11.5))
+                        Text("LGPL-3.0")
+                            .font(.system(size: 12))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4.5)
                 }
             }
 
-            // Open Source Credits & Acknowledgements Card
-            SettingsCard(title: L10n.tr("Architecture & Acknowledgements", "底层架构与技术致谢"), icon: "cube.box") {
-                VStack(spacing: 8) {
-                    aboutCreditRow(name: "Apple VideoToolbox & Metal 3", license: "Hardware Acceleration")
-                    Divider().opacity(0.2)
-                    aboutCreditRow(name: "Apple AudioToolbox (AudioQueue)", license: "Native Audio Subsystem")
-                    Divider().opacity(0.2)
-                    aboutCreditRow(name: "FFmpeg (Core Libraries)", license: "LGPL-3.0 Dynamic")
-                }
-            }
+            Spacer().frame(height: 18)
 
-            Text(L10n.tr("Released under LGPL-3.0 · Powered by SilkCoreKit", "遵循 LGPL-3.0 动态链接合规标准 · 由 SilkCoreKit 核心库提供支持"))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.70))
-                .padding(.bottom, 4)
+            Text("Copyright © 2026 SilkPlayer. All rights reserved.")
+                .font(.system(size: 10.5))
+                .foregroundColor(.secondary.opacity(0.6))
+
+            Spacer(minLength: 10)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func aboutCreditRow(name: String, license: String) -> some View {
-        HStack {
-            Text(name)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.primary)
-            Spacer()
-            HStack(spacing: 4) {
-                Text(L10n.tr("License:", "许可证:"))
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.75))
-                Text(license)
-                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.white.opacity(0.08)))
-            }
-        }
-        .padding(.vertical, 2)
-    }
+    private func aboutInfoRow(icon: String, title: String, value: String) -> some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary.opacity(0.8))
+                    .frame(width: 16)
 
-    private func aboutPillarRow(icon: String, color: Color, title: String, desc: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundColor(color)
-                .frame(width: 24, height: 24)
-                .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundColor(.primary)
-                Text(desc)
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .foregroundColor(.secondary)
-                    .lineSpacing(2)
             }
+            .frame(width: 125, alignment: .leading)
+
+            Text(value)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.primary.opacity(0.9))
+
+            Spacer()
         }
+        .frame(height: 24)
+    }
+
+    // MARK: - Reusable Card Form Component
+    private func settingsFormCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.65))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.07), lineWidth: 0.5)
+        )
     }
 
     private func selectFolder() {
@@ -764,48 +637,5 @@ public struct SilkSettingsView: View {
             settings.screenshotDirectory = url.path
         }
         NSCursor.unhide()
-    }
-}
-
-// MARK: - Reusable Settings Card
-public struct SettingsCard<Content: View>: View {
-    public let title: String
-    public let icon: String
-    public let content: Content
-
-    public init(title: String, icon: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.icon = icon
-        self.content = content()
-    }
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.cyan)
-
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.primary.opacity(0.85))
-
-                Spacer()
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                content
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(Color.white.opacity(0.04))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-            )
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

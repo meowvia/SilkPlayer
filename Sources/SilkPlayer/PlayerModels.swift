@@ -287,6 +287,7 @@ public protocol PlayerControllable: AnyObject {
     func startFastForward2x()
     func stopFastForward2x()
     func fitWindow(scale: Double)
+    func resetWindowSize()
     func toggleInspector()
     func togglePlaylistDrawer()
     func applyContentAspectRatioLock()
@@ -312,6 +313,8 @@ public extension PlayerControllable {
         set {}
     }
     func renderCurrentFrameImmediately() {}
+    func fitWindow(scale: Double) {}
+    func resetWindowSize() {}
     func applyContentAspectRatioLock() {}
     func setFullscreenState(_ fullscreen: Bool) {}
     func setExactRotation(_ angle: Int) {}
@@ -457,6 +460,132 @@ public enum PlayerGeometry: Sendable {
         }
 
         return NSSize(width: targetW, height: targetH)
+    }
+
+    /// Computes initial adaptive video window content size within desktop safe bounds.
+    public static func adaptiveVideoContentSize(
+        for aspect: CGFloat,
+        isVertical: Bool,
+        rawVideoWidth: CGFloat,
+        screenVisibleSize: NSSize
+    ) -> NSSize {
+        let safeAspect = max(0.001, aspect)
+        let minSz = minimumContentSize(for: safeAspect, screenVisibleHeight: screenVisibleSize.height)
+        let maxSafe = maximumSafeContentSize(for: safeAspect, screenVisibleSize: screenVisibleSize)
+
+        var targetContentW: CGFloat
+        var targetContentH: CGFloat
+
+        if isVertical {
+            let idealH = round(screenVisibleSize.height * 0.60)
+            targetContentH = min(max(idealH, minSz.height), maxSafe.height)
+            targetContentW = round(targetContentH * safeAspect)
+            if targetContentW > maxSafe.width {
+                targetContentW = maxSafe.width
+                targetContentH = round(targetContentW / safeAspect)
+            }
+            if targetContentW < minSz.width {
+                targetContentW = minSz.width
+                targetContentH = round(targetContentW / safeAspect)
+            }
+        } else {
+            let idealW = round(min(rawVideoWidth, screenVisibleSize.width * 0.55))
+            targetContentW = max(minSz.width, min(maxSafe.width, idealW))
+            targetContentH = round(targetContentW / safeAspect)
+
+            if targetContentH > maxSafe.height {
+                targetContentH = maxSafe.height
+                targetContentW = round(targetContentH * safeAspect)
+            }
+            if targetContentW < minSz.width {
+                targetContentW = minSz.width
+                targetContentH = minSz.height
+            }
+        }
+
+        return NSSize(width: targetContentW, height: targetContentH)
+    }
+
+    /// Computes aspect-locked window content size as a fraction (`0.5`, `0.75`, `1.0`) of the
+    /// video's full-frame edge-to-edge fit (`maximizedContentSize`), clamped to `minimumContentSize`
+    /// so playback never crops edges or subtitles.
+    public static func windowPresetContentSize(
+        fraction: CGFloat,
+        aspect: CGFloat,
+        screenVisibleSize: NSSize
+    ) -> NSSize {
+        let safeAspect = max(0.001, aspect)
+        let clampedFraction = min(1.0, max(0.1, fraction))
+        let minSz = minimumContentSize(for: safeAspect, screenVisibleHeight: screenVisibleSize.height)
+        let maxSz = maximizedContentSize(for: safeAspect, screenVisibleSize: screenVisibleSize)
+
+        if clampedFraction >= 0.999 {
+            return maxSz
+        }
+
+        var targetW: CGFloat
+        var targetH: CGFloat
+        if safeAspect < 1.0 {
+            targetH = round(maxSz.height * clampedFraction)
+            targetW = round(targetH * safeAspect)
+        } else {
+            targetW = round(maxSz.width * clampedFraction)
+            targetH = round(targetW / safeAspect)
+        }
+
+        if targetW < minSz.width {
+            targetW = minSz.width
+            targetH = round(targetW / safeAspect)
+        }
+        if targetH < minSz.height {
+            targetH = minSz.height
+            targetW = round(targetH * safeAspect)
+        }
+        if targetW > maxSz.width {
+            targetW = maxSz.width
+            targetH = round(targetW / safeAspect)
+        }
+        if targetH > maxSz.height {
+            targetH = maxSz.height
+            targetW = round(targetH * safeAspect)
+        }
+        if targetW > maxSz.width { targetW = maxSz.width }
+        if targetH > maxSz.height { targetH = maxSz.height }
+
+        return NSSize(width: targetW, height: targetH)
+    }
+
+    public struct WindowScalePresetState: Equatable, Sendable {
+        public let isEnabled: Bool
+        public let isCurrent: Bool
+    }
+
+    /// Evaluates whether a window size preset item is currently active and legally reachable
+    /// without exceeding desktop edge bounds (`maxSize`) or violating UI minimum limits (`minSize`).
+    public static func windowPresetMenuState(
+        targetSize: NSSize,
+        currentSize: NSSize,
+        minSize: NSSize,
+        maxSize: NSSize,
+        tolerance: CGFloat = 2.0
+    ) -> WindowScalePresetState {
+        let isCurrent = abs(currentSize.width - targetSize.width) <= tolerance &&
+                        abs(currentSize.height - targetSize.height) <= tolerance
+        let isAtMaxBounds = currentSize.width >= maxSize.width - tolerance &&
+                            currentSize.height >= maxSize.height - tolerance
+        let targetAtOrBeyondMax = targetSize.width >= maxSize.width - tolerance &&
+                                  targetSize.height >= maxSize.height - tolerance
+        let isAtMinBounds = currentSize.width <= minSize.width + tolerance &&
+                            currentSize.height <= minSize.height + tolerance
+        let targetAtOrBelowMin = targetSize.width <= minSize.width + tolerance &&
+                                 targetSize.height <= minSize.height + tolerance
+
+        let cannotEnlarge = isAtMaxBounds && targetAtOrBeyondMax
+        let cannotShrink = isAtMinBounds && targetAtOrBelowMin
+        return WindowScalePresetState(
+            isEnabled: !isCurrent && !cannotEnlarge && !cannotShrink,
+            isCurrent: isCurrent
+        )
     }
 }
 

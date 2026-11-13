@@ -28,6 +28,65 @@ public enum HUDLayoutTier: Equatable {
     public var retainsPrevNextButtons: Bool {
         true
     }
+
+    /// Whether the bottom playback speed menu is directly visible.
+    public func showsSpeedButton(isAudioOnly: Bool) -> Bool {
+        isAudioOnly || self != .minimal
+    }
+
+    /// Whether the inline volume slider is shown on the bottom control bar.
+    public func showsVolumeSlider(isAudioOnly: Bool) -> Bool {
+        !isAudioOnly && self != .minimal
+    }
+
+    /// Whether the audio track selector menu is directly visible on the bottom bar.
+    public func showsAudioTrackButton(isAudioOnly: Bool) -> Bool {
+        !isAudioOnly && (self == .expanded || self == .standard)
+    }
+
+    /// Whether the subtitle track selector menu is directly visible on the bottom bar.
+    public func showsSubtitleTrackButton(isAudioOnly: Bool) -> Bool {
+        !isAudioOnly && self != .minimal
+    }
+
+    /// Whether the secondary "More" menu button is displayed on the bottom bar.
+    public func showsMoreMenuButton(isAudioOnly: Bool) -> Bool {
+        !isAudioOnly && self != .expanded
+    }
+
+    /// Whether the Preferences button is directly displayed on the bottom bar.
+    public func showsDirectSettingsButton(isAudioOnly: Bool) -> Bool {
+        isAudioOnly || self == .expanded
+    }
+
+    /// Whether horizontal width permits inline leftward expansion of `HUDVolumeSlider`
+    /// without colliding with centered transport controls (`Next`).
+    public func supportsInlineHorizontalVolumeExpansion(width: CGFloat, isFullscreen: Bool = false) -> Bool {
+        guard self == .expanded else { return false }
+        let minimumSafeWidth: CGFloat = isFullscreen ? 930 : 950
+        return width >= minimumSafeWidth
+    }
+
+    public var outerBottomHorizontalPadding: CGFloat {
+        self == .minimal ? 10 : 16
+    }
+
+    public var wingHorizontalPadding: CGFloat {
+        switch self {
+        case .minimal: return 0
+        case .compact: return 4
+        case .standard: return 8
+        case .expanded: return 16
+        }
+    }
+
+    public var wingItemSpacing: CGFloat {
+        switch self {
+        case .minimal: return 6
+        case .compact, .standard: return 8
+        case .expanded: return 12
+        }
+    }
 }
 
 @MainActor
@@ -113,7 +172,7 @@ public struct PlayerHUDView: View {
                 VStack(spacing: 0) {
                     topBar(tier: tier, isHUDActive: isHUDActive)
                         .padding(.horizontal, 16)
-                        .padding(.top, player.isFullscreen ? 16 : 30)
+                        .padding(.top, player.isFullscreen ? 16 : 40)
                         .allowsHitTesting(isHUDActive)
                     Spacer()
                         .allowsHitTesting(false)
@@ -375,7 +434,7 @@ public struct PlayerHUDView: View {
         VStack(spacing: tier == .minimal ? 6 : 8) {
             // 1. Sleek Scrubber Progress Section (Directly embedded on video canvas)
             PlayerProgressSection(player: player, clock: player.clock, playlist: playlist, tier: tier)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, tier == .minimal ? 6 : 16)
 
             // 2. Cohesive Transport and Functional Controls
             ZStack(alignment: .center) {
@@ -386,12 +445,13 @@ public struct PlayerHUDView: View {
                 HStack(alignment: .center, spacing: 0) {
                     leftWingControls(tier: tier)
                     Spacer()
-                    rightWingControls(tier: tier)
+                    rightWingControls(tier: tier, width: width)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, tier.wingHorizontalPadding)
             }
+            .zIndex(20)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, tier.outerBottomHorizontalPadding)
         .padding(.top, 24)
         .padding(.bottom, 14)
         .background(
@@ -533,17 +593,18 @@ public struct PlayerHUDView: View {
     // MARK: - Left Wing Controls (Playback Mode, Speed, Screenshot)
     @ViewBuilder
     private func leftWingControls(tier: HUDLayoutTier) -> some View {
-        HStack(spacing: 12) {
+        let isAudio = player.isAudioOnly
+        HStack(spacing: tier.wingItemSpacing) {
             // 0. 播放模式 (顺序播放 / 列表循环 / 单曲循环 / 随机播放)
             PlaybackModeButton(playlist: playlist)
 
-            // 1. 播放倍速选择菜单 (expanded, standard, compact 模式直显)
-            if tier != .minimal {
+            // 1. 播放倍速选择菜单 (纯音频模式全尺寸直显；视频模式在 expanded, standard, compact 模式直显)
+            if tier.showsSpeedButton(isAudioOnly: isAudio) {
                 HUDSpeedMenuButton(player: player)
             }
 
             // 2. 截屏 (仅在视频播放时于 expanded 和 standard 模式直显，纯音频回放自动隐藏)
-            if !player.isAudioOnly && (tier == .expanded || tier == .standard) {
+            if !isAudio && (tier == .expanded || tier == .standard) {
                 HUDTransportButton(
                     icon: "camera",
                     size: 14,
@@ -570,15 +631,22 @@ public struct PlayerHUDView: View {
         }
     }
 
-    // MARK: - Right Wing Controls (Playlist, Tracks, Subtitles, More, Settings, Fullscreen)
+    // MARK: - Right Wing Controls (Volume, Tracks, Subtitles, More, Settings, Fullscreen)
     @ViewBuilder
-    private func rightWingControls(tier: HUDLayoutTier) -> some View {
-        HStack(spacing: tier == .minimal ? 10 : 12) {
-            // 常态交互式音量微调与起播防爆音安全锁 (24pt 动态图标，悬停平滑展开微型滑块)
-            HUDVolumeSlider(player: player)
+    private func rightWingControls(tier: HUDLayoutTier, width: CGFloat) -> some View {
+        let isAudio = player.isAudioOnly
+        let inlineVolumeExpanded = tier.supportsInlineHorizontalVolumeExpansion(
+            width: width,
+            isFullscreen: player.isFullscreen
+        )
+        HStack(spacing: tier.wingItemSpacing) {
+            // 0. 音量微调滑块 (窄窗口切换为向上垂直弹出，避免横向挤压居中“下一首”按钮；纯音频模式隐藏)
+            if tier.showsVolumeSlider(isAudioOnly: isAudio) {
+                HUDVolumeSlider(player: player, expandVertically: !inlineVolumeExpanded)
+            }
 
-            // 1. 音轨选择原生菜单 (expanded 和 standard 模式直显，compact/minimal 收纳进更多)
-            if tier == .expanded || tier == .standard {
+            // 1. 音轨选择原生菜单 (仅视频模式 expanded/standard 直显)
+            if tier.showsAudioTrackButton(isAudioOnly: isAudio) {
                 HUDMenuButton(
                     icon: "waveform",
                     size: 14,
@@ -589,8 +657,8 @@ public struct PlayerHUDView: View {
                 }
             }
 
-            // 3. 字幕选择原生菜单 (expanded, standard, compact 模式直显，minimal 收纳进更多)
-            if tier != .minimal {
+            // 3. 字幕选择原生菜单 (仅视频模式 non-minimal 直显)
+            if tier.showsSubtitleTrackButton(isAudioOnly: isAudio) {
                 HUDMenuButton(
                     icon: "captions.bubble",
                     size: 14,
@@ -602,15 +670,15 @@ public struct PlayerHUDView: View {
                 }
             }
 
-            // 4. 更多控制菜单 (当处于 standard, compact, minimal 模式时动态出现，收纳次级功能)
-            if tier != .expanded {
+            // 4. 更多控制菜单 (仅视频模式非 expanded 尺寸出现)
+            if tier.showsMoreMenuButton(isAudioOnly: isAudio) {
                 HUDMoreMenuButton {
                     moreMenuContent(tier: tier)
                 }
             }
 
-            // 5. 偏好设置 (仅 expanded 模式直显，其余模式在“更多”菜单中)
-            if tier == .expanded {
+            // 5. 偏好设置 (纯音频模式全尺寸直显；视频模式仅 expanded 直显，其余模式收进“更多”菜单)
+            if tier.showsDirectSettingsButton(isAudioOnly: isAudio) {
                 HUDTransportButton(
                     icon: "gearshape",
                     size: 14,
@@ -679,13 +747,19 @@ public struct PlayerHUDView: View {
 
     @ViewBuilder
     private func moreMenuContent(tier: HUDLayoutTier) -> some View {
-        // 1. 如果在 minimal 模式下，包含倍速选择
+        // 1. 如果在 minimal 模式下，包含倍速与静音切换
         if tier == .minimal {
             Menu(L10n.playbackSpeed + " (\(String(format: "%.2fx", player.speed)))") {
                 ForEach([0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
                     Button(abs(player.speed - rate) < 0.04 ? "✓ \(String(format: "%.2fx", rate))\(rate == 1.0 ? " (" + L10n.speedNormal + ")" : "")" : "\(String(format: "%.2fx", rate))\(rate == 1.0 ? " (" + L10n.speedNormal + ")" : "")") {
                         player.setSpeed(rate)
                     }
+                }
+            }
+
+            if !player.isAudioOnly {
+                Button((player.isMuted ? L10n.unmuteAudio : L10n.muteAudio) + " (M)") {
+                    player.toggleMute()
                 }
             }
         }

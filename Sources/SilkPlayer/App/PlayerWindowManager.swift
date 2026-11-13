@@ -81,6 +81,13 @@ extension Notification.Name {
 @Observable public final class PlayerWindowManager {
     public static let shared = PlayerWindowManager()
 
+    nonisolated public static var isRunningTests: Bool {
+        NSClassFromString("XCTestCase") != nil ||
+        NSClassFromString("XCTest") != nil ||
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+        ProcessInfo.processInfo.arguments.contains(where: { $0.contains("xctest") })
+    }
+
     public private(set) var sessions: [PlayerWindowSession] = []
 
     /// Queue for pending files to be consumed by newly spawned windows
@@ -442,12 +449,14 @@ extension Notification.Name {
             }
             existing.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
             existing.level = .floating
-            existing.makeKeyAndOrderFront(nil)
-            NSApp?.activate(ignoringOtherApps: true)
+            if !Self.isRunningTests {
+                existing.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            }
             return
         }
 
-        let contentRect = NSRect(x: 0, y: 0, width: 540, height: 680)
+        let contentRect = NSRect(x: 0, y: 0, width: 520, height: 490)
         let window = NSWindow(
             contentRect: contentRect,
             styleMask: [.titled, .closable, .fullSizeContentView],
@@ -465,8 +474,8 @@ extension Notification.Name {
         // Fullscreen auxiliary space support strictly prevents macOS Space jump
         window.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
         window.level = .floating
-        window.minSize = NSSize(width: 520, height: 560)
-        window.maxSize = NSSize(width: 520, height: 560)
+        window.minSize = NSSize(width: 520, height: 490)
+        window.maxSize = NSSize(width: 520, height: 490)
 
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
@@ -483,8 +492,10 @@ extension Notification.Name {
         window.contentView = hostingView
 
         self.settingsWindow = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp?.activate(ignoringOtherApps: true)
+        if !Self.isRunningTests {
+            window.makeKeyAndOrderFront(nil)
+            NSApp?.activate(ignoringOtherApps: true)
+        }
     }
 
     /// Recursively expands folders and external disk volumes into contained video/audio paths,
@@ -534,8 +545,10 @@ extension Notification.Name {
             if expanded.count > 1 {
                 session.appendPlaylistPaths(Array(expanded.dropFirst()))
             }
-            session.window?.makeKeyAndOrderFront(nil)
-            NSApp?.activate(ignoringOtherApps: true)
+            if !Self.isRunningTests {
+                session.window?.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            }
         } else if !singleWindow && !sessions.isEmpty {
             enqueuePendingFiles(expanded)
             openWindowAction?()
@@ -544,8 +557,10 @@ extension Notification.Name {
             if expanded.count > 1 {
                 session.appendPlaylistPaths(Array(expanded.dropFirst()))
             }
-            session.window?.makeKeyAndOrderFront(nil)
-            NSApp?.activate(ignoringOtherApps: true)
+            if !Self.isRunningTests {
+                session.window?.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            }
         } else {
             enqueuePendingFiles(expanded)
             openWindowAction?()
@@ -556,8 +571,10 @@ extension Notification.Name {
     public func requestNewWindow() {
         if AppSettings.shared.singleWindowMode {
             if let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
-                session.window?.makeKeyAndOrderFront(nil)
-                NSApp?.activate(ignoringOtherApps: true)
+                if !Self.isRunningTests {
+                    session.window?.makeKeyAndOrderFront(nil)
+                    NSApp?.activate(ignoringOtherApps: true)
+                }
             } else {
                 openNewWindow()
             }
@@ -595,9 +612,11 @@ extension Notification.Name {
                 win.minSize = safeMin
                 win.contentMinSize = safeMin
 
-                let refreshSel = NSSelectorFromString("_doUpdateTilingConstraintsImmediately")
-                if win.responds(to: refreshSel) {
-                    _ = win.perform(refreshSel)
+                if !Self.isRunningTests {
+                    let refreshSel = NSSelectorFromString("_doUpdateTilingConstraintsImmediately")
+                    if win.responds(to: refreshSel) {
+                        _ = win.perform(refreshSel)
+                    }
                 }
 
                 win.standardWindowButton(.zoomButton)?.isEnabled = true
@@ -609,7 +628,7 @@ extension Notification.Name {
             guard let win = s.window ?? (s.player as? PlayerCore)?.hostWindow else { continue }
             configureWindow(win)
         }
-        if let keyWindow = NSApp?.keyWindow {
+        if !Self.isRunningTests, let keyWindow = NSApp?.keyWindow {
             configureWindow(keyWindow)
         }
     }
@@ -732,6 +751,50 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     private var savedPreZoomFrame: NSRect? = nil
     private var preFullScreenState: PreFullScreenState? = nil
     private var lastToggleMaximizeTime: TimeInterval = 0
+    public private(set) var resizeHUDView: WindowResizeHUDView?
+
+    /// Clears maximized tracking state before programmatic window resizing (e.g., scale presets or adaptive reset).
+    public func resetInteractiveModeToNormal() {
+        currentInteractiveMode = .normal
+        savedPreZoomFrame = nil
+    }
+
+    @MainActor
+    public func ensureHUDAttached(to window: NSWindow) -> WindowResizeHUDView? {
+        if let existing = resizeHUDView, existing.window == window {
+            return existing
+        }
+        guard let contentView = window.contentView else { return nil }
+
+        if let existing = contentView.subviews.compactMap({ $0 as? WindowResizeHUDView }).first {
+            self.resizeHUDView = existing
+            return existing
+        }
+
+        let hud = WindowResizeHUDView()
+        hud.translatesAutoresizingMaskIntoConstraints = false
+        hud.alphaValue = 0.0
+        hud.isHidden = true
+        contentView.addSubview(hud, positioned: .above, relativeTo: nil)
+        NSLayoutConstraint.activate([
+            hud.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            hud.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12)
+        ])
+        self.resizeHUDView = hud
+        return hud
+    }
+
+    @MainActor
+    private func updateResizeHUD(window: NSWindow, resolvedSize: NSSize) {
+        guard !window.styleMask.contains(.fullScreen), !isFullscreenTransitioning else { return }
+        let hud = ensureHUDAttached(to: window)
+        hud?.update(
+            size: resolvedSize,
+            videoWidth: self.player?.displayVideoWidth ?? (self.player?.videoWidth ?? 0),
+            videoHeight: self.player?.displayVideoHeight ?? (self.player?.videoHeight ?? 0),
+            isAudioOnly: self.player?.isAudioOnly ?? false
+        )
+    }
 
     public init(session: PlayerWindowSession? = nil, player: (any PlayerControllable)? = nil) {
         self.session = session
@@ -830,6 +893,19 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         return false
     }
 
+    public func windowWillStartLiveResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              !window.styleMask.contains(.fullScreen),
+              !isFullscreenTransitioning else { return }
+        let hud = ensureHUDAttached(to: window)
+        hud?.show(
+            size: window.frame.size,
+            videoWidth: player?.displayVideoWidth ?? (player?.videoWidth ?? 0),
+            videoHeight: player?.displayVideoHeight ?? (player?.videoHeight ?? 0),
+            isAudioOnly: player?.isAudioOnly ?? false
+        )
+    }
+
     public func windowWillResize(_ window: NSWindow, to frameSize: NSSize) -> NSSize {
         let idleMinW: CGFloat = 640
         let screen = window.screen ?? NSScreen.main
@@ -867,10 +943,12 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         if window.inLiveResize && NSEvent.modifierFlags.contains(.shift) {
             let minSide: CGFloat = (player?.isAudioOnly == true) ? 380.0 : 360.0
             let minWidth: CGFloat = (player?.isAudioOnly == true) ? 380.0 : idleMinW
-            return NSSize(
+            let res = NSSize(
                 width: max(minWidth, min(maxSize.width, frameSize.width)),
                 height: max(minSide, min(maxSize.height, frameSize.height))
             )
+            updateResizeHUD(window: window, resolvedSize: res)
+            return res
         }
 
         // Dedicated pure-audio window resize branch: decouple interactive live dragging from programmatic 1:1 square sizing
@@ -880,10 +958,12 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
             if window.inLiveResize {
                 // Live interactive drag: decouple axes to track mouse pointer smoothly without feedback oscillation
-                return NSSize(
+                let res = NSSize(
                     width: max(minAudioSize, min(maxSize.width, frameSize.width)),
                     height: max(minAudioSize, min(maxSize.height, frameSize.height))
                 )
+                updateResizeHUD(window: window, resolvedSize: res)
+                return res
             } else {
                 // Non-live programmatic resize (or snap/init): maintain 1:1 proportional square
                 let side = max(minAudioSize, min(maxAudioDimension, frameSize.width))
@@ -898,10 +978,14 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
                     height: min(maxSize.height, frameSize.height)
                 )
             }
-            return NSSize(
+            let res = NSSize(
                 width: max(idleMinW, min(maxSize.width, frameSize.width)),
                 height: max(360, min(maxSize.height, frameSize.height))
             )
+            if window.inLiveResize {
+                updateResizeHUD(window: window, resolvedSize: res)
+            }
+            return res
         }
 
         let baseAspect = player.effectiveAspectRatio
@@ -919,7 +1003,9 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             }
             let clampedW = max(minW, min(maxSize.width, frameSize.width))
             let clampedH = max(minH, min(maxSize.height, frameSize.height))
-            return NSSize(width: round(clampedW), height: round(clampedH))
+            let res = NSSize(width: round(clampedW), height: round(clampedH))
+            updateResizeHUD(window: window, resolvedSize: res)
+            return res
         }
 
         // Video-Adaptive Split Screen Tiling ("播放自适应分屏"):
@@ -1017,14 +1103,22 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return frameSize
         }
 
-        return NSSize(width: round(targetW), height: round(targetH))
+        let resolved = NSSize(width: round(targetW), height: round(targetH))
+        if window.inLiveResize {
+            updateResizeHUD(window: window, resolvedSize: resolved)
+        }
+
+        return resolved
     }
 
     public func windowDidEndLiveResize(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
               !window.styleMask.contains(.fullScreen),
-              !isFullscreenTransitioning,
-              let player = self.player else { return }
+              !isFullscreenTransitioning else { return }
+
+        // Update final frame size and smoothly dismiss HUD after 0.35s
+        updateResizeHUD(window: window, resolvedSize: window.frame.size)
+        resizeHUDView?.dismiss(afterDelay: 0.35, duration: 0.25)
 
         savedPreZoomFrame = nil
 
@@ -1063,8 +1157,8 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         capturePreFullScreenFrameIfNeeded(window: window)
 
         let contentSize = window.contentRect(forFrameRect: window.frame).size
-        if player.videoWidth > 0 || player.videoHeight > 0 {
-            player.updateRememberedWindowSize(contentSize)
+        if let p = self.player, p.videoWidth > 0 || p.videoHeight > 0 {
+            p.updateRememberedWindowSize(contentSize)
         }
     }
 
@@ -1079,6 +1173,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
               !window.styleMask.contains(.fullScreen) else { return }
 
         if window.inLiveResize {
+            updateResizeHUD(window: window, resolvedSize: window.frame.size)
             return
         }
 
@@ -1179,10 +1274,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         let screen = window.screen ?? NSScreen.main
         guard let screenFrame = screen?.visibleFrame else { return }
 
-        let isTesting = NSClassFromString("XCTestCase") != nil ||
-                        NSClassFromString("XCTest") != nil ||
-                        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
-                        ProcessInfo.processInfo.arguments.contains(where: { $0.contains("xctest") })
+        let isTesting = PlayerWindowManager.isRunningTests
 
         isMaximizingOrRestoring = true
         isAdjustingWindowFrame = true
@@ -1194,7 +1286,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             let cy = round(screenFrame.midY - sz / 2)
             let targetFrame = NSRect(x: cx, y: cy, width: sz, height: sz)
             if isTesting {
-                window.setFrame(targetFrame, display: true, animate: false)
+                window.setFrame(targetFrame, display: false, animate: false)
                 isAdjustingWindowFrame = false
                 isMaximizingOrRestoring = false
                 return
@@ -1243,7 +1335,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         }
 
         if isTesting {
-            window.setFrame(targetFrame, display: true, animate: false)
+            window.setFrame(targetFrame, display: false, animate: false)
             isAdjustingWindowFrame = false
             isMaximizingOrRestoring = false
             return
@@ -1267,6 +1359,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowWillEnterFullScreen(_ notification: Notification) {
+        resizeHUDView?.hideImmediately()
         if let window = notification.object as? NSWindow {
             let screen = window.screen ?? NSScreen.main
             let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
@@ -1414,6 +1507,8 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowWillClose(_ notification: Notification) {
+        resizeHUDView?.removeFromSuperview()
+        resizeHUDView = nil
         player?.stop()
     }
 }

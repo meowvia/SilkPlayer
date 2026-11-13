@@ -99,6 +99,14 @@ SilkPlayer 实行双架构发布与开源前端/闭源内核协同：
    - 坚守“历史版本永久免费不撤回”原则；
    - 严格执行开发纪律：在 2.0.0 之前（整个 1.x 分支生命周期内），完全不进行任何局域网 / NAS 深度互联功能的编码与部署。
 
+### 铁律 8：官方网站专属维护归口与接力清单轻量化
+1. **独立归口与单一事实源**：
+   - 官方网站独立物理路径位于 `/Volumes/2T/Projects/SilkPlayer/Website`（生产域名 `https://silkplayer.1999909.xyz`）；
+   - 完整的建站架构、排版规范、i18n 对齐、Cloudflare Pages 边缘服务与全球缓存清理流程，已全量收拢归档于 `/Volumes/2T/Projects/SilkPlayer/Website/README.md` 作为唯一运维事实源；
+2. **严禁在项目接力清单中冗余堆叠**：
+   - 为防止工程移交 Prompt 严重膨胀，后续在进行 SilkPlayer 项目接力时，**严禁将整份网站运维清单原样粘贴到工程接力 Prompt 中**；
+   - 接力清单中仅保留 1~2 行指向该目录手册的纯净引用锚点，接手 Agent 仅在执行网站特定维护任务时直接按需通读该手册即可。
+
 ---
 
 ## 二、 每次移交接力清单格式化标准 (Mandatory Handoff Template)
@@ -113,6 +121,7 @@ SilkPlayer 实行双架构发布与开源前端/闭源内核协同：
 - **Git 状态**: 分支 `<branch_name>` · Commit `<commit_hash>` · 工作区状态（Clean / Modified）
 - **当前版本基准**: `v<current_version>` (双架构支持: Apple Silicon arm64 & Intel x86_64)
 - **自动化测试基线**: `./scripts/run_tests.sh` -> 以当前脚本实际输出为准，记录通过数 / 总数 / 失败项
+- **官方网站资产与归口**: 路径 `/Volumes/2T/Projects/SilkPlayer/Website` · 生产域名 `https://silkplayer.1999909.xyz` (运维手册参见该目录下 `README.md`，接手 Agent 按需阅读即可，严禁在接力清单展开)
 
 ## 2. 文档事实源与跟踪状态
 - **功能规划库 (`Documentation/FEATURE_PROPOSALS.md`)**:

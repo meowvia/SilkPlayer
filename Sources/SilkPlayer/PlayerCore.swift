@@ -106,6 +106,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var activeOSD: OSDNotification? = nil
     public var hasAppliedInitialWindowSize: Bool = false
 
+    // MARK: - Live Resize Precision HUD
+    @Published public var isLiveResizing: Bool = false
+    @Published public var liveResizeSize: CGSize = .zero
+    @Published public var liveResizeCursorLocation: CGPoint? = nil
+
     // MARK: - Tracks & Chapters
     @Published public var audioTracks: [TrackItem] = []
     @Published public var subtitleTracks: [TrackItem] = []
@@ -509,6 +514,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             isPlaylistDrawerVisible = false
             isInspectorVisible = false
         }
+        isLiveResizing = false
+        liveResizeSize = .zero
+        liveResizeCursorLocation = nil
         hasAppliedInitialWindowSize = false
         isDolbyVision = false
         isHDRContent = false
@@ -1226,7 +1234,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 _ = window.perform(refreshSel)
             }
         }
-        if !window.isKeyWindow {
+        if !PlayerWindowManager.isRunningTests && !window.isKeyWindow {
             window.makeKeyAndOrderFront(nil)
         }
 
@@ -1250,7 +1258,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             }
         }
 
-        window.toggleFullScreen(nil)
+        if !PlayerWindowManager.isRunningTests {
+            window.toggleFullScreen(nil)
+        }
     }
 
     public func renderCurrentFrameImmediately() {
@@ -1266,49 +1276,6 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             isPlaylistDrawerVisible = false
         }
         updateTrafficLightsVisibility()
-    }
-
-    public func fitWindow(scale: Double) {
-        guard let window = hostWindow ?? NSApp.keyWindow, videoWidth > 0, videoHeight > 0 else { return }
-        let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-        let aspect = effectiveAspectRatio
-        let isPerpendicular = transform.isPerpendicular
-        let rawW = CGFloat(displayVideoWidth > 0 ? displayVideoWidth : videoWidth)
-        let rawH = CGFloat(displayVideoHeight > 0 ? displayVideoHeight : videoHeight)
-        let baseW = isPerpendicular ? rawH : rawW
-
-        var targetContentW = round(baseW * CGFloat(scale))
-        var targetContentH = round(targetContentW / aspect)
-
-        let maxSafeSz = PlayerGeometry.maximumSafeContentSize(for: aspect, screenVisibleSize: screenFrame.size)
-        let maxW = maxSafeSz.width
-        let maxH = maxSafeSz.height
-        if targetContentW > maxW {
-            targetContentW = maxW
-            targetContentH = round(targetContentW / aspect)
-        }
-        if targetContentH > maxH {
-            targetContentH = maxH
-            targetContentW = round(targetContentH * aspect)
-        }
-        let minContentSz = PlayerGeometry.minimumContentSize(for: aspect, screenVisibleHeight: screenFrame.height)
-        if targetContentW < minContentSz.width {
-            targetContentW = minContentSz.width
-            targetContentH = round(targetContentW / aspect)
-        }
-        if targetContentH < minContentSz.height {
-            targetContentH = minContentSz.height
-            targetContentW = round(targetContentH * aspect)
-        }
-
-        let frameW = targetContentW
-        let frameH = targetContentH
-
-        let currentCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
-        let newX = max(screenFrame.minX, min(screenFrame.maxX - frameW, currentCenter.x - frameW / 2))
-        let newY = max(screenFrame.minY, min(screenFrame.maxY - frameH, currentCenter.y - frameH / 2))
-        window.setFrame(NSRect(x: newX, y: newY, width: frameW, height: frameH), display: true, animate: true)
-        applyContentAspectRatioLock()
     }
 
     public func toggleInspector() {

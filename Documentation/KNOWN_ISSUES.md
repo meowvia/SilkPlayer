@@ -21,7 +21,13 @@
 | ISSUE-011 | 音频模式下手动调整播放窗口尺寸引起边框弹跳与高频振荡抖动 | 窗口交互与几何约束 / SilkPlayer (PlayerWindowManager) | Medium | 已修复 (1.5.0) | 1.4.0 |
 | ISSUE-012 | 前置图钉浮动层级导致全屏请求被系统静默抛弃与状态机永久死锁 | 窗口交互与状态机 / SilkPlayer (PlayerCore) | High | 已修复 (1.5.0) | 1.4.0 |
 | ISSUE-013 | 铺满最大化模式下按 Esc 键误触发退出播放而非缩回原窗口尺寸 | 键盘响应链与窗口管理 / SilkPlayer (PlayerCore & Delegate) | Medium | 已修复 (1.5.0) | 1.4.0 |
-| ISSUE-014 | 自动化测试进程抢占全局焦点导致前台播放视窗失焦闪烁 | 窗口调度与测试工程 / SilkPlayer (PlayerWindowManager & PlayerCore) | Medium | 待修复 (1.6.0) | 1.5.0 |
+| ISSUE-014 | 自动化测试进程抢占全局焦点导致前台播放视窗失焦闪烁 | 窗口调度与测试工程 / SilkPlayer (PlayerWindowManager & PlayerCore) | Medium | 已修复 (1.6.0) | 1.5.0 |
+| ISSUE-015 | 音乐模式顶栏右上角按钮精简与提示重叠遮挡问题（原误判 `xmark` 切回主窗口） | 音乐模式顶部栏 / SilkPlayer (MusicModeView) | Medium | 已修复并实机验证 (1.7.0-music-preview) | 1.7.0-music-preview |
+| ISSUE-016 | 音乐模式收起态退出后保存 `228pt` 高度（设计目标 `224pt`）及锁屏期实机复测缺口 | 窗口几何与生命周期 / SilkPlayer (AppDelegate & PlayerWindowManager) | Low | 已修复并实机验证 (1.7.0-music-preview) | 1.7.0-music-preview |
+| ISSUE-017 | 音乐模式快速拖拽窗口与光标分离（及视频模式/主界面起手快甩偏移待合入 1.7.0 优化） | 窗口拖拽与几何协调 / SilkPlayer (MusicModeView, PlayerCore+WindowGeometry, VideoView, EmptyPlaybackView) | High | 预览版已修复；视频/主界面优化登记待合入 1.7.0 正式版 | 1.7.0-music-preview |
+| ISSUE-018 | 冷启动被 `WindowGroup` 桌面平铺状态 (`tilingPosition: 9`) 恢复为铺满屏尺寸 | 窗口生命周期与冷启动几何 / SilkPlayer (SilkPlayerApp, AppShellView, AppDelegate, PlayerCore+WindowGeometry) | High | 预览版已修复；冷启动防平铺隔离登记待合入 1.7.0 正式版 | 1.7.0-music-preview |
+| ISSUE-019 | 竖屏/极窄窗口（`.minimal` 档）底栏音量按钮未隐藏导致与“下一首”按钮重叠冲突 | 视频 HUD 底栏 / SilkPlayer (PlayerHUDView, HUDVolumeSlider) | Medium | **已修复**（`1.6.0` 已落地） | 1.6.0 |
+| ISSUE-020 | 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题 | 顶部菜单栏 / SilkPlayer (PlayerCommands, PlayerCore) | Low | **已解决**（`1.6.0` 已移除并由右键菜单方案替代） | 1.6.0 |
 
 ---
 
@@ -739,6 +745,145 @@ public enum WindowPresentationState: Equatable {
 1. **测试态静默判定**：在 `openExternalFiles` 与 `toggleFullscreen` 的窗口激活和置前逻辑前，增加 `isTesting` 检查（检查 `XCTestCase` 或测试环境变量）；
 2. **测试环境下跳过抢焦**：当处于测试态时，跳过 `NSApp.activate` 与 `makeKeyAndOrderFront`，仅保留数据状态与管线逻辑验证，杜绝向 WindowServer 发送全局抢焦指令；
 3. **验收标准**：后台执行 `run_tests.sh` 时，前台运行中的 SilkPlayer 窗口零失焦、零闪烁、零视觉感知。
+
+### 4. 修复与销项验证 (已在 1.6.0 落地销项)
+- **落地文件**：`PlayerWindowManager.swift`、`PlayerCore.swift`、`AppShellView.swift`
+- **实施效果**：在 `openExternalFiles`、`requestNewWindow`、`openSettings` 与 `toggleFullscreen` 中增加 `PlayerWindowManager.isRunningTests` 判定。测试环境下跳过 `NSApp.activate` 与 `window.makeKeyAndOrderFront`。经实机自动化跑测验证，后台连续两轮运行测试期间，前台播放器视窗保持持续置顶播放，零焦点剥夺、零闪烁失焦。
+
+---
+
+## ISSUE-015: 音乐模式顶栏右上角按钮精简与提示重叠遮挡问题
+
+### 1. 现象与交互确认
+- 原记录将 `xmark` 关闭按钮点击后停止音乐并切回 `640×360` 空闲主窗口 (`EmptyPlaybackView`) 视作异常；经与用户确认，该行为是有意保留的“快速退出音乐播放并切回影视入口”路径，与左上角原生红灯（关闭整个窗口）职责不同，应予保留；
+- 真正需调整的问题集中在三按钮本身：
+  1. `info.circle`（媒体属性）按钮在音乐模式下信息冗余（核心格式规格已展示在 `heroCard` 右侧）且抽屉在收起态高度不足；
+  2. 点击 `pin`（置顶）按钮触发 `player.showOSD(...)` 会在 `padding(.top, 58)` 位置弹出居中胶囊，长歌名时遮挡标题文本；
+  3. `MusicCircleIconButton` 挂载的 `.hudTooltip(..., edge: .bottom)` 在悬停 `0.2s` 后固定向下偏移 `34 pt`，与下方 `heroCard` 右侧的音频格式胶囊直接重叠。
+
+### 2. 代码定位与落地修复
+- [`MusicModeView.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/MusicModeView.swift#L273-L296):
+  - 移除 `info.circle` 媒体属性按钮（菜单 `Cmd+I` 与快捷键 `I` 仍保留作为备用），右上角精简为置顶 (`pin`) 与关闭 (`xmark`) 两枚按钮；
+  - 保留 `xmark` 调用 `onClosePlayback()` 返回 `640×360` 空闲主页以便快速切入视频播放；
+  - 移除点击置顶按钮时的 `player.showOSD(...)` 调用，直接通过按钮自身的 `pin` / `pin.fill` 高亮状态反馈置顶状态；
+- [`MusicModeView.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/MusicModeView.swift#L1377-L1408):
+  - 移除 `MusicCircleIconButton` 上的 `.hudTooltip(...)` 与 `.help(...)`，保留 `.accessibilityLabel(accessibilityTitle)`，消除悬停提示对下方音频格式胶囊的任何重叠遮挡。
+
+### 3. 解锁桌面实机验证
+- 悬停置顶按钮 `0.6s` 无浮动提示压住 `WAV · 44.1 kHz / 16-bit` 胶囊；点击置顶后窗口层级从 `0` 切换为 `3`（置顶高亮开启）且无居中 OSD 遮挡歌名；点击 `xmark` 按钮平滑停播并切回 `640×360` `EmptyPlaybackView`。
+
+---
+
+## ISSUE-016: 音乐模式收起态退出后保存 `228pt` 高度及锁屏期实机复测缺口
+
+### 1. 根因定位
+- 在桌面运行态下，音乐模式收起态窗口高度本身已稳定在 `614×224 pt`（`AppShellView.rootMinHeight = 140.0`）；
+- 导致退出落盘变成 `228 pt` 的根因是 [`AppDelegate.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/AppDelegate.swift#L69-L92)（`applicationShouldTerminate` 与 `applicationWillTerminate`）及 [`PlayerWindowManager.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerWindowManager.swift#L1668-L1677)（`windowWillClose`）在退出时调用了无参 `player.stop()`（默认 `resetUI: true, preserveAudioMode: false`）；
+- 该调用在窗口尚未销毁并执行 `NSWindow` 位置持久化前，将 `player.isAudioOnly` 置回 `false`，使 [`AppShellView.rootMinHeight`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/AppShellView.swift#L48-L57) 从 `140.0` 跳变回 `200.0`，叠加 `.hiddenTitleBar` 顶部安全区 `28 pt`（`200 + 28 = 228 pt`）把退出中的窗口向下撑高 `4 pt` 后写入 `NSWindow Frame playerWindow-AppWindow-1`。
+
+### 2. 修复与实机验收结果
+- [`AppDelegate.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/AppDelegate.swift#L69-L92) 与 [`PlayerWindowManager.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerWindowManager.swift#L1668-L1677) 改为调用 `player.stop(resetUI: false, preserveAudioMode: true)`，在退出/关窗时停播引擎并保存进度，同时保留音频窗口几何状态与约束；
+- [`MusicModeTests.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Tests/SilkPlayerTests/MusicModeTests.swift#L762-L784) 补充 `NSWindow(614×224)` 断言，验证 `stop(resetUI: false, preserveAudioMode: true)` 保持 `minSize.height == 224` 与 `frame.height == 224`；
+- 解锁桌面 `/Applications/SilkPlayer.app` 实机复测全部通过：
+  1. 收起态（`614×224`）与展开态（`614×500`）均无顶部 `4 pt` 透明缝隙，`MusicQueueBorderNotch` 压线居中；
+  2. 从左侧空白边距拖拽窗口成功位移（`1069,431 -> 1116,459`），从底部 `6 pt` 边缘向下拉伸触发磁吸展开至 `614×500` 且未弹出尺寸比例 HUD；
+  3. 音乐模式进度条悬停不弹出视频缩略图预览；`Cmd+L` 收回 `614×224` 后正常退出，实测 `defaults read com.silkplayer.SilkPlayer "NSWindow Frame playerWindow-AppWindow-1"` 稳定落盘为 `1116 469 614 224 0 0 2752 1122`；
+  4. 视频模式回归正常：进度条悬停显示缩略图预览卡片，边缘实时拖拽显示 `1350 × 759 | 16:9` 尺寸比例 HUD。
+
+---
+
+## ISSUE-017: 音乐模式快速拖拽窗口与光标分离（及视频模式/主界面起手快甩偏移优化）
+
+### 1. 缺陷现象
+- **音乐模式 (`1.7.0-music-preview`)**：使用鼠标或触控板快速拖动音乐模式窗口时，窗口移动明显滞后于硬件光标，光标会脱离抓手位置，靠近屏幕四边时还会被硬截停导致与光标分离。
+- **视频模式与空载主界面**：持续快速拖动过程中窗口与光标同步跟手，但在极快起手甩动时，超越启动防抖阈值前已产生的初始位移不会补回，窗口会带着一段固定抓点偏移跟随移动。
+
+### 2. 根因分析
+1. **音乐模式绕过 `WindowServer` 原生拖拽**：
+   - [`MusicDragCanvasNSView`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/MusicModeView.swift#L2051-L2079) 为避免触发 macOS 贴边/顶栏平铺最大化手势，将 `mouseDownCanMoveWindow` 设为 `false`，改在 `mouseDragged` 中手动读取 `NSEvent.mouseLocation` 并调用 `window.setFrameOrigin(clamped)`。
+   - 手动 `setFrameOrigin` 依赖 App 主线程事件分发与核心动画/毛玻璃背景（`VisualEffectView`、`.glassEffect`）重绘提交，无法达到 `WindowServer` 硬件级光标同步频率；同时 `clampedWindowOrigin` 将单屏窗口四边硬锁死在 `visibleFrame` 内，进一步造成甩向边界时光标脱手。
+2. **视频模式与空载主界面向 `performDrag(with:)` 传入滞后事件**：
+   - [`MetalPlayerContainerView`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/VideoView.swift#L651-L685)（`> 8.0pt` 防抖）与 [`WindowDragCanvasView`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/EmptyPlaybackView.swift#L257-L276)（`> 3.0pt` 防抖）在跨过阈值后直接把当时的 `.leftMouseDragged` 事件传入 `window.performDrag(with:)`，而非 `NSWindow.h` 规范要求的原始 `.leftMouseDown` 事件，导致起手跨越阈值前的前置位移形成固定抓点偏移。
+
+### 3. 预览版修复方案与根治落地
+1. **音乐模式改用高优先级 `.eventTracking` 本地追踪拖拽（彻底脱离 `WindowManager` 并消除旧版滞后）**：
+   - 在 [`PlayerCore+WindowGeometry.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/PlayerCore+WindowGeometry.swift#L335-L426) 将 `MusicWindowDragCoordinator` 从 `window.performDrag(with:)` + 临时 `.resizable` 锁重构为 `beginDrag(on:with:)` 同步事件追踪循环：
+     - 拖拽全程运行在 `window.trackEvents(matching: [.leftMouseDragged, .leftMouseUp], timeout: NSEvent.foreverDuration, mode: .eventTracking)` 中，并在期间关闭 `NSEvent.isMouseCoalescingEnabled`（`defer` 严格还原），在每次更新前清空队列中积压的拖拽/抬起事件并读取实时 `NSEvent.mouseLocation`；
+     - 使用 `CATransaction.setDisableActions(true)` + 原生 `window.setFrameOrigin(...)`，移除原先把四边硬锁死在 `visibleFrame` 内的 `clampedWindowOrigin`（由 AppKit 原生多屏边界与菜单栏顶界约束自然接管），同时在 [`PlayerWindowManager.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerWindowManager.swift#L188-L194) 的 `didChangeScreenNotification` 监听中跳过拖拽期重排并延迟到松手后按新屏幕宽度适配；
+     - 因不再调用 `window.performDrag(with:)`，音乐模式拖拽过程 100% 不经过 `WindowServer`/`WindowManager` 平铺状态机，彻底消除左右贴边平铺（`tilingPosition: 5/6`）与顶部 Fill（`tilingPosition: 9`）的触发途径。
+   - [`MusicDragCanvasNSView`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/MusicModeView.swift#L2051-L2076) 在 `mouseDown` 直接调用 `MusicWindowDragCoordinator.shared.beginDrag(on: window, with: event)`。
+2. **视频模式与空载主界面保留原 `mouseDown` 事件驱动的 `performDrag(with:)`**：
+   - [`MetalPlayerContainerView`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/VideoView.swift#L527-L690) 与 [`WindowDragCanvasView`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/EmptyPlaybackView.swift#L232-L279) 保留点击/双击防抖阈值并在 `mouseDown` 缓存 `pendingDragMouseDownEvent`，跨过阈值后将原始 `mouseDown` 事件传入 `window.performDrag(with:)`，消除快甩起手抓点偏移并保留视频/空载窗口的原生系统平铺能力；已登记待同步合入 `1.7.0` 正式版（`main` 分支）。
+3. **单元测试补充**：
+   - [`MusicModeTests.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Tests/SilkPlayerTests/MusicModeTests.swift#L1174-L1242) 新增 `testMusicWindowDragCoordinatorTranslatesOriginAndAppliesMoveWithoutTiling` 与 `testPurgeSavedWindowFrameAutosaveRemovesAllPlayerWindowKeys`。
+
+### 4. `1.7.0` 正式版合入备忘 (Target Carryover for `1.7.0` Mainline)
+- **当前状态**：上述音乐模式与视频/主界面拖拽修复均已在独立预览分支 `feature/music-mode-revamp`（`1.7.0-music-preview`）完成编码并通过单测；
+- **待 `1.7.0` 正式版（`main` 分支）执行事项**：
+  1. 在推进 `1.7.0` 主线版本发布时，将 [`VideoView.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/VideoView.swift)（`MetalPlayerContainerView.pendingDragMouseDownEvent`）与 [`EmptyPlaybackView.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/EmptyPlaybackView.swift)（`WindowDragCanvasView.pendingDragMouseDownEvent`）向 `window.performDrag(with:)` 传递原始 `mouseDown` 事件的优化同步合入 `main` 分支并写入 `1.7.0` 发版说明；
+  2. `MusicWindowDragCoordinator` 随独立预览分支 `feature/music-mode-revamp` 冻结归档，待 `2.0.0` 音乐模式正式合并发版时一并交付。
+
+---
+
+## ISSUE-018: 冷启动被 `WindowGroup` 桌面平铺状态 (`tilingPosition: 9`) 恢复为铺满屏尺寸
+
+### 1. 缺陷现象
+- 关闭应用后冷启动进入空载主页，窗口未按默认 `960 × 540` 居中展示，而是直接铺满整个可用工作区（`0 95 2752 1027`），视觉上等同于全屏。
+
+### 2. 根因分析
+1. **SwiftUI `WindowGroup` 自动持久化与恢复桌面 Fill 状态**：
+   - `NSWindow Frame playerWindow-AppWindow-1` 中持久化了 macOS 桌面窗口平铺的“填充（Fill）”状态：`{"tilingState":{"tilingPosition":9,"normalizedSize":1,"untiledFrame":"{{1330, 619}, {614, 224}}"}}`（伴随系统 `EnableTiledWindowMargins = 0` 与无标题栏配置）；
+   - [`AppShellView.handleWindowAcquired`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/AppShellView.swift#L489-L556) 在 [`WindowObserverView.viewDidMoveToWindow()`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerWindowManager.swift#L772-L781) 调度的单次 `DispatchQueue.main.async` 中设置 `960 × 540`，但早于 SwiftUI 窗口呈现与持久化状态恢复完成前就被 `NSWindow Frame` 恢复覆盖，且 `window.setFrame` 自身不会剥离描述符中的 `tilingState`。
+2. **`performDrag(with:)` 在 `WindowManager` 下无法通过公开属性禁用桌面左右/顶部平铺**：
+   - 本机 `macOS` 交叉验证确认，只要音乐模式仍调用 `window.performDrag(with:)`，即便禁用 `.resizable`、锁定 `minSize == maxSize` 并调用 `_doUpdateTilingConstraintsImmediately`，`_windowManagerAware` 仍为 `1` 且 `_zoomLeft:`/`_zoomRight:` 仍保持可触发状态，松手瞬间恢复 `.resizable` 亦会重新放行 `_zoomFill:`。
+
+### 3. 修复方案
+- **从源头切断音乐模式对 `WindowManager` 的平铺入口**：[`MusicWindowDragCoordinator`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/PlayerCore+WindowGeometry.swift#L335-L426) 改用 `.eventTracking` 本地追踪拖窗，不再调用 `window.performDrag(with:)`；
+- **全窗口冷启动持久化隔离（防止视频/空载模式平铺残留）**：[`SilkPlayerApp.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/SilkPlayerApp.swift#L9-L38)、[`AppShellView.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/AppShellView.swift#L489-L556)、[`PlayerWindowManager.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerWindowManager.swift#L1737-L1751) 与 [`AppDelegate.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/AppDelegate.swift#L69-L97) 在启动、窗口挂载、关窗与退出时统一调用 `SilkPlayerApp.purgeSavedWindowFrameAutosave()` 清除所有 `NSWindow Frame playerWindow-*` 键，置 `window.isRestorable = false` 与 `window.setFrameAutosaveName("")` 断开 SwiftUI 自动恢复，并在首次窗口呈现后复核 `960 × 540` 居中帧。
+
+### 4. `1.7.0` 正式版合入备忘 (Target Carryover for `1.7.0` Mainline)
+- **待 `1.7.0` 正式版（`main` 分支）比对合入事项**：
+  1. 将全窗口冷启动持久化隔离（`SilkPlayerApp.purgeSavedWindowFrameAutosave()`、`AppShellView.handleWindowAcquired` 的 `isRestorable = false` / `setFrameAutosaveName("")` / 首次呈现 `960 × 540` 居中复核、`PlayerWindowDelegate.windowWillClose` 与 `AppDelegate` 退出清理）同步合入 `main` 分支，防止视频或空载模式手动平铺后冷启动异常铺满屏；
+  2. 音乐模式专属的 `MusicWindowDragCoordinator` 保持随 `feature/music-mode-revamp` 冻结至 `2.0.0` 再并入。
+
+---
+
+## ISSUE-019: 竖屏/极窄窗口（`.minimal` 档）底栏音量按钮未隐藏导致与“下一首”按钮重叠冲突
+
+### 1. 缺陷现象
+- 打开竖屏视频（或手动将视频窗口收窄至 `< 480 pt`，触发 [`HUDLayoutTier.minimal`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift#L6-L22)）时，底部控制栏右侧的音量调节按钮（[`HUDVolumeSlider`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/HUD/HUDVolumeSlider.swift#L5-L45)）仍处于显示状态，与居中控制组中的“下一首”（`forward.end.fill`）按钮发生水平空间碰撞与视觉重叠。
+
+### 2. 根因分析
+1. **`.minimal` 档位缺失音量控件隐藏条件**：
+   - 在 [`PlayerHUDView.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift#L37-L41) 中，`HUDLayoutTier.showsVolumeSlider(isAudioOnly:)` 未对 `self == .minimal` 返回 `false`（在 `feature/v1.6.0` 为 `!isAudioOnly`，在当前分支为 `true`）。
+2. **三栏 `ZStack` 居中叠放导致右翼向左越界**：
+   - [`bottomControls`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift#L409-L428) 使用 `ZStack` 将绝对居中的 `centerControls` 与 `HStack { leftWingControls; Spacer(); rightWingControls }` 叠加排版，叠加多层水平内边距（`16 + 16 + 8 = 40 pt` 单侧）。
+   - 在 `< 480 pt` 的竖屏窗口宽度下，右翼同时渲染 `HUDVolumeSlider`（折叠态 `28 pt`、悬停展开 `> 100 pt`）、更多按钮与全屏按钮，总宽超出右侧可用余量，向左侵入并遮挡 `centerControls` 最右侧的“下一首”按钮。
+
+### 3. 修复落地（解决版本：`1.6.0`）
+- **核心改动**：
+  - 在 `PlayerHUDView.swift` 中保持 `.minimal`（`< 480 pt`）隐藏底栏音量控件（`HUDLayoutTier.showsVolumeSlider` 返回 `!isAudioOnly && self != .minimal`），并将横向外边距与翼栏间距收紧（`outerBottomHorizontalPadding = 10`，`wingItemSpacing = 6`），在溢出菜单 (`moreMenuContent`) 保留静音/取消静音入口（兼容滚轮、方向键及 `M` 键）；
+  - 为 `480 ..< 950 pt` 桌面窄窗（含 `.compact` 档宽竖屏、`9:16` 放大至 `100%` 的 `578 pt`、`.standard` 与窄 `.expanded`）新增 [`supportsInlineHorizontalVolumeExpansion`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift#L63-L68) 判定，使 [`HUDVolumeSlider`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/HUD/HUDVolumeSlider.swift) 在窄窗下保持固定 `28 pt` 占位并在悬停/拖拽时向上垂直弹出 `32 × 92 pt` 音量条，同时收紧 `.compact` / `.standard` 翼栏边距与间距，消除所有窗口宽度下的遮挡冲突；
+- **测试补全**：更新 `Tests/SilkPlayerTests/PlaylistTests.swift` Test 63，验证 `.minimal` 音量隐藏、各档位全清空间隔余量与 `< 950 pt` 垂直弹出开关。
+
+---
+
+## ISSUE-020: 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题
+
+### 1. 缺陷现象
+- 顶部系统菜单栏出现两个并排的「窗口」菜单（`视频  窗口  窗口  帮助`），其中自定义「窗口 -> 贴合画面尺寸」下提供的 `原始尺寸 (1:1 / 100%)` 与 `双倍尺寸 (2:1 / 200%)` 实机点击几乎无实际可用反馈，且桌面观影用户极少前往顶部左侧菜单栏调整窗口比例。
+
+### 2. 代码核查根因
+1. **顶部「窗口」菜单与 SwiftUI 系统窗口菜单重名**：[`PlayerCommands.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerCommands.swift#L360-L400) 使用 `CommandMenu(L10n.menuWindow)` 新建了独立「窗口」菜单，而非通过 `CommandGroup` 注入系统「窗口」菜单，导致顶部同时存在两个「窗口」入口。
+2. **门控状态刷新与窗口缩放实现缺陷**：
+   - `PlayerCommands` 为普通 `struct`（仅在 `body` 顶部读取 `windowManager.commandSyncToken`），SwiftUI `Commands` 下 `.disabled(!isLoaded)` 存在状态刷新滞后/灰显问题；
+   - [`PlayerCore.fitWindow(scale:)`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerCore.swift#L1374-L1415) 未在设帧前临时释放 `window.minSize`（缩小或切换方向易被现有 `minSize` 锁死）、缺少全屏拦截与 OSD 提示，且 1080p/4K 片源下 `100%` 与 `200%` 均被 [`maximumSafeContentSize`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerModels.swift#L392-L409) 钳制到同一桌面安全上限，切换时窗口尺寸无任何变化。
+
+### 3. 解决落地（解决版本：`1.6.0`）
+- **合并顶栏重名菜单并移除冗余入口**：在 `PlayerCommands.swift` 将自定义 `CommandMenu(L10n.menuWindow)` 替换为 `CommandGroup(before: .windowList)` 归入系统「窗口」菜单（保留媒体详情、播放列表、窗口置顶及分隔线），并移除 `Menu(L10n.fitToVideo)` 及其废弃本地化键值；
+- **窗口比例调节收拢至右键菜单**：按 [`提案 027`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Documentation/FEATURE_PROPOSALS.md) 在 `1.6.0` 于视频画布右键菜单提供 `50% / 75% / 100%` 与「恢复默认」入口，并完善 `fitWindow(scale:)` 的 `minSize` 释放、`.maximized` 复位、OSD 提示、边界置灰门控及全屏/纯音频禁用保护。
+
+
 
 
 

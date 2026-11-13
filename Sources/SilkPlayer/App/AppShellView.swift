@@ -154,6 +154,8 @@ public struct AppShellView: View {
                         .zIndex(17)
                     }
                 }
+
+
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
         }
@@ -446,8 +448,10 @@ public struct AppShellView: View {
                 // Duplicate window detected in single window mode: close immediately!
                 DispatchQueue.main.async {
                     window.close()
-                    existing.window?.makeKeyAndOrderFront(nil)
-                    NSApp?.activate(ignoringOtherApps: true)
+                    if !PlayerWindowManager.isRunningTests {
+                        existing.window?.makeKeyAndOrderFront(nil)
+                        NSApp?.activate(ignoringOtherApps: true)
+                    }
                 }
                 return
             }
@@ -467,6 +471,7 @@ public struct AppShellView: View {
                 zoomBtn.target = delegate
                 zoomBtn.action = #selector(PlayerWindowDelegate.handleZoomButtonClick(_:))
             }
+            _ = (window.delegate as? PlayerWindowDelegate)?.ensureHUDAttached(to: window)
         }
         player.hostWindow = window
         window.toolbar = nil
