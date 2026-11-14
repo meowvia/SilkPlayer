@@ -766,8 +766,8 @@ public final class MetalPlayerContainerView: NSView {
         let dx = current.x - dragInitialMouseScreenLocation.x
         let dy = current.y - dragInitialMouseScreenLocation.y
         let distance = hypot(dx, dy)
-        // 防抖微位移阈值放宽至 8.0pt（避免快速连击双击时的手指微位移误触 window.performDrag）
-        if distance > 8.0 {
+        // Responsive drag threshold: 4.0pt provides instant grab response while preventing click jitter
+        if distance > 4.0 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
             canDragWindowFromCurrentMouseDown = false
@@ -782,7 +782,7 @@ public final class MetalPlayerContainerView: NSView {
 
         let current = NSEvent.mouseLocation
         let distance = hypot(current.x - dragInitialMouseScreenLocation.x, current.y - dragInitialMouseScreenLocation.y)
-        if distance > 8.0 {
+        if distance > 4.0 {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
             return
