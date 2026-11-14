@@ -269,6 +269,42 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         }
     }
 
+    func testAppearanceAndThemeSeparationAndUnifiedDriving() {
+        let settings = AppSettings.shared
+        let origMode = settings.appearanceMode
+        let origTheme = settings.proLibraryTheme
+
+        defer {
+            settings.appearanceMode = origMode
+            settings.proLibraryTheme = origTheme
+            settings.applyAppearance()
+        }
+
+        // 1. When Pro is inactive: appearanceMode directly dictates effectiveScheme & effectiveAppearance
+        if !SilkProLicenseEngine.shared.isProActive {
+            settings.appearanceMode = .light
+            XCTAssertEqual(settings.effectiveColorScheme, .light)
+            XCTAssertEqual(settings.effectiveNSAppearance, NSAppearance(named: .aqua))
+
+            settings.appearanceMode = .dark
+            XCTAssertEqual(settings.effectiveColorScheme, .dark)
+            XCTAssertEqual(settings.effectiveNSAppearance, NSAppearance(named: .darkAqua))
+
+            settings.appearanceMode = .system
+            XCTAssertNil(settings.effectiveColorScheme)
+            XCTAssertNil(settings.effectiveNSAppearance)
+        }
+
+        // 2. Pro Theme property validation and persistence
+        settings.proLibraryTheme = .nuanbai
+        XCTAssertEqual(settings.proLibraryTheme, .nuanbai)
+        XCTAssertTrue(settings.proLibraryTheme.isLight)
+
+        settings.proLibraryTheme = .shenghui
+        XCTAssertEqual(settings.proLibraryTheme, .shenghui)
+        XCTAssertFalse(settings.proLibraryTheme.isLight)
+    }
+
     // MARK: - 4. SMB Input Parsing & Share Enumeration Tests
 
     func testSMBInputParsingAndSmbutilShareParsing() {

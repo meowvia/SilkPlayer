@@ -266,7 +266,7 @@ public struct AppShellView: View {
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
         }
-        .preferredColorScheme(settings.appearanceMode.colorScheme)
+        .preferredColorScheme(settings.effectiveColorScheme)
         .id(settings.appLanguage)
         .frame(minWidth: rootMinWidth, minHeight: rootMinHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -17,7 +17,7 @@ struct SilkPlayerApp: App {
         // 1. 单窗口统一视口容器 (PlayerWindowRootView) - 默认主窗口
         WindowGroup("SilkPlayer", id: "playerWindow") {
             PlayerWindowRootView()
-                .preferredColorScheme(settings.appearanceMode.colorScheme)
+                .preferredColorScheme(settings.effectiveColorScheme)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 960, height: 540)

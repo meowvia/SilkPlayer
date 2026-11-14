@@ -967,7 +967,13 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var id: String { rawValue }
     public static let userDefaultsKey = "proLibraryThemeId"
 
-    public static func current() -> SilkLibraryTheme { .shenghui }
+    public static func current() -> SilkLibraryTheme {
+        if let raw = UserDefaults.standard.string(forKey: userDefaultsKey),
+           let parsed = SilkLibraryTheme(rawValue: raw) {
+            return parsed
+        }
+        return .shenghui
+    }
 
     public var displayName: String {
         switch self {

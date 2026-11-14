@@ -131,6 +131,41 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             applyAppearance()
         }
     }
+
+    /// Pro edition theme selection. Backed by `SilkLibraryTheme.userDefaultsKey`.
+    public var proLibraryTheme: SilkLibraryTheme {
+        get {
+            if let raw = UserDefaults.standard.string(forKey: SilkLibraryTheme.userDefaultsKey),
+               let parsed = SilkLibraryTheme(rawValue: raw) {
+                return parsed
+            }
+            return .shenghui
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: SilkLibraryTheme.userDefaultsKey)
+            applyAppearance()
+        }
+    }
+
+    /// Unified effective color scheme:
+    /// In Pro edition, directly driven by `proLibraryTheme` (nuanbai -> .light, shenghui -> .dark).
+    /// In Free edition, governed by native macOS `appearanceMode`.
+    public var effectiveColorScheme: ColorScheme? {
+        if SilkProLicenseEngine.shared.isProActive {
+            return proLibraryTheme.isLight ? .light : .dark
+        }
+        return appearanceMode.colorScheme
+    }
+
+    /// Unified effective NSAppearance:
+    /// In Pro edition, directly driven by `proLibraryTheme` (nuanbai -> aqua, shenghui -> darkAqua).
+    /// In Free edition, governed by native macOS `appearanceMode`.
+    public var effectiveNSAppearance: NSAppearance? {
+        if SilkProLicenseEngine.shared.isProActive {
+            return proLibraryTheme.isLight ? NSAppearance(named: .aqua) : NSAppearance(named: .darkAqua)
+        }
+        return appearanceMode.nsAppearance
+    }
     public var appLanguage: AppLanguage {
         didSet {
             UserDefaults.standard.set(appLanguage.rawValue, forKey: "appLanguage")
@@ -428,13 +463,24 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 
     public func applyAppearance() {
-        switch appearanceMode {
-        case .system:
-            NSApp?.appearance = nil
-        case .light:
-            NSApp?.appearance = NSAppearance(named: .aqua)
-        case .dark:
-            NSApp?.appearance = NSAppearance(named: .darkAqua)
+        if SilkProLicenseEngine.shared.isProActive {
+            switch proLibraryTheme {
+            case .nuanbai:
+                NSApp?.appearance = NSAppearance(named: .aqua)
+            case .shenghui:
+                NSApp?.appearance = NSAppearance(named: .darkAqua)
+            @unknown default:
+                NSApp?.appearance = NSAppearance(named: .darkAqua)
+            }
+        } else {
+            switch appearanceMode {
+            case .system:
+                NSApp?.appearance = nil
+            case .light:
+                NSApp?.appearance = NSAppearance(named: .aqua)
+            case .dark:
+                NSApp?.appearance = NSAppearance(named: .darkAqua)
+            }
         }
     }
 

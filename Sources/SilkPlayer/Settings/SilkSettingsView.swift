@@ -57,20 +57,27 @@ public struct SilkSettingsView: View {
         }
         .frame(width: 520, height: 490)
         .tint(isWarmWhitePro ? currentTheme.accentColor : nil)
-        .preferredColorScheme(isWarmWhitePro ? .light : settings.appearanceMode.colorScheme)
+        .preferredColorScheme(settings.effectiveColorScheme)
         .background(
             SettingsWindowAppearanceSync(
-                appearance: isWarmWhitePro
-                    ? NSAppearance(named: .aqua)
-                    : settings.appearanceMode.nsAppearance
+                appearance: settings.effectiveNSAppearance
             )
         )
         .id(settings.appLanguage)
         .onAppear {
             consumeRequestedTab()
+            settings.applyAppearance()
         }
         .onChange(of: settings.requestedSettingsTab) { _, _ in
             consumeRequestedTab()
+        }
+        .onChange(of: selectedThemeRaw) { _, newThemeRaw in
+            if let theme = SilkLibraryTheme(rawValue: newThemeRaw) {
+                settings.proLibraryTheme = theme
+            }
+        }
+        .onChange(of: licenseEngine.isProActive) { _, _ in
+            settings.applyAppearance()
         }
         .alert(L10n.tr("Playback History Cleared", "播放历史已清除"), isPresented: $showHistoryClearedAlert) {
             Button(L10n.tr("OK", "好"), role: .cancel) {}
@@ -226,93 +233,20 @@ public struct SilkSettingsView: View {
             VStack(spacing: 6) {
                 sectionTitle(L10n.tr("Appearance & Theme", "外观与主题"))
                 settingsFormCard {
-                    // Appearance Mode
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Appearance", "外观模式"))
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
-                            Text(L10n.tr("System baseline light or dark styling", "系统标准浅色与深色基础外观"))
-                                .font(.system(size: 10))
-                                .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
-                        }
-                        Spacer()
-                        Picker("", selection: $settings.appearanceMode) {
-                            ForEach(AppearanceMode.allCases) { mode in
-                                Text(mode.title).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 210)
+                    if licenseEngine.isProActive {
+                        // Pro 版由“界面主题”直接驱动外观（暖白联动浅色 Aqua，深灰联动深色 DarkAqua）
+                        proThemeRow
+                    } else {
+                        // 免费版仅保留 macOS 原生“外观模式”（跟随系统/浅色/深色），主题锁定深灰带 PRO 徽标
+                        freeAppearanceRow
+                        Divider().opacity(0.12).padding(.vertical, 3)
+                        freeLockedThemeRow
                     }
-                    .frame(height: 34)
-
-                    Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
-
-                    // Theme Mode (Free: disabled + lock icon; Pro: unlocked interactive picker)
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 5) {
-                                Text(L10n.tr("Interface Theme", "界面主题"))
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
-
-                                proThemeBadge(isUnlocked: licenseEngine.isProActive)
-                            }
-
-                            Text(licenseEngine.isProActive
-                                 ? L10n.tr("Pro signature aesthetics · Slate & Warm White", "Pro 专属艺术质感 · 深灰黑胶与雅致暖白")
-                                 : L10n.tr("Pro exclusive styling · Unlock in About tab", "Pro 专属定制质感 · 激活解锁暖白等个性化主题"))
-                                .font(.system(size: 10))
-                                .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
-                        }
-
-                        Spacer()
-
-                        if licenseEngine.isProActive {
-                            Picker("", selection: $selectedThemeRaw) {
-                                ForEach(SilkLibraryTheme.allCases) { th in
-                                    Text(th.displayName).tag(th.rawValue)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .frame(width: 170)
-                        } else {
-                            HStack(spacing: 4) {
-                                Image(systemName: "lock.fill")
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.secondary)
-                                Picker("", selection: .constant(SilkLibraryTheme.shenghui.rawValue)) {
-                                    ForEach(SilkLibraryTheme.allCases) { th in
-                                        Text(th.displayName).tag(th.rawValue)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                                .frame(width: 150)
-                                .disabled(true)
-                            }
-                            .opacity(0.60)
-                            .help(L10n.tr("Activate SilkPlayer Pro in About to unlock themes", "请在「设置 → 关于」激活 SilkPlayer Pro 解锁主题功能"))
-                        }
-                    }
-                    .frame(height: 34)
 
                     Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
 
                     // App Language
-                    HStack {
-                        Text(L10n.tr("Language", "界面语言"))
-                            .font(.system(size: 13))
-                            .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
-                        Spacer()
-                        Picker("", selection: $settings.appLanguage) {
-                            ForEach(AppLanguage.allCases) { lang in
-                                Text(lang.displayName).tag(lang)
-                            }
-                        }
-                        .frame(width: 170)
-                    }
-                    .frame(height: 32)
+                    languageRow
                 }
             }
 
@@ -401,6 +335,111 @@ public struct SilkSettingsView: View {
         .padding(.horizontal, 24)
         .padding(.top, 10)
         .padding(.bottom, 12)
+    }
+
+    // MARK: - Appearance & Theme Rows (Free vs Pro Separation)
+    private var freeAppearanceRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.tr("Appearance", "外观模式"))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                Text(L10n.tr("System baseline light or dark styling", "系统标准浅色与深色基础外观"))
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Picker("", selection: $settings.appearanceMode) {
+                ForEach(AppearanceMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 210)
+        }
+        .frame(height: 34)
+    }
+
+    private var freeLockedThemeRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text(L10n.tr("Interface Theme", "界面主题"))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
+
+                    proThemeBadge(isUnlocked: false)
+                }
+
+                Text(L10n.tr("Pro exclusive styling · Unlock in About tab", "Pro 专属定制质感 · 激活解锁暖白等个性化主题"))
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            HStack(spacing: 4) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                Picker("", selection: .constant(SilkLibraryTheme.shenghui.rawValue)) {
+                    ForEach(SilkLibraryTheme.allCases) { th in
+                        Text(th.displayName).tag(th.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 150)
+                .disabled(true)
+            }
+            .opacity(0.60)
+            .help(L10n.tr("Activate SilkPlayer Pro in About to unlock themes", "请在「设置 → 关于」激活 SilkPlayer Pro 解锁主题功能"))
+        }
+        .frame(height: 34)
+    }
+
+    private var proThemeRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text(L10n.tr("Interface Theme", "界面主题"))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
+
+                    proThemeBadge(isUnlocked: true)
+                }
+
+                Text(L10n.tr("Slate drives Dark appearance · Warm White drives Light appearance", "深灰黑胶联动系统深色 (DarkAqua) · 雅致暖白联动系统浅色 (Aqua)"))
+                    .font(.system(size: 10))
+                    .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
+            }
+
+            Spacer()
+
+            Picker("", selection: $selectedThemeRaw) {
+                ForEach(SilkLibraryTheme.allCases) { th in
+                    Text(th.displayName).tag(th.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 170)
+        }
+        .frame(height: 34)
+    }
+
+    private var languageRow: some View {
+        HStack {
+            Text(L10n.tr("Language", "界面语言"))
+                .font(.system(size: 13))
+                .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
+            Spacer()
+            Picker("", selection: $settings.appLanguage) {
+                ForEach(AppLanguage.allCases) { lang in
+                    Text(lang.displayName).tag(lang)
+                }
+            }
+            .frame(width: 170)
+        }
+        .frame(height: 32)
     }
 
     // MARK: - 2. Playback Tab (播放)
@@ -1096,7 +1135,7 @@ public struct SilkSettingsView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.appearance = isWarmWhitePro ? NSAppearance(named: .aqua) : nil
+        panel.appearance = settings.effectiveNSAppearance
         panel.prompt = L10n.tr("Select", "选择")
         if panel.runModal() == .OK, let url = panel.url {
             settings.screenshotDirectory = url.path
