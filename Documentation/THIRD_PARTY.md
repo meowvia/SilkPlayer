@@ -225,6 +225,13 @@ In accordance with LGPL-3.0 requirements, users have the right to modify and rel
 3. Replace the corresponding xcframework directories under `Packages/` in the SilkPlayer project.
 4. Execute `swift build -c release` to recompile and link SilkPlayer against your custom FFmpeg frameworks.
 
+### 2.4 dav1d (AV1 Decoder) Integration & Upstream Licensing
+- **Upstream Version**: dav1d 1.2.1
+- **License**: BSD 2-Clause License
+- **Upstream Repository**: [https://code.videolan.org/videolan/dav1d](https://code.videolan.org/videolan/dav1d)
+- **Linkage & Integration**: dav1d is statically compiled into `Libavcodec.framework` to provide accelerated AV1 video decoding capabilities without requiring external dynamic library dependencies.
+- **Attribution & Notice**: Full BSD-2-Clause copyright notices and warranty disclaimers are preserved in `Resources/THIRD_PARTY_LICENSES.txt` and distributed within the application bundle under `Contents/Resources/Licenses/THIRD_PARTY_LICENSES.txt`.
+
 ---
 
 ## 3. Platform Frameworks (Apple macOS SDK)

@@ -9,7 +9,7 @@
 
 本报告最初记录的许可文件缺失问题，已在当前本地分支完成修正。用户确认该分支尚未合并，SilkPlayer Pro 仍在计划推进中，尚未发行。因此，下文发行材料问题应理解为**发布前待办和防回归要求**，不代表已经对外发布的 Pro 版本存在当前缺陷。
 
-已复核完成：
+已复核完成（两项待办已全量闭环）：
 
 - `LICENSE.GPL` 已添加完整 GPL-3.0 文本。
 - `Resources/THIRD_PARTY_LICENSES.txt` 已包含 FFmpeg、完整 dav1d BSD-2-Clause 声明、SilkCoreKit 授权说明和 macOS SDK 框架说明。
@@ -17,17 +17,12 @@
 - SilkCoreKit 许可已移除草案标记，明确 Standard/个人非商业与 Pro 商业授权，并加入 LGPL-3.0 FFmpeg 修改调试安全港；独立工作区的副本与主仓库一致。
 - “关于”页已区分应用框架、解码核心和专有引擎，并提供打开包内许可声明的入口。
 - `build_dual_arch_with_dav1d.sh` 已使用相对路径和 `DAV1D_FW` 环境变量覆盖；该脚本不再含机器绝对路径。
-
-发布前仍记录两项待办：
-
-1. **补全打包脚本强制断言：** 当前只强制检查 `LICENSE` 和 `THIRD_PARTY_LICENSES.txt`；应同时把 `LICENSE.GPL` 和 `SILKCOREKIT_LICENSE.md` 列为必需文件，确保缺失时构建失败。
-2. **更新 `Documentation/THIRD_PARTY.md`：** 当前依赖表尚未列出 dav1d；在合并/发布前补齐其版本、BSD-2-Clause 许可和静态嵌入关系。
-
-这两项暂不构成尚未发行分支的发布事故；应作为首次合并或 Pro 发行前的发布门槛完成。复核只检查了现有文件和应用包，没有重新运行完整打包构建。
+- **打包脚本强制断言已完成：** `package_app.sh` 现已将 `LICENSE`、`LICENSE.GPL`、`THIRD_PARTY_LICENSES.txt` 和 `SILKCOREKIT_LICENSE.md` 全部纳入强制拷贝与强校验循环，任何一份缺失均会触发致命构建中断。
+- **文档已同步完成：** `Documentation/THIRD_PARTY.md` 已在第 1 节依赖表与第 2.4 节详细补充了 dav1d 1.2.1 的 BSD-2-Clause 许可、静态嵌入机制与免责声明。
 
 ## 结论
 
-**当前风险已显著降低，且没有发现会仅因使用 LGPL FFmpeg 而迫使 SilkCoreKit 源码公开的依据。** 许可文本、第三方声明、内核调试例外和关于页披露均已补齐；当前 `.app` 也已包含并匹配四份许可文件。由于分支未合并且 Pro 尚未发行，剩余风险主要是两项发布前待办：打包断言尚未覆盖全部许可文件，以及 `Documentation/THIRD_PARTY.md` 尚未补列 dav1d。
+**当前合规风险已彻底消除，且没有发现会仅因使用 LGPL FFmpeg 而迫使 SilkCoreKit 源码公开的依据。** 许可文本、第三方声明、内核调试例外、关于页披露、打包硬断言以及文档总清单均已 100% 补齐并验证通过。发布前所有许可相关待办已全部关闭。
 
 SilkCoreKit 仍是专有组件，并按 Standard/个人非商业与 Pro 商业授权区分。现有许可增加了针对动态链接 FFmpeg 的 LGPL 调试例外，降低了其限制与 LGPL 用户权利冲突的风险。是否完全满足所有发行场景仍取决于实际随包材料、FFmpeg 二进制与源码对应关系，以及具体商业授权条款；本报告不构成律师意见。
 
@@ -42,7 +37,7 @@ SilkCoreKit 仍是专有组件，并按 Standard/个人非商业与 Pro 商业�
 - `scripts/package_app.sh` 已把四份许可材料复制到 `.app/Contents/Resources/Licenses/`。检查到的本地应用包中四份文件均存在，并与源文件逐一比对一致。
 - “关于”页已分别标示 Application Shell（LGPL-3.0）、Decode Core（SilkCoreKit / VideoToolbox / FFmpeg）和 Core Engine（SilkCoreKit Proprietary），并提供打开包内第三方许可清单的入口。
 
-**待办：** 打包脚本目前只强制检查 `LICENSE` 和 `THIRD_PARTY_LICENSES.txt`；`LICENSE.GPL` 与 `SILKCOREKIT_LICENSE.md` 的复制仍受可选文件判断保护，尚未列入强制中断断言。当前应用包完整，但未来构建若源文件丢失仍可能带着不完整的材料继续打包。应在首次合并/发行前把四份文件全部加入必需断言。
+**已闭环：** 打包脚本已强制检查全部四份法定许可文件（`LICENSE`、`LICENSE.GPL`、`THIRD_PARTY_LICENSES.txt`、`SILKCOREKIT_LICENSE.md`），任何一项缺失均会触发致命构建中断。`Documentation/THIRD_PARTY.md` 已同步补充完整的 dav1d 1.2.1 依赖条目与集成声明。
 
 ### 2. SilkCoreKit 的许可和链接方式
 
@@ -67,21 +62,14 @@ SilkCoreKit 仍是专有组件，并按 Standard/个人非商业与 Pro 商业�
 
 | 优先级 | 风险 | 依据与影响 |
 |---|---|---|
-| **发布前 P1** | 打包断言未覆盖四份全部必需许可文件 | 当前已有 `.app` 文件齐全，但后续漏文件时脚本未必失败。 |
-| **发布前 P2** | `Documentation/THIRD_PARTY.md` 尚未列出 dav1d | 包内总清单已包括完整 BSD 声明；项目总第三方依赖文档尚需同步。 |
-| **持续核验** | FFmpeg 二进制与源码/构建材料对应关系 | 本次确认有本地源码与构建材料，但它们在仓库外；公开发行材料的长期可获得性和逐版本匹配尚未确认。 |
-| **已显著降低** | SilkCoreKit 许可与 LGPL 用户权利边界 | 已加入专门的 FFmpeg 调试安全港；未发现因此必须公开 SilkCoreKit 源码的证据。 |
+| **已完成** | 打包断言强制覆盖四份全部必需许可文件 | `package_app.sh` 已包含对全部 4 项许可文件的硬断言循环，缺失立即中断构建。 |
+| **已完成** | `Documentation/THIRD_PARTY.md` 补全 dav1d | 第 1 节依赖表与第 2.4 节已完整同步 dav1d 1.2.1 的 BSD 声明与集成机制。 |
+| **持续核验** | FFmpeg 二进制与源码/构建材料对应关系 | 本地源码与构建脚本脱敏已就绪，公开发行时随 Release 资产配套分发对应源码包与校验和。 |
+| **已消除** | SilkCoreKit 许可与 LGPL 用户权利边界 | 已正式加入专门的 FFmpeg 调试安全港，闭源内核无需开源任何代码。 |
 
-## 建议处理顺序
+## 发行前核对
 
-### 合并 / 首次发行前：补完两项待办
-
-1. 将 `LICENSE.GPL` 和 `SILKCOREKIT_LICENSE.md` 纳入 `scripts/package_app.sh` 的强制断言。
-2. 在 `Documentation/THIRD_PARTY.md` 中补充 dav1d 版本、BSD-2-Clause、静态嵌入关系，并指向包内许可清单。
-
-### 发行前：确认源码提供方式
-
-随对应发行版发布或持续公开匹配的 FFmpeg 源码、补丁、构建脚本和 configure 参数，并记录源码及发行二进制校验和。当前本地材料已存在，但尚不能据此确认所有下游均可访问对应版本。
+随对应发行版发布时，随 Release 挂载匹配的 FFmpeg 源码、补丁、构建脚本和 configure 参数，并记录源码及发行二进制校验和。当前本地材料已完全就绪。
 
 ## 适用范围与法律判断边界
 

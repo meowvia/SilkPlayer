@@ -199,27 +199,20 @@ if [[ -d "${PROJECT_DIR}/Resources/Turntable" ]]; then
     cp -R "${PROJECT_DIR}/Resources/Turntable" "${APP_BUNDLE}/Contents/Resources/"
 fi
 
-# Embed licenses and third-party notices into Contents/Resources/Licenses
+# Embed all 4 mandatory licenses and third-party notices into Contents/Resources/Licenses
 mkdir -p "${APP_BUNDLE}/Contents/Resources/Licenses"
 cp "${PROJECT_DIR}/LICENSE" "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE"
-if [[ -f "${PROJECT_DIR}/LICENSE.GPL" ]]; then
-    cp "${PROJECT_DIR}/LICENSE.GPL" "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE.GPL"
-fi
-if [[ -f "${PROJECT_DIR}/Resources/THIRD_PARTY_LICENSES.txt" ]]; then
-    cp "${PROJECT_DIR}/Resources/THIRD_PARTY_LICENSES.txt" "${APP_BUNDLE}/Contents/Resources/Licenses/THIRD_PARTY_LICENSES.txt"
-fi
-if [[ -f "${PROJECT_DIR}/SILKCOREKIT_LICENSE.md" ]]; then
-    cp "${PROJECT_DIR}/SILKCOREKIT_LICENSE.md" "${APP_BUNDLE}/Contents/Resources/Licenses/SILKCOREKIT_LICENSE.md"
-fi
+cp "${PROJECT_DIR}/LICENSE.GPL" "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE.GPL"
+cp "${PROJECT_DIR}/Resources/THIRD_PARTY_LICENSES.txt" "${APP_BUNDLE}/Contents/Resources/Licenses/THIRD_PARTY_LICENSES.txt"
+cp "${PROJECT_DIR}/SILKCOREKIT_LICENSE.md" "${APP_BUNDLE}/Contents/Resources/Licenses/SILKCOREKIT_LICENSE.md"
 
 # Assert license completeness (enforce all 4 required license assets)
-if [[ ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE" || \
-      ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE.GPL" || \
-      ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/THIRD_PARTY_LICENSES.txt" || \
-      ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/SILKCOREKIT_LICENSE.md" ]]; then
-    echo "Error: Bundle missing required license assets in Contents/Resources/Licenses!" >&2
-    exit 1
-fi
+for req_license in LICENSE LICENSE.GPL THIRD_PARTY_LICENSES.txt SILKCOREKIT_LICENSE.md; do
+    if [[ ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/${req_license}" ]]; then
+        echo "Fatal Error: Mandatory license asset '${req_license}' is missing from bundle Contents/Resources/Licenses!" >&2
+        exit 1
+    fi
+done
 
 # Copy SwiftPM resource bundles if present
 find "${PROJECT_DIR}/.build" -path "*/Release/*.bundle" -type d | while read -r b; do
