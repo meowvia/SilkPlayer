@@ -859,7 +859,15 @@ public struct PlayerHUDView: View {
                     return event
                 }
                 guard let p = player else { return event }
-                if let hostWin = p.hostWindow, let evWin = event.window, evWin !== hostWin {
+                guard let hostWin = p.hostWindow else { return event }
+                if let evWin = event.window, evWin !== hostWin {
+                    return event
+                }
+
+                // ISSUE-021: Multi-screen / Fullscreen protection
+                // Ignore cursor movement on secondary screens or outside the player window
+                let mouseScreenLocation = NSEvent.mouseLocation
+                guard hostWin.frame.contains(mouseScreenLocation) else {
                     return event
                 }
 
@@ -891,6 +899,7 @@ public struct PlayerHUDView: View {
         guard let hostWin = player.hostWindow, hostWin.isKeyWindow else { return }
         guard NSApp.modalWindow == nil else { return }
         if PlayerWindowManager.shared.settingsWindow != nil { return }
+        guard hostWin.frame.contains(NSEvent.mouseLocation) else { return }
         NSCursor.setHiddenUntilMouseMoves(true)
         isCursorHidden = true
     }
