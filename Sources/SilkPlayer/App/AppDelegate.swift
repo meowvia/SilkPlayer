@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SilkCoreKit
 
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -7,10 +8,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp?.setActivationPolicy(.regular)
-        if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-           let iconImg = NSImage(contentsOf: iconURL) {
-            NSApp?.applicationIconImage = iconImg
-        }
+        SilkProIconManager.syncApplicationIcon(isProActive: SilkProLicenseEngine.shared.isProActive)
         NSApp?.activate(ignoringOtherApps: true)
         let args = CommandLine.arguments.dropFirst()
         var validFiles: [String] = []

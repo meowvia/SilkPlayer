@@ -388,6 +388,7 @@ public struct AppShellView: View {
             Text(libraryPlaybackErrorMessage ?? "")
         }
         .onChange(of: licenseEngine.isProActive) { _, isActive in
+            SilkProIconManager.syncApplicationIcon(isProActive: isActive)
             guard isActive else { return }
             Task { @MainActor in
                 if settings.proAutoScanOnLaunch {
@@ -398,6 +399,7 @@ public struct AppShellView: View {
             }
         }
         .onAppear {
+            SilkProIconManager.syncApplicationIcon(isProActive: licenseEngine.isProActive)
             registerSession()
             setupHooks()
             checkPendingFiles()

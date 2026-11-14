@@ -175,8 +175,19 @@ install_name_tool -add_rpath "@loader_path/../Frameworks" "${APP_BUNDLE}/Content
 audit_bundle_dependencies "${APP_BUNDLE}" "Staging .app Bundle"
 
 cp "${PROJECT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
-if [[ -f "${PROJECT_DIR}/Resources/AppIcon.icns" ]]; then
+if [[ "${VERSION}" == *"-pro"* && -f "${PROJECT_DIR}/Resources/AppIcon_Pro.icns" ]]; then
+    cp "${PROJECT_DIR}/Resources/AppIcon_Pro.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+elif [[ -f "${PROJECT_DIR}/Resources/AppIcon.icns" ]]; then
     cp "${PROJECT_DIR}/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+fi
+if [[ -f "${PROJECT_DIR}/Resources/AppIcon_Pro.icns" ]]; then
+    cp "${PROJECT_DIR}/Resources/AppIcon_Pro.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon_Pro.icns"
+fi
+if [[ -f "${PROJECT_DIR}/Resources/AppIcon_Pro_1024.png" ]]; then
+    cp "${PROJECT_DIR}/Resources/AppIcon_Pro_1024.png" "${APP_BUNDLE}/Contents/Resources/AppIcon_Pro_1024.png"
+fi
+if [[ -f "${PROJECT_DIR}/Resources/AppIcon_1024.png" ]]; then
+    cp "${PROJECT_DIR}/Resources/AppIcon_1024.png" "${APP_BUNDLE}/Contents/Resources/AppIcon_1024.png"
 fi
 for lproj in "${PROJECT_DIR}/Resources"/*.lproj; do
     if [[ -d "${lproj}" ]]; then
@@ -200,8 +211,11 @@ if [[ -f "${PROJECT_DIR}/SILKCOREKIT_LICENSE.md" ]]; then
     cp "${PROJECT_DIR}/SILKCOREKIT_LICENSE.md" "${APP_BUNDLE}/Contents/Resources/Licenses/SILKCOREKIT_LICENSE.md"
 fi
 
-# Assert license completeness
-if [[ ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE" || ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/THIRD_PARTY_LICENSES.txt" ]]; then
+# Assert license completeness (enforce all 4 required license assets)
+if [[ ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE" || \
+      ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE.GPL" || \
+      ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/THIRD_PARTY_LICENSES.txt" || \
+      ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/SILKCOREKIT_LICENSE.md" ]]; then
     echo "Error: Bundle missing required license assets in Contents/Resources/Licenses!" >&2
     exit 1
 fi

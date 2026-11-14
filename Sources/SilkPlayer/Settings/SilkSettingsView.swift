@@ -619,6 +619,7 @@ public struct SilkSettingsView: View {
             let result = await licenseEngine.activate(licenseKey: key)
             if case .success = result {
                 licenseKeyInput = ""
+                SilkProIconManager.syncApplicationIcon(isProActive: true)
             }
         }
     }
@@ -632,11 +633,62 @@ public struct SilkSettingsView: View {
         VStack(spacing: 0) {
             Spacer().frame(height: 18)
 
-            // Header: Title + Slogan
-            VStack(spacing: 6) {
-                Text("SilkPlayer")
-                    .font(.system(size: 21, weight: .bold))
-                    .foregroundColor(.primary)
+            // Header: App Icon + Title with Pro Badge + Slogan
+            VStack(spacing: 8) {
+                if let appIcon = SilkProIconManager.currentDisplayIcon(isProActive: licenseEngine.isProActive) {
+                    Image(nsImage: appIcon)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 64, height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: Color.black.opacity(0.18), radius: 6, x: 0, y: 3)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(licenseEngine.isProActive ? Color(red: 0.85, green: 0.55, blue: 0.25).opacity(0.4) : Color.white.opacity(0.12), lineWidth: 1)
+                        )
+                }
+
+                HStack(spacing: 8) {
+                    Text("SilkPlayer")
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundColor(.primary)
+
+                    if licenseEngine.isProActive {
+                        Text("PRO")
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 1.0, green: 0.88, blue: 0.65),
+                                        Color(red: 0.95, green: 0.65, blue: 0.25)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .padding(.horizontal, 6.5)
+                            .padding(.vertical, 2.5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .fill(Color(red: 0.22, green: 0.16, blue: 0.12).opacity(0.95))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 0.95, green: 0.65, blue: 0.25).opacity(0.8),
+                                                Color(red: 0.65, green: 0.35, blue: 0.15).opacity(0.4)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 0.8
+                                    )
+                            )
+                            .shadow(color: Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.25), radius: 3, x: 0, y: 1)
+                    }
+                }
 
                 Text(L10n.tr(
                     "Native · Minimal · Ultra-light · Effortless",
@@ -644,7 +696,7 @@ public struct SilkSettingsView: View {
                 ))
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundColor(.secondary.opacity(0.9))
-                .padding(.top, 2)
+                .padding(.top, 1)
             }
 
             Spacer().frame(height: 16)
@@ -672,6 +724,13 @@ public struct SilkSettingsView: View {
                                 Text("\(receipt.licenseKeyMask) · \(receipt.hardwareId.prefix(8))")
                                     .font(.system(size: 10.5, design: .monospaced))
                                     .foregroundColor(.secondary.opacity(0.85))
+                                Text(L10n.tr(
+                                    "Pro features active · Pro amber icon enabled (restart if Dock does not refresh instantly)",
+                                    "Pro 功能与琥珀黑金图标已生效（若系统 Dock 栏未即时刷新，重启应用即可完全生效）"
+                                ))
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary.opacity(0.75))
+                                .padding(.top, 1)
                             } else if !licenseEngine.isProActive {
                                 Text(L10n.tr(
                                     "Enter an activation key for SMB 2/3, NFS, and LAN media library.",

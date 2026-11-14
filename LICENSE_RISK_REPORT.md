@@ -5,11 +5,31 @@
 - **主要审阅对象：** 本地仓库 `feature/v2.0.0-pro`、本地已组装的 `build/SilkPlayer.app`、旁置的 FFmpeg 构建目录，以及 GitHub 可读取的公开仓库 `meowvia/SilkPlayer` `main` 分支。
 - **限制：** GitHub 连接无法读取私有远程 `meowvia/SilkPlayer-Private`（返回 404）。因此，本报告以本地检出为准，不对该私有远程当前版本作断言。没有对已发布 DMG 做逐项解包核验，也没有对 FFmpeg 二进制进行完整配置取证。
 
+## 最新复核状态（2026-11-14）
+
+本报告最初记录的许可文件缺失问题，已在当前本地分支完成修正。用户确认该分支尚未合并，SilkPlayer Pro 仍在计划推进中，尚未发行。因此，下文发行材料问题应理解为**发布前待办和防回归要求**，不代表已经对外发布的 Pro 版本存在当前缺陷。
+
+已复核完成：
+
+- `LICENSE.GPL` 已添加完整 GPL-3.0 文本。
+- `Resources/THIRD_PARTY_LICENSES.txt` 已包含 FFmpeg、完整 dav1d BSD-2-Clause 声明、SilkCoreKit 授权说明和 macOS SDK 框架说明。
+- 现有本地 `.app` 的 `Contents/Resources/Licenses/` 中有 `LICENSE`、`LICENSE.GPL`、`THIRD_PARTY_LICENSES.txt`、`SILKCOREKIT_LICENSE.md`；四份文件均与对应源文件逐一比对一致。
+- SilkCoreKit 许可已移除草案标记，明确 Standard/个人非商业与 Pro 商业授权，并加入 LGPL-3.0 FFmpeg 修改调试安全港；独立工作区的副本与主仓库一致。
+- “关于”页已区分应用框架、解码核心和专有引擎，并提供打开包内许可声明的入口。
+- `build_dual_arch_with_dav1d.sh` 已使用相对路径和 `DAV1D_FW` 环境变量覆盖；该脚本不再含机器绝对路径。
+
+发布前仍记录两项待办：
+
+1. **补全打包脚本强制断言：** 当前只强制检查 `LICENSE` 和 `THIRD_PARTY_LICENSES.txt`；应同时把 `LICENSE.GPL` 和 `SILKCOREKIT_LICENSE.md` 列为必需文件，确保缺失时构建失败。
+2. **更新 `Documentation/THIRD_PARTY.md`：** 当前依赖表尚未列出 dav1d；在合并/发布前补齐其版本、BSD-2-Clause 许可和静态嵌入关系。
+
+这两项暂不构成尚未发行分支的发布事故；应作为首次合并或 Pro 发行前的发布门槛完成。复核只检查了现有文件和应用包，没有重新运行完整打包构建。
+
 ## 结论
 
-**这不只是文案问题。** 本地证据显示，项目把 FFmpeg 作为 LGPL-3.0 动态库随应用分发，但当前打包脚本和本地 `.app` 产物没有附带 LGPL 文本或第三方许可声明；项目使用的 dav1d BSD 许可声明也未见于随包资源。这是当前最明确、应优先修正的发行合规风险。
+**当前风险已显著降低，且没有发现会仅因使用 LGPL FFmpeg 而迫使 SilkCoreKit 源码公开的依据。** 许可文本、第三方声明、内核调试例外和关于页披露均已补齐；当前 `.app` 也已包含并匹配四份许可文件。由于分支未合并且 Pro 尚未发行，剩余风险主要是两项发布前待办：打包断言尚未覆盖全部许可文件，以及 `Documentation/THIRD_PARTY.md` 尚未补列 dav1d。
 
-SilkCoreKit 则是实际受限的专有组件：它以静态库方式链接进主程序，许可仅授予个人、非商业用途，并限制逆向、修改和再分发。这些限制本身可能是有意的商业策略，但与“应用显示 LGPL-3.0”和 LGPL 对 FFmpeg 修改、重新链接及调试的权利要求之间，存在需要通过许可文本明确解决的边界风险。**仅凭当前资料无法断言已经构成 LGPL 违规；但也不能把风险归结为措辞不够清楚。**
+SilkCoreKit 仍是专有组件，并按 Standard/个人非商业与 Pro 商业授权区分。现有许可增加了针对动态链接 FFmpeg 的 LGPL 调试例外，降低了其限制与 LGPL 用户权利冲突的风险。是否完全满足所有发行场景仍取决于实际随包材料、FFmpeg 二进制与源码对应关系，以及具体商业授权条款；本报告不构成律师意见。
 
 ## 核对到的事实
 
@@ -17,64 +37,55 @@ SilkCoreKit 则是实际受限的专有组件：它以静态库方式链接进�
 
 - `Package.swift` 将五个 FFmpeg XCFramework 作为二进制依赖；本地 `Libavcodec` 确认为动态库，并动态依赖其他 FFmpeg framework。
 - `Documentation/THIRD_PARTY.md` 声明 FFmpeg 6.1.2 按 `--disable-gpl`、`--disable-nonfree`、`--enable-version3` 构建，并提供动态链接和替换指南。
-- 项目还使用静态 dav1d（BSD-2-Clause），构建脚本将其并入 FFmpeg。根据 BSD 条款，二进制分发应附上版权声明、条件和免责声明。
-- 本地 `scripts/package_app.sh` 组装应用时复制图标、本地化资源和素材，没有复制根目录 `LICENSE`、`Documentation/THIRD_PARTY.md` 或第三方许可清单。`Resources/THIRD_PARTY_LICENSES.txt` 不存在。
-- 检查到的 `build/SilkPlayer.app/Contents/Resources` 只有图标、素材和本地化文件，没有许可证或第三方声明文件。
-- 应用“关于”页只显示“GNU LGPL v3.0”，并链接到 GitHub 上的根 `LICENSE`；没有在应用内显示 FFmpeg/dav1d 许可声明或本地提供完整许可文本。
+- 项目使用静态 dav1d（BSD-2-Clause），构建脚本将其并入 FFmpeg。新版 `Resources/THIRD_PARTY_LICENSES.txt` 已包括完整 dav1d 版权、条件和免责声明。
+- `LICENSE.GPL` 已添加，文件包含 GPL-3.0 结束标记；`Resources/THIRD_PARTY_LICENSES.txt` 已列明 FFmpeg、dav1d、SilkCoreKit 和 macOS SDK。
+- `scripts/package_app.sh` 已把四份许可材料复制到 `.app/Contents/Resources/Licenses/`。检查到的本地应用包中四份文件均存在，并与源文件逐一比对一致。
+- “关于”页已分别标示 Application Shell（LGPL-3.0）、Decode Core（SilkCoreKit / VideoToolbox / FFmpeg）和 Core Engine（SilkCoreKit Proprietary），并提供打开包内第三方许可清单的入口。
 
-**判断：** 对当前已组装应用，这是高优先级、可直接复核的合规缺项。LGPL-3.0 第 4 节要求组合分发满足相应许可文本和用户权利条件；FFmpeg 官方清单也建议随应用提供与实际二进制匹配的源码、改动和构建说明。若 DMG 没有通过其他方式同时附带这些材料，应视为发行合规风险，而非单纯文案问题。
+**待办：** 打包脚本目前只强制检查 `LICENSE` 和 `THIRD_PARTY_LICENSES.txt`；`LICENSE.GPL` 与 `SILKCOREKIT_LICENSE.md` 的复制仍受可选文件判断保护，尚未列入强制中断断言。当前应用包完整，但未来构建若源文件丢失仍可能带着不完整的材料继续打包。应在首次合并/发行前把四份文件全部加入必需断言。
 
 ### 2. SilkCoreKit 的许可和链接方式
 
 - `Packages/SilkCoreKit.xcframework` 中的主库是静态 archive；打包脚本也写明 SilkCoreKit 静态链接进应用可执行文件。
-- `SILKCOREKIT_LICENSE.md` 标为草案，授予个人、非商业用途，并限制逆向、解密、提取、修改、独立再分发和在第三方应用中的嵌入。
-- `README.md` 说明项目开源前端采用 LGPL-3.0，而 SilkCoreKit 另受专有许可约束；应用“关于”页却以单一“GNU LGPL v3.0”标示应用协议。
+- `SILKCOREKIT_LICENSE.md` 已移除草案标记，区分 Standard Edition 个人非商业授权与 Pro 商业授权。
+- 该许可仍限制对 SilkCoreKit 本身的逆向、提取、修改和第三方再分发，但已增加 LGPL-3.0 安全港，明确不限制用户修改、替换、重新链接动态 FFmpeg 库，以及为调试这些修改而必要的逆向操作。
+- 主仓库与相邻的 SilkCoreKit 独立工作区中的许可证文件逐字节一致。
 - 本地工作区存在 SilkCoreKit 源码旁置目录，但它不属于 SilkPlayer 仓库本身。公开项目的默认构建依赖预编译二进制。
 
-**判断：** 非商业、禁止再分发等是实际许可限制，会影响默认构建应用及其 fork 的使用方式。LGPL-3.0 对与 LGPL 库组合分发提出条件：组合条款应保留对 LGPL 部分进行修改，以及为调试这些修改而逆向的权利；采用静态链接时还涉及重新链接机制。SilkCoreKit 的宽泛限制可能被理解为影响这些权利。建议明确加入 LGPL 权利保留条款，并清晰限定禁止逆向条款不适用于为调试、替换或重新链接 FFmpeg 而进行的必要操作。是否构成法律上的冲突，需由熟悉 LGPL 的律师结合实际发行条款确认。
+**判断：** 目前没有发现仅因动态链接 LGPL FFmpeg 就要求公开 SilkCoreKit 源码的依据。闭源核心的非商业/Pro 授权是有意的许可边界；新增安全港也降低了对 LGPL 用户权利的冲突风险。实际发行仍应确保该安全港和完整许可文本随包交付。
 
 ### 3. FFmpeg 源码与构建材料的可获得性
 
 - 本地旁置目录 `../SilkPlayer_LGPL_Build/` 确实包含 FFmpeg 源码、安装产物和构建脚本，修正了“本地完全没有构建脚本”的误解。
-- 该目录位于 SilkPlayer 仓库之外，不是当前 Git 仓库中的可追踪文件；其双架构构建脚本还引用了机器专属的绝对路径。
-- GitHub 公开 `main` 上，许可声明引用的 `SilkPlayer_LGPL_Build/build_dual_arch_with_dav1d.sh` 和 `package_xcframeworks.sh` 路径无法读取（404）。
+- 该目录位于 SilkPlayer 仓库之外，不是当前 Git 仓库中的可追踪文件。
+- `build_dual_arch_with_dav1d.sh` 已改用脚本相对路径并允许通过 `DAV1D_FW` 覆盖；复核该脚本未发现 `/Volumes/...` 或 `/Users/...` 硬编码。
+- GitHub 公开 `main` 上，许可声明引用的构建脚本路径仍无法读取（404）；私有远程无法通过当前 GitHub 连接核实。
 
-**判断：** 本地维护者有构建材料，不等于发行用户能取得与已分发 FFmpeg 二进制对应的完整源码、补丁和构建说明。应把必要材料放进公开仓库或与每个发行包配套发布，并去除机器专属路径。需要进一步核实本地 `src` 是否未经修改，以及其版本、补丁和配置是否与当前 XCFramework 完全对应。
+**判断：** 指定的 dav1d 路径脱敏项已完成。发布前仍应确认发行用户可取得与对应 FFmpeg 二进制匹配的源码、补丁和构建说明；本次没有对该对应关系做完整二进制取证。
 
 ## 风险优先级
 
 | 优先级 | 风险 | 依据与影响 |
 |---|---|---|
-| **P1** | 发行 `.app` 缺少 LGPL 和第三方许可材料 | 打包脚本未复制许可证；当前应用资源也未包含声明。分发者可能无法证明满足许可文本及归属声明义务。 |
-| **P1** | SilkCoreKit 专有条款可能限制 LGPL 权利 | SilkCoreKit 静态链接，许可宽泛限制逆向/修改；可能影响调试和重新链接 FFmpeg 修改的权利。属实质条款风险，法律结论待确认。 |
-| **P1** | FFmpeg 对应源码和构建配方未随公开仓库提供 | 本地 sidecar 目录不在仓库内，公开路径缺失；下游用户难以验证或重建已发行二进制。 |
-| **P2** | 应用协议展示可能让用户误以为整个应用均为 LGPL | README 将 LGPL 限定于前端，而应用内只显示单一 LGPL 标识；容易混淆专有核心的授权限制。 |
-| **P2** | SilkCoreKit 许可仍为 Draft 且授权范围不够明确 | “个人非商业”与“嵌入 SilkPlayer”并列，但未清楚说明官方发行、fork、开发、测试、企业内部使用及再分发的边界。 |
+| **发布前 P1** | 打包断言未覆盖四份全部必需许可文件 | 当前已有 `.app` 文件齐全，但后续漏文件时脚本未必失败。 |
+| **发布前 P2** | `Documentation/THIRD_PARTY.md` 尚未列出 dav1d | 包内总清单已包括完整 BSD 声明；项目总第三方依赖文档尚需同步。 |
+| **持续核验** | FFmpeg 二进制与源码/构建材料对应关系 | 本次确认有本地源码与构建材料，但它们在仓库外；公开发行材料的长期可获得性和逐版本匹配尚未确认。 |
+| **已显著降低** | SilkCoreKit 许可与 LGPL 用户权利边界 | 已加入专门的 FFmpeg 调试安全港；未发现因此必须公开 SilkCoreKit 源码的证据。 |
 
 ## 建议处理顺序
 
-### 立即：修复发行包的许可材料
+### 合并 / 首次发行前：补完两项待办
 
-1. 在 `.app` 的 `Contents/Resources` 中随包放置完整 LGPL-3.0 文本、GNU GPL-3.0 文本、FFmpeg 和 dav1d 的版权/许可声明，以及 SilkCoreKit 的适用许可说明。
-2. 更新 `scripts/package_app.sh`，让每次构建都复制同一份维护的第三方许可清单，并确保该文件纳入签名后的发行 `.app` 和 DMG。
-3. 在应用“关于 / 许可”入口说明 FFmpeg 的 LGPL 身份、源码获取位置和 SilkCoreKit 的专有授权边界。不能只展示“GNU LGPL v3.0”而不解释该标识涵盖哪些部分。
+1. 将 `LICENSE.GPL` 和 `SILKCOREKIT_LICENSE.md` 纳入 `scripts/package_app.sh` 的强制断言。
+2. 在 `Documentation/THIRD_PARTY.md` 中补充 dav1d 版本、BSD-2-Clause、静态嵌入关系，并指向包内许可清单。
 
-### 高优先级：厘清开源与专有组件的权利边界
+### 发行前：确认源码提供方式
 
-1. 将 SilkCoreKit 草案定稿，并在根许可证、README、第三方清单、二进制包和应用 UI 中统一许可范围：明确 LGPL 适用于哪些源文件；明确 SilkCoreKit、资源和发行包分别由何种许可覆盖。
-2. 在 SilkCoreKit 许可中增加明确例外：其逆向、修改、签名和再分发限制不妨碍用户依据 LGPL 修改、替换、重新链接或为调试 FFmpeg 修改而进行必要操作。
-3. 确认下游用户能否用修改后的 FFmpeg 运行组合应用。若现有静态 CoreKit 和限制条款使此操作不可行，应调整授权/链接架构或取得律师对具体方案的书面意见。
-4. 诚实标示默认构建条件：若官方二进制只授权个人非商业使用，应明确说明商业 fork 或商业分发需要另行授权，不能让 LGPL 徽标造成“整包可自由商用”的印象。
-
-### 高优先级：让源码义务可验证
-
-1. 将 FFmpeg 6.1.2 的确切源码、所有本地补丁、dav1d 版本、configure 参数、构建脚本和 framework 打包脚本发布到可长期访问的位置，并与对应二进制版本绑定。
-2. 记录并发布每次发行使用的源码 commit/校验和、`ffmpeg -buildconf` 或等价配置输出、源码补丁差异及二进制校验和。
-3. 将脚本改成不依赖 `/Volumes/...` 等维护者本机绝对路径的可复现构建方式。
+随对应发行版发布或持续公开匹配的 FFmpeg 源码、补丁、构建脚本和 configure 参数，并记录源码及发行二进制校验和。当前本地材料已存在，但尚不能据此确认所有下游均可访问对应版本。
 
 ## 适用范围与法律判断边界
 
-本报告是基于文件、构建脚本和本地应用包的许可证风险审查，不是律师意见，也没有独立验证全部发行 DMG、代码签名包、FFmpeg 二进制内所有组件或每个贡献者的版权授权。尤其是 SilkCoreKit 条款是否与 LGPL 第 4 节产生法律冲突，应结合实际分发许可、安装方式和用户重链接流程由律师确认。
+本报告是基于文件、构建脚本和本地应用包的许可证风险审查，不是律师意见，也没有独立验证全部发行 DMG、代码签名包、FFmpeg 二进制内所有组件、实际 FFmpeg 源码对应关系或每个贡献者的版权授权。SilkCoreKit 的新增安全港降低了 LGPL 边界风险，但正式商业发行前仍应结合具体授权流程确认文本适用范围。
 
 ## 参考资料
 
