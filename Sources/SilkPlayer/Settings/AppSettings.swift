@@ -199,6 +199,11 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             UserDefaults.standard.set(autoPlayNextItem, forKey: "autoPlayNextItem")
         }
     }
+    public var autoSkipIntro: Bool {
+        didSet {
+            UserDefaults.standard.set(autoSkipIntro, forKey: "autoSkipIntro")
+        }
+    }
     public var dualPlaylistMode: Bool {
         didSet {
             UserDefaults.standard.set(dualPlaylistMode, forKey: "dualPlaylistMode")
@@ -374,6 +379,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         self.resumePlayback = UserDefaults.standard.object(forKey: "resumePlayback") as? Bool ?? true
         self.autoResumeOnLaunch = UserDefaults.standard.object(forKey: "autoResumeOnLaunch") as? Bool ?? false
         self.autoPlayNextItem = UserDefaults.standard.object(forKey: "autoPlayNextItem") as? Bool ?? true
+        self.autoSkipIntro = UserDefaults.standard.object(forKey: "autoSkipIntro") as? Bool ?? true
         self.dualPlaylistMode = UserDefaults.standard.object(forKey: "dualPlaylistMode") as? Bool ?? true
         self.shortSeekStep = UserDefaults.standard.object(forKey: "shortSeekStep") as? Double ?? 5.0
         self.longSeekStep = UserDefaults.standard.object(forKey: "longSeekStep") as? Double ?? 30.0
