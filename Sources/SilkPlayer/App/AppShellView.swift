@@ -300,8 +300,9 @@ public struct AppShellView: View {
                     let screen = w.screen ?? NSScreen.main
                     let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
 
+                    let defaultIdleSize = NSSize(width: 960, height: 540)
                     let targetFrame: NSRect
-                    if let savedLibraryFrame = prePlaybackLibraryFrame, isProLibraryActive {
+                    if let savedLibraryFrame = prePlaybackLibraryFrame, (isProLibraryActive || savedLibraryFrame.width >= savedLibraryFrame.height) {
                         prePlaybackLibraryFrame = nil
                         let targetW = max(emptyMin.width, min(screenFrame.width, savedLibraryFrame.width))
                         let targetH = max(emptyMin.height, min(screenFrame.height, savedLibraryFrame.height))
@@ -311,11 +312,31 @@ public struct AppShellView: View {
                     } else {
                         prePlaybackLibraryFrame = nil
                         let currentFrame = w.frame
-                        let targetW = max(currentFrame.width, emptyMin.width)
-                        let targetH = max(currentFrame.height, emptyMin.height)
-                        let targetY = currentFrame.origin.y - (targetH - currentFrame.height)
-                        let targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, currentFrame.origin.x))
-                        targetFrame = NSRect(x: targetX, y: max(screenFrame.minY, targetY), width: targetW, height: targetH)
+                        let targetW: CGFloat
+                        let targetH: CGFloat
+                        let targetX: CGFloat
+                        let targetY: CGFloat
+
+                        // ISSUE-022: If closing after playing a portrait/vertical video (width < height)
+                        // or unusually narrow window, reset back to standard 960x540 landscape frame.
+                        if currentFrame.width < currentFrame.height || currentFrame.width < 720 {
+                            targetW = min(defaultIdleSize.width, screenFrame.width)
+                            targetH = min(defaultIdleSize.height, screenFrame.height)
+                            let centerX = currentFrame.midX
+                            let centerY = currentFrame.midY
+                            let candidateX = centerX - (targetW / 2)
+                            let candidateY = centerY - (targetH / 2)
+                            targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, candidateX))
+                            targetY = max(screenFrame.minY, min(screenFrame.maxY - targetH, candidateY))
+                        } else {
+                            targetW = max(currentFrame.width, emptyMin.width)
+                            targetH = max(currentFrame.height, emptyMin.height)
+                            let rawY = currentFrame.origin.y - (targetH - currentFrame.height)
+                            let rawX = currentFrame.origin.x
+                            targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, rawX))
+                            targetY = max(screenFrame.minY, min(screenFrame.maxY - targetH, rawY))
+                        }
+                        targetFrame = NSRect(x: targetX, y: targetY, width: targetW, height: targetH)
                     }
 
                     w.minSize = NSSize(width: 100, height: 100)
@@ -452,7 +473,6 @@ public struct AppShellView: View {
 
     private func startPlayback(path: String, startTime: Double = 0.0, autoPlay: Bool? = nil) {
         if !isPlaying,
-           isProLibraryActive,
            prePlaybackLibraryFrame == nil,
            let w = player.hostWindow,
            !w.styleMask.contains(.fullScreen) {
