@@ -69,7 +69,7 @@ public struct PlayerProgressSection: View {
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .monospacedDigit()
                 .foregroundColor(.white.opacity(0.88))
-                .shadow(color: .black.opacity(0.35), radius: 2, x: 0, y: 1)
+                .shadow(color: .black.opacity(0.60), radius: 2, x: 0, y: 1)
                 .frame(minWidth: tier == .minimal ? 38 : 46, alignment: .trailing)
 
             // Progress Bar Scrubber
@@ -86,7 +86,7 @@ public struct PlayerProgressSection: View {
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundColor(showRemainingTime ? .cyan.opacity(0.95) : .white.opacity(0.85))
-                    .shadow(color: .black.opacity(0.35), radius: 2, x: 0, y: 1)
+                    .shadow(color: .black.opacity(0.60), radius: 2, x: 0, y: 1)
                     .frame(minWidth: tier == .minimal ? 38 : 46, alignment: .leading)
             }
             .buttonStyle(.plain)
@@ -180,7 +180,7 @@ public struct PlayerScrubberView: View {
                     let trackY = (size.height - trackHeight) * 0.5
                     let baseRect = CGRect(x: 0, y: trackY, width: size.width, height: trackHeight)
                     let basePath = Path(roundedRect: baseRect, cornerRadius: trackHeight * 0.5)
-                    graphics.fill(basePath, with: .color(Color.black.opacity(0.20)))
+                    graphics.fill(basePath, with: .color(Color.black.opacity(0.35)))
                     graphics.fill(basePath, with: .color(Color.white.opacity(0.12)))
 
                     if bufferWidth > 0 {
