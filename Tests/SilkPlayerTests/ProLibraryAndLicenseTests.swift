@@ -515,8 +515,10 @@ final class ProLibraryAndLicenseTests: XCTestCase {
 
         let ep1Item = try XCTUnwrap(engine.items.first(where: { $0.path == wedEp1.path }))
         let ep2Item = try XCTUnwrap(engine.items.first(where: { $0.path == wedEp2.path }))
-        XCTAssertEqual(ep1Item.seriesName, "星期三 第二季")
+        XCTAssertEqual(ep1Item.seriesName, "星期三")
         XCTAssertEqual(ep1Item.seriesName, ep2Item.seriesName)
+        XCTAssertEqual(ep1Item.seasonNumber, 2)
+        XCTAssertEqual(ep2Item.seasonNumber, 2)
 
         let promoItem = try XCTUnwrap(engine.items.first(where: { $0.path == moviePromo.path }))
         XCTAssertEqual(promoItem.title, "wp")
@@ -561,11 +563,12 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         let item3 = try XCTUnwrap(engine.items.first(where: { $0.path == ep3.path }))
 
         // All 3 episodes must share the exact same seriesName without any episode/batch or ad tokens!
-        XCTAssertEqual(item1.seriesName, "嗜血法医：杀魔复生 第二季")
-        XCTAssertEqual(item2.seriesName, "嗜血法医：杀魔复生 第二季")
-        XCTAssertEqual(item3.seriesName, "嗜血法医：杀魔复生 第二季")
+        XCTAssertEqual(item1.seriesName, "嗜血法医：杀魔复生")
+        XCTAssertEqual(item2.seriesName, "嗜血法医：杀魔复生")
+        XCTAssertEqual(item3.seriesName, "嗜血法医：杀魔复生")
         XCTAssertFalse(item1.seriesName?.contains("S02E01") == true)
         XCTAssertFalse(item3.seriesName?.contains("S02E03") == true)
+        XCTAssertFalse(item1.seriesName?.contains("第二季") == true)
 
         XCTAssertEqual(item1.seasonNumber, 2)
         XCTAssertEqual(item1.episodeNumber, 1)
@@ -573,6 +576,50 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         XCTAssertEqual(item2.episodeNumber, 2)
         XCTAssertEqual(item3.seasonNumber, 2)
         XCTAssertEqual(item3.episodeNumber, 3)
+    }
+
+    func testMultiSeasonAggregationAndSeasonPillsGrouping() async throws {
+        guard !isCIMockEnvironment else { return }
+
+        let tempDir = try makeTempDir()
+        let dbURL = tempDir.appendingPathComponent("multi_season.sqlite")
+        let rootDir = tempDir.appendingPathComponent("MediaRoot", isDirectory: true)
+
+        let season1 = rootDir.appendingPathComponent("电视剧/怪奇物语 第一季", isDirectory: true)
+        let season2 = rootDir.appendingPathComponent("电视剧/怪奇物语 第二季", isDirectory: true)
+        let season3 = rootDir.appendingPathComponent("电视剧/怪奇物语 第三季", isDirectory: true)
+        let season4 = rootDir.appendingPathComponent("电视剧/怪奇物语 第四季", isDirectory: true)
+        let season5 = rootDir.appendingPathComponent("电视剧/怪奇物语 第五季", isDirectory: true)
+
+        for d in [season1, season2, season3, season4, season5] {
+            try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        }
+
+        // Write sample episodes across all 5 seasons
+        let s1e1 = season1.appendingPathComponent("Stranger.Things.S01E01.mkv")
+        let s1e8 = season1.appendingPathComponent("Stranger.Things.S01E08.mkv")
+        let s2e1 = season2.appendingPathComponent("怪奇物语.S02E01.mkv")
+        let s2e9 = season2.appendingPathComponent("怪奇物语.S02E09.mkv")
+        let s3e1 = season3.appendingPathComponent("怪奇物语.S03E01.mkv")
+        let s4e1 = season4.appendingPathComponent("怪奇物语.S04E01.mkv")
+        let s5e8 = season5.appendingPathComponent("怪奇物语.S05E08.mkv")
+
+        for f in [s1e1, s1e8, s2e1, s2e9, s3e1, s4e1, s5e8] {
+            try Data("mock video content".utf8).write(to: f)
+        }
+
+        let engine = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        _ = await engine.addLocalSource(url: rootDir, displayName: "LAN")
+
+        XCTAssertEqual(engine.items.count, 7)
+
+        // All 7 episodes across all 5 seasons MUST collapse under one pure seriesName
+        for item in engine.items {
+            XCTAssertEqual(item.seriesName, "怪奇物语")
+        }
+
+        let seasons = Set(engine.items.compactMap(\.seasonNumber))
+        XCTAssertEqual(seasons, [1, 2, 3, 4, 5])
     }
 
     // MARK: - 6. Mount-Index-Playback Stability Tests
