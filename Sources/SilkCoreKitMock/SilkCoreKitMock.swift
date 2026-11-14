@@ -981,6 +981,11 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var accentColor: Color { .accentColor }
     public var backgroundBase: Color { .black }
     public var backgroundHighlight: Color { .black }
+    public var cardSurface: Color { .black }
+    public var cardFocusedSurface: Color { .black }
+    public var pillSurface: Color { .white.opacity(0.08) }
+    public var pillSelectedSurface: Color { .accentColor.opacity(0.2) }
+    public var borderColor: Color { .white.opacity(0.1) }
     public var surfaceFill: Color { .black }
     public var surfaceElevatedFill: Color { .black }
     public var surfaceBorder: Color { .white.opacity(0.1) }

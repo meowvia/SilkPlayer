@@ -13,18 +13,32 @@ public struct SilkSettingsView: View {
     @Bindable var updateService = UpdateService.shared
     @ObservedObject var licenseEngine = SilkProLicenseEngine.shared
     @ObservedObject var libraryEngine = SilkMediaLibraryEngine.shared
+    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
 
     @State private var selectedTab: Int = 0
     @State private var showHistoryClearedAlert: Bool = false
     @State private var licenseKeyInput: String = ""
     @State private var showPurchasePendingAlert: Bool = false
 
+    private var currentTheme: SilkLibraryTheme {
+        SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
+    }
+
+    private var isWarmWhitePro: Bool {
+        licenseEngine.isProActive && currentTheme == .nuanbai
+    }
+
     public init() {}
 
     public var body: some View {
         ZStack {
-            VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
-                .edgesIgnoringSafeArea(.all)
+            if isWarmWhitePro {
+                currentTheme.backgroundBase
+                    .edgesIgnoringSafeArea(.all)
+            } else {
+                VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                    .edgesIgnoringSafeArea(.all)
+            }
 
             VStack(spacing: 0) {
                 // Centered macOS Segmented Toolbar Header
@@ -34,7 +48,7 @@ public struct SilkSettingsView: View {
                     .padding(.bottom, 12)
 
                 Divider()
-                    .opacity(0.25)
+                    .opacity(isWarmWhitePro ? 0.35 : 0.25)
 
                 // Tab Content Body (Fixed 520 × 422 pt)
                 tabContent
@@ -42,7 +56,8 @@ public struct SilkSettingsView: View {
             }
         }
         .frame(width: 520, height: 490)
-        .preferredColorScheme(settings.appearanceMode.colorScheme)
+        .tint(isWarmWhitePro ? currentTheme.accentColor : nil)
+        .preferredColorScheme(isWarmWhitePro ? .light : settings.appearanceMode.colorScheme)
         .id(settings.appLanguage)
         .onAppear {
             consumeRequestedTab()
@@ -115,7 +130,13 @@ public struct SilkSettingsView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
+                .fill(isWarmWhitePro ? currentTheme.pillSurface : Color.primary.opacity(0.06))
+        )
+        .overlay(
+            isWarmWhitePro
+                ? RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(currentTheme.borderColor, lineWidth: 0.6)
+                : nil
         )
     }
 
@@ -139,15 +160,17 @@ public struct SilkSettingsView: View {
                 Text(title)
                     .font(.system(size: 12.5, weight: selectedTab == tag ? .medium : .regular))
             }
-            .foregroundColor(selectedTab == tag ? .primary : .secondary)
+            .foregroundColor(selectedTab == tag
+                ? (isWarmWhitePro ? currentTheme.accentColor : .primary)
+                : (isWarmWhitePro ? currentTheme.secondaryText : .secondary))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(
                 Group {
                     if selectedTab == tag {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                            .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
+                            .fill(isWarmWhitePro ? currentTheme.cardSurface : Color(nsColor: .controlBackgroundColor))
+                            .shadow(color: Color.black.opacity(isWarmWhitePro ? 0.05 : 0.12), radius: 2, x: 0, y: 1)
                     } else {
                         Color.clear
                     }
@@ -181,7 +204,7 @@ public struct SilkSettingsView: View {
         HStack {
             Text(text)
                 .font(.system(size: 11.5, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
             Spacer()
         }
         .padding(.horizontal, 4)
@@ -200,7 +223,7 @@ public struct SilkSettingsView: View {
                     HStack {
                         Text(L10n.tr("Appearance", "外观模式"))
                             .font(.system(size: 13))
-                            .foregroundColor(.primary)
+                            .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
                         Spacer()
                         Picker("", selection: $settings.appearanceMode) {
                             ForEach(AppearanceMode.allCases) { mode in
@@ -212,7 +235,68 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 32)
 
-                    Divider().opacity(0.12).padding(.vertical, 3)
+                    Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
+
+                    // Theme Mode (Free: disabled + PRO badge; Pro: unlocked interactive picker)
+                    HStack {
+                        HStack(spacing: 6) {
+                            Text(L10n.tr("Theme", "界面主题"))
+                                .font(.system(size: 13))
+                                .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
+
+                            if !licenseEngine.isProActive {
+                                Text("PRO")
+                                    .font(.system(size: 9, weight: .heavy, design: .rounded))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 1.0, green: 0.88, blue: 0.65),
+                                                Color(red: 0.90, green: 0.68, blue: 0.38)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .padding(.horizontal, 4.5)
+                                    .padding(.vertical, 1.5)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color(red: 0.35, green: 0.25, blue: 0.12).opacity(0.45))
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color(red: 0.90, green: 0.68, blue: 0.38).opacity(0.55), lineWidth: 0.6)
+                                    )
+                                    .help(L10n.tr("Upgrade to SilkPlayer Pro to unlock custom themes", "激活 SilkPlayer Pro 即可解锁深灰与暖白专属主题"))
+                            }
+                        }
+
+                        Spacer()
+
+                        if licenseEngine.isProActive {
+                            Picker("", selection: $selectedThemeRaw) {
+                                ForEach(SilkLibraryTheme.allCases) { th in
+                                    Text(th.displayName).tag(th.rawValue)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 170)
+                        } else {
+                            Picker("", selection: .constant(SilkLibraryTheme.shenghui.rawValue)) {
+                                ForEach(SilkLibraryTheme.allCases) { th in
+                                    Text(th.displayName).tag(th.rawValue)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 170)
+                            .disabled(true)
+                            .opacity(0.55)
+                            .help(L10n.tr("Activate SilkPlayer Pro in About to unlock themes", "请在「设置 → 关于」激活 SilkPlayer Pro 解锁主题功能"))
+                        }
+                    }
+                    .frame(height: 32)
+
+                    Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
 
                     // App Language
                     HStack {
@@ -935,11 +1019,11 @@ public struct SilkSettingsView: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.65))
+                .fill(isWarmWhitePro ? currentTheme.cardSurface : Color(nsColor: .controlBackgroundColor).opacity(0.65))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(0.07), lineWidth: 0.5)
+                .stroke(isWarmWhitePro ? currentTheme.borderColor : Color.primary.opacity(0.07), lineWidth: isWarmWhitePro ? 0.75 : 0.5)
         )
     }
 

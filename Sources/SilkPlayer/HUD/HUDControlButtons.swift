@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SilkCoreKit
 
 // MARK: - Instant Responsive Micro-Tooltip Modifier
 @MainActor
@@ -233,6 +234,11 @@ struct HUDMoreMenuButton<Content: View>: View {
 struct HUDSpeedMenuButton: View {
     @ObservedObject var player: PlayerCore
     @State private var isHovered = false
+    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
+
+    private var isWarmWhiteMusic: Bool {
+        player.isAudioOnly && selectedThemeRaw == SilkLibraryTheme.nuanbai.rawValue
+    }
 
     var body: some View {
         Menu {
@@ -245,17 +251,30 @@ struct HUDSpeedMenuButton: View {
             Text(speedPillText)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .foregroundColor(player.speed != 1.0 ? .cyan : .white.opacity(0.88))
+                .foregroundColor(
+                    player.speed != 1.0
+                        ? (isWarmWhiteMusic ? SilkLibraryTheme.nuanbai.accentColor : .cyan)
+                        : (isWarmWhiteMusic ? SilkLibraryTheme.nuanbai.primaryText : .white.opacity(0.88))
+                )
                 .frame(minWidth: 32)
                 .frame(height: 26)
                 .padding(.horizontal, 4)
                 .background(
                     Capsule()
-                        .fill(Color.white.opacity(isHovered ? 0.14 : (player.speed != 1.0 ? 0.12 : 0.06)))
+                        .fill(
+                            isWarmWhiteMusic
+                                ? (player.speed != 1.0 ? SilkLibraryTheme.nuanbai.accentColor.opacity(0.15) : (isHovered ? SilkLibraryTheme.nuanbai.pillSurface : Color.clear))
+                                : Color.white.opacity(isHovered ? 0.14 : (player.speed != 1.0 ? 0.12 : 0.06))
+                        )
                 )
                 .overlay(
                     Capsule()
-                        .strokeBorder(player.speed != 1.0 ? Color.cyan.opacity(0.4) : Color.white.opacity(0.15), lineWidth: 0.6)
+                        .strokeBorder(
+                            isWarmWhiteMusic
+                                ? (player.speed != 1.0 ? SilkLibraryTheme.nuanbai.accentColor.opacity(0.4) : SilkLibraryTheme.nuanbai.borderColor)
+                                : (player.speed != 1.0 ? Color.cyan.opacity(0.4) : Color.white.opacity(0.15)),
+                            lineWidth: 0.6
+                        )
                 )
         }
         .menuStyle(.borderlessButton)
