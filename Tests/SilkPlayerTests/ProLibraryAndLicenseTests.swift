@@ -528,6 +528,53 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         XCTAssertEqual(techItem.title, "zl2")
     }
 
+    func testNestedEpisodeFolderInFolderGrouping() async throws {
+        guard !isCIMockEnvironment else { return }
+
+        let tempDir = try makeTempDir()
+        let dbURL = tempDir.appendingPathComponent("nested_grouping.sqlite")
+        let rootDir = tempDir.appendingPathComponent("MediaRoot", isDirectory: true)
+
+        let seriesRoot = rootDir.appendingPathComponent("电视剧/嗜血法医：杀魔复生 第二季", isDirectory: true)
+        let batchFolder1 = seriesRoot.appendingPathComponent("嗜血法医：杀魔复生.Dexter.Resurrection.S02E01-02.6v电影 地址发布页 www.6v123.net 收藏不迷路", isDirectory: true)
+        let batchFolder2 = seriesRoot.appendingPathComponent("嗜血法医：杀魔复生.Dexter.Resurrection.S02E03.6v电影 地址发布页 www.6v123.net 收藏不迷路", isDirectory: true)
+
+        for dir in [batchFolder1, batchFolder2] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+
+        let ep1 = batchFolder1.appendingPathComponent("嗜血法医：杀魔复生.Dexter.Resurrection.S02E01.Risky.Business.1080p.HD中英双字[最新电影www.dyg7.com].mp4")
+        let ep2 = batchFolder1.appendingPathComponent("嗜血法医：杀魔复生.Dexter.Resurrection.S02E02.Fallen.1080p.HD中英双字[最新电影www.dyg7.com].mp4")
+        let ep3 = batchFolder2.appendingPathComponent("嗜血法医：杀魔复生.Dexter.Resurrection.S02E03.Live.Free.and.Die.1080p.HD中英双字[最新电影www.dyg7.com].mp4")
+
+        for f in [ep1, ep2, ep3] {
+            try Data("video".utf8).write(to: f)
+        }
+
+        let engine = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        _ = await engine.addLocalSource(url: rootDir, displayName: "LAN")
+
+        XCTAssertEqual(engine.items.count, 3)
+
+        let item1 = try XCTUnwrap(engine.items.first(where: { $0.path == ep1.path }))
+        let item2 = try XCTUnwrap(engine.items.first(where: { $0.path == ep2.path }))
+        let item3 = try XCTUnwrap(engine.items.first(where: { $0.path == ep3.path }))
+
+        // All 3 episodes must share the exact same seriesName without any episode/batch or ad tokens!
+        XCTAssertEqual(item1.seriesName, "嗜血法医：杀魔复生 第二季")
+        XCTAssertEqual(item2.seriesName, "嗜血法医：杀魔复生 第二季")
+        XCTAssertEqual(item3.seriesName, "嗜血法医：杀魔复生 第二季")
+        XCTAssertFalse(item1.seriesName?.contains("S02E01") == true)
+        XCTAssertFalse(item3.seriesName?.contains("S02E03") == true)
+
+        XCTAssertEqual(item1.seasonNumber, 2)
+        XCTAssertEqual(item1.episodeNumber, 1)
+        XCTAssertEqual(item2.seasonNumber, 2)
+        XCTAssertEqual(item2.episodeNumber, 2)
+        XCTAssertEqual(item3.seasonNumber, 2)
+        XCTAssertEqual(item3.episodeNumber, 3)
+    }
+
     // MARK: - 6. Mount-Index-Playback Stability Tests
 
     func testLargeScale4000FileIndexingAndImmediateResolve() async throws {
