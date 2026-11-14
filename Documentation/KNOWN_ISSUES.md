@@ -30,6 +30,7 @@
 | ISSUE-020 | 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题 | 顶部菜单栏 / SilkPlayer (PlayerCommands, PlayerCore) | Low | **已解决**（`1.6.0` 已移除并由右键菜单方案替代） | 1.6.0 |
 | ISSUE-021 | macOS 多显示器扩展屏全屏播放时，副屏移动鼠标误触发控件唤醒与沉浸态退出 | 全屏与交互 / SilkPlayer (PlayerHUDView) | Medium | 已复现确认，列入 1.7.0 修复计划 | 1.6.0 |
 | ISSUE-022 | 播放竖屏视频后关闭，播放窗口未复位为标准横向尺寸导致空状态视窗形状异常 | 窗口几何与生命周期 / SilkPlayer (AppShellView & WindowGeometry) | Medium | 已复现确认，列入 1.7.0 修复计划 | 1.6.0 |
+| ISSUE-023 | Pro 版本多声道（DTS-ES 6.1 等）无损 LPCM 输出在立体声物理设备下引起 DAC 削顶爆音 | 纯音频与多声道播放 / SilkCoreKit (SilkAudioEngine) | High | 已定位根因，待晚间针对 Pro 统一优化与修复 | 2.0.0-pro |
 
 ---
 
@@ -972,6 +973,36 @@ public enum WindowPresentationState: Equatable {
    - 彻底释放竖屏 `minSize`，将其重置为标准横向空状态最小约束（`480 × 270`）。
 2. **自动化测试守卫**：
    在 `Tests/SilkPlayerTests/` 中新增 Test 65，模拟竖屏媒体播放后触发 `stopPlayback()`，断言窗口纵横比成功复位为 `>= 1.0` 的标准横向比例。
+
+---
+
+## ISSUE-023: Pro 版本多声道（DTS-ES 6.1 等）无损 LPCM 输出在立体声物理设备下引起 DAC 削顶爆音
+
+- **影响范围**: Pro 版本多声道音频（DTS-CD、DTS-ES 6.1、TrueHD 7.1 等）在双声道设备下的回放
+- **涉及模块**: `SilkCoreKit (SilkAudioEngine.swift)`
+- **严重程度**: High
+- **发现版本**: 2.0.0-pro (commit `8362d2d`)
+- **当前状态**: **已定位根因，已完成定点方案设计，待晚间针对 Pro 进行统一优化与修复**
+
+### 1. 缺陷现象
+在测试 Pro 版本的音频播放时，播放特定无损音频（典型样本：`/Volumes/HDD2T/影音娱乐/音乐/一人一首成名曲/群星-真心英雄.wav`）时发生剧烈、刺耳的声音爆裂与杂音；而在 1.5.0 / 1.6.0 等主干免费版本中播放该曲目完全平稳顺畅、无任何爆音。
+
+### 2. 根因剖析
+1. **音源特征**：
+   - 探测显示整张专辑 191 首 WAV 文件中，其余 190 首均为标准双声道 PCM WAV，仅《群星-真心英雄.wav》为历史常见的 **DTS-CD（DTS-ES 6.1，7 个离散声道）** 格式；
+2. **免费版 vs Pro 版架构差异**：
+   - **免费版 (main)**：音频管线恒定输出 2 声道立体声，`Libswresample` 自动通过 ITU-R 标准下混矩阵将 6.1 声道按权重衰减后合流为立体声，总电平严格控制在 0 dBFS 以内，因此无爆音；
+   - **Pro 版 (feature/v2.0.0-pro)**：引入提案 026（多声道无损 LPCM 输出）后，因检测到 `rawChannels >= 7`，引擎盲目开启了 8 声道 AudioQueue 并直通 8 声道 Float32 LPCM；
+3. **硬件脱节与被动折叠削顶 (Clipping)**：
+   - 用户测试设备（Mac mini M4）物理硬件仅有 2 个声道（内置喇叭/3.5mm耳机/双声道显示器）；
+   - CoreAudio 在硬件驱动层对 8 声道进行被动累加，且 `kAudioQueueProperty_EnableTimePitch` 未配置限幅器，副歌大动态音频能量叠加后电平大幅突破 1.0（0 dBFS），DAC 产生严重的方波削顶畸变与爆鸣破音。
+
+### 3. 定点优化与修复方案（待晚间实施）
+1. **物理硬件输出声道动态感知**：
+   在 `SilkAudioEngine.open` 时通过 CoreAudio `kAudioDevicePropertyStreamConfiguration` 查询默认物理输出设备的实际物理声道数；若物理设备仅为 2 声道，强制回退至带有标准衰减矩阵的软件立体声下混管线，杜绝盲目开启 8 声道 AudioQueue；
+2. **多声道 PCM 防溢出软限幅 (Soft Limiter / Peak Clamp)**：
+   在音频帧入队前，对重采样后的 Float32 缓冲增加浮点电平安全限制（$[-1.0, 1.0]$），彻底消除瞬态叠加溢出。
+
 
 
 
