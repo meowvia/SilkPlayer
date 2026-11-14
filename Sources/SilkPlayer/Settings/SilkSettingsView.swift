@@ -58,6 +58,13 @@ public struct SilkSettingsView: View {
         .frame(width: 520, height: 490)
         .tint(isWarmWhitePro ? currentTheme.accentColor : nil)
         .preferredColorScheme(isWarmWhitePro ? .light : settings.appearanceMode.colorScheme)
+        .background(
+            SettingsWindowAppearanceSync(
+                appearance: isWarmWhitePro
+                    ? NSAppearance(named: .aqua)
+                    : settings.appearanceMode.nsAppearance
+            )
+        )
         .id(settings.appLanguage)
         .onAppear {
             consumeRequestedTab()
@@ -215,15 +222,20 @@ public struct SilkSettingsView: View {
         VStack(spacing: 16) {
             Spacer().frame(height: 2)
 
-            // Group 1: 界面外观与语言
+            // Group 1: 界面外观与个性化
             VStack(spacing: 6) {
-                sectionTitle(L10n.tr("Appearance & Language", "外观与语言"))
+                sectionTitle(L10n.tr("Appearance & Theme", "外观与主题"))
                 settingsFormCard {
                     // Appearance Mode
                     HStack {
-                        Text(L10n.tr("Appearance", "外观模式"))
-                            .font(.system(size: 13))
-                            .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tr("Appearance", "外观模式"))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
+                            Text(L10n.tr("System baseline light or dark styling", "系统标准浅色与深色基础外观"))
+                                .font(.system(size: 10))
+                                .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
+                        }
                         Spacer()
                         Picker("", selection: $settings.appearanceMode) {
                             ForEach(AppearanceMode.allCases) { mode in
@@ -233,42 +245,26 @@ public struct SilkSettingsView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 210)
                     }
-                    .frame(height: 32)
+                    .frame(height: 34)
 
                     Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
 
-                    // Theme Mode (Free: disabled + PRO badge; Pro: unlocked interactive picker)
+                    // Theme Mode (Free: disabled + lock icon; Pro: unlocked interactive picker)
                     HStack {
-                        HStack(spacing: 6) {
-                            Text(L10n.tr("Theme", "界面主题"))
-                                .font(.system(size: 13))
-                                .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 5) {
+                                Text(L10n.tr("Interface Theme", "界面主题"))
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
 
-                            if !licenseEngine.isProActive {
-                                Text("PRO")
-                                    .font(.system(size: 9, weight: .heavy, design: .rounded))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(red: 1.0, green: 0.88, blue: 0.65),
-                                                Color(red: 0.90, green: 0.68, blue: 0.38)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .padding(.horizontal, 4.5)
-                                    .padding(.vertical, 1.5)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color(red: 0.35, green: 0.25, blue: 0.12).opacity(0.45))
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(Color(red: 0.90, green: 0.68, blue: 0.38).opacity(0.55), lineWidth: 0.6)
-                                    )
-                                    .help(L10n.tr("Upgrade to SilkPlayer Pro to unlock custom themes", "激活 SilkPlayer Pro 即可解锁深灰与暖白专属主题"))
+                                proThemeBadge(isUnlocked: licenseEngine.isProActive)
                             }
+
+                            Text(licenseEngine.isProActive
+                                 ? L10n.tr("Pro signature aesthetics · Slate & Warm White", "Pro 专属艺术质感 · 深灰黑胶与雅致暖白")
+                                 : L10n.tr("Pro exclusive styling · Unlock in About tab", "Pro 专属定制质感 · 激活解锁暖白等个性化主题"))
+                                .font(.system(size: 10))
+                                .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
                         }
 
                         Spacer()
@@ -282,19 +278,24 @@ public struct SilkSettingsView: View {
                             .pickerStyle(.segmented)
                             .frame(width: 170)
                         } else {
-                            Picker("", selection: .constant(SilkLibraryTheme.shenghui.rawValue)) {
-                                ForEach(SilkLibraryTheme.allCases) { th in
-                                    Text(th.displayName).tag(th.rawValue)
+                            HStack(spacing: 4) {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.secondary)
+                                Picker("", selection: .constant(SilkLibraryTheme.shenghui.rawValue)) {
+                                    ForEach(SilkLibraryTheme.allCases) { th in
+                                        Text(th.displayName).tag(th.rawValue)
+                                    }
                                 }
+                                .pickerStyle(.segmented)
+                                .frame(width: 150)
+                                .disabled(true)
                             }
-                            .pickerStyle(.segmented)
-                            .frame(width: 170)
-                            .disabled(true)
-                            .opacity(0.55)
+                            .opacity(0.60)
                             .help(L10n.tr("Activate SilkPlayer Pro in About to unlock themes", "请在「设置 → 关于」激活 SilkPlayer Pro 解锁主题功能"))
                         }
                     }
-                    .frame(height: 32)
+                    .frame(height: 34)
 
                     Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
 
@@ -302,7 +303,7 @@ public struct SilkSettingsView: View {
                     HStack {
                         Text(L10n.tr("Language", "界面语言"))
                             .font(.system(size: 13))
-                            .foregroundColor(.primary)
+                            .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
                         Spacer()
                         Picker("", selection: $settings.appLanguage) {
                             ForEach(AppLanguage.allCases) { lang in
@@ -323,7 +324,7 @@ public struct SilkSettingsView: View {
                     HStack {
                         Text(L10n.tr("Startup Window", "启动视窗行为"))
                             .font(.system(size: 13))
-                            .foregroundColor(.primary)
+                            .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
                         Spacer()
                         Picker("", selection: $settings.windowMode) {
                             Text(L10n.tr("Remember Last Position", "记忆上次位置")).tag(WindowMode.singleWindow)
@@ -333,17 +334,17 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 32)
 
-                    Divider().opacity(0.12).padding(.vertical, 3)
+                    Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
 
                     // Fullscreen Clock
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.tr("Show Clock in Fullscreen", "全屏右上角显示时钟"))
                                 .font(.system(size: 13))
-                                .foregroundColor(.primary)
+                                .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
                             Text(L10n.tr("Displays system clock HUD during fullscreen playback", "全屏播放时在右上角常驻显示系统时钟"))
                                 .font(.system(size: 10.5))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
                         }
                         Spacer()
                         Toggle("", isOn: $settings.showLocalTimeInFullscreen)
@@ -352,18 +353,18 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 32)
 
-                    Divider().opacity(0.12).padding(.vertical, 3)
+                    Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
 
                     // Screenshots Directory
                     HStack {
                         Text(L10n.tr("Screenshots Directory", "截图保存目录"))
                             .font(.system(size: 13))
-                            .foregroundColor(.primary)
+                            .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
                         Spacer()
                         HStack(spacing: 8) {
                             Text(settings.screenshotDirectory)
                                 .font(.system(size: 11.5))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .frame(maxWidth: 180, alignment: .trailing)
@@ -377,13 +378,13 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 32)
 
-                    Divider().opacity(0.12).padding(.vertical, 3)
+                    Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
 
                     // Screenshot Format
                     HStack {
                         Text(L10n.tr("Screenshot Format", "截图保存格式"))
                             .font(.system(size: 13))
-                            .foregroundColor(.primary)
+                            .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
                         Spacer()
                         Picker("", selection: $settings.screenshotFormat) {
                             Text(L10n.tr("PNG (Lossless)", "PNG (无损原画)")).tag("png")
@@ -815,6 +816,19 @@ public struct SilkSettingsView: View {
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary.opacity(0.75))
                                 .padding(.top, 1)
+
+                                Button {
+                                    Task {
+                                        UserDefaults.standard.set(receipt.rawToken, forKey: "silk.pro.lastActiveReceipt")
+                                        await licenseEngine.deactivate()
+                                        SilkProIconManager.syncApplicationIcon(isProActive: false)
+                                    }
+                                } label: {
+                                    Text(L10n.tr("Deactivate / Experience Free Edition", "停用授权 / 体验免费版"))
+                                        .font(.system(size: 11))
+                                }
+                                .buttonStyle(.link)
+                                .padding(.top, 3)
                             } else if !licenseEngine.isProActive {
                                 Text(L10n.tr(
                                     "Enter an activation key for SMB 2/3, NFS, and LAN media library.",
@@ -822,6 +836,20 @@ public struct SilkSettingsView: View {
                                 ))
                                 .font(.system(size: 10.5))
                                 .foregroundColor(.secondary)
+
+                                if let cached = UserDefaults.standard.string(forKey: "silk.pro.lastActiveReceipt"), !cached.isEmpty {
+                                    Button {
+                                        Task {
+                                            _ = await licenseEngine.activate(licenseKey: cached)
+                                            SilkProIconManager.syncApplicationIcon(isProActive: true)
+                                        }
+                                    } label: {
+                                        Text(L10n.tr("Restore Pro Activation", "恢复 Pro 授权"))
+                                            .font(.system(size: 11))
+                                    }
+                                    .buttonStyle(.link)
+                                    .padding(.top, 2)
+                                }
                             }
                         }
 
@@ -1027,6 +1055,40 @@ public struct SilkSettingsView: View {
         )
     }
 
+    private func proThemeBadge(isUnlocked: Bool) -> some View {
+        HStack(spacing: 3) {
+            if !isUnlocked {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 7.5))
+            }
+            Text("PRO")
+                .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+        }
+        .foregroundStyle(
+            LinearGradient(
+                colors: [
+                    Color(red: 1.0, green: 0.88, blue: 0.65),
+                    Color(red: 0.90, green: 0.68, blue: 0.38)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(
+            Capsule()
+                .fill(Color(red: 0.35, green: 0.25, blue: 0.12).opacity(isUnlocked ? 0.35 : 0.60))
+        )
+        .overlay(
+            Capsule()
+                .stroke(Color(red: 0.90, green: 0.68, blue: 0.38).opacity(isUnlocked ? 0.45 : 0.70), lineWidth: 0.6)
+        )
+        .help(isUnlocked
+            ? L10n.tr("SilkPlayer Pro active: Slate & Warm White unlocked", "SilkPlayer Pro 已激活：深灰与暖白专属主题已解锁")
+            : L10n.tr("Upgrade to SilkPlayer Pro in About to unlock custom themes", "激活 SilkPlayer Pro 即可解锁深灰与暖白专属主题"))
+    }
+
     private func selectFolder() {
         NSCursor.unhide()
         let panel = NSOpenPanel()
@@ -1034,10 +1096,39 @@ public struct SilkSettingsView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
+        panel.appearance = isWarmWhitePro ? NSAppearance(named: .aqua) : nil
         panel.prompt = L10n.tr("Select", "选择")
         if panel.runModal() == .OK, let url = panel.url {
             settings.screenshotDirectory = url.path
         }
         NSCursor.unhide()
+    }
+}
+
+// MARK: - Settings Window Dynamic Appearance Synchronizer
+private struct SettingsWindowAppearanceSync: NSViewRepresentable {
+    let appearance: NSAppearance?
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            apply(view: view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            apply(view: nsView)
+        }
+    }
+
+    private func apply(view: NSView) {
+        if view.window?.appearance != appearance {
+            view.window?.appearance = appearance
+        }
+        if view.window?.contentView?.appearance != appearance {
+            view.window?.contentView?.appearance = appearance
+        }
     }
 }

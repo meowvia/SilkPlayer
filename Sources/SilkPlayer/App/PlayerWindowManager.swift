@@ -542,6 +542,9 @@ extension Notification.Name {
             }
         }
 
+        let isWarmWhite = SilkProLicenseEngine.shared.isProActive && SilkLibraryTheme.current() == .nuanbai
+        window.appearance = isWarmWhite ? NSAppearance(named: .aqua) : AppSettings.shared.appearanceMode.nsAppearance
+
         let hostingView = NSHostingView(rootView: SilkSettingsView())
         hostingView.autoresizingMask = [.width, .height]
         window.contentView = hostingView

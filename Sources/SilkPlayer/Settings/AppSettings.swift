@@ -26,6 +26,14 @@ public enum AppearanceMode: String, CaseIterable, Identifiable, Codable, Sendabl
         case .dark: return .dark
         }
     }
+
+    public var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
 }
 
 public enum AppLanguage: String, CaseIterable, Identifiable, Codable, Sendable {
