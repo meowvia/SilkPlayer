@@ -29,14 +29,25 @@ public enum SilkProIconManager {
         return standardIconImage
     }
 
-    /// Synchronizes the macOS application Dock icon with the Pro activation state
+    /// Synchronizes the macOS application Dock icon and Finder bundle icon with the Pro activation state
     public static func syncApplicationIcon(isProActive: Bool) {
+        let bundlePath = Bundle.main.bundlePath
+        let isMainAppBundle = bundlePath.hasSuffix(".app")
+
         if isProActive, let proIcon = proIconImage {
             NSApp?.applicationIconImage = proIcon
-        } else if let stdIcon = standardIconImage {
-            NSApp?.applicationIconImage = stdIcon
+            if isMainAppBundle {
+                _ = NSWorkspace.shared.setIcon(proIcon, forFile: bundlePath, options: [])
+            }
         } else {
-            NSApp?.applicationIconImage = nil
+            if let stdIcon = standardIconImage {
+                NSApp?.applicationIconImage = stdIcon
+            } else {
+                NSApp?.applicationIconImage = nil
+            }
+            if isMainAppBundle {
+                _ = NSWorkspace.shared.setIcon(nil, forFile: bundlePath, options: [])
+            }
         }
     }
 }
