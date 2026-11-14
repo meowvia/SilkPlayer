@@ -28,6 +28,7 @@
 | ISSUE-018 | 冷启动被 `WindowGroup` 桌面平铺状态 (`tilingPosition: 9`) 恢复为铺满屏尺寸 | 窗口生命周期与冷启动几何 / SilkPlayer (SilkPlayerApp, AppShellView, AppDelegate, PlayerCore+WindowGeometry) | High | 预览版已修复；冷启动防平铺隔离登记待合入 1.7.0 正式版 | 1.7.0-music-preview |
 | ISSUE-019 | 竖屏/极窄窗口（`.minimal` 档）底栏音量按钮未隐藏导致与“下一首”按钮重叠冲突 | 视频 HUD 底栏 / SilkPlayer (PlayerHUDView, HUDVolumeSlider) | Medium | **已修复**（`1.6.0` 已落地） | 1.6.0 |
 | ISSUE-020 | 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题 | 顶部菜单栏 / SilkPlayer (PlayerCommands, PlayerCore) | Low | **已解决**（`1.6.0` 已移除并由右键菜单方案替代） | 1.6.0 |
+| ISSUE-021 | macOS 多显示器扩展屏全屏播放时，副屏移动鼠标误触发控件唤醒与沉浸态退出 | 全屏与交互 / SilkPlayer (PlayerHUDView) | Medium | 已复现确认，列入 1.7.0 修复计划 | 1.6.0 |
 
 ---
 
@@ -882,6 +883,51 @@ public enum WindowPresentationState: Equatable {
 ### 3. 解决落地（解决版本：`1.6.0`）
 - **合并顶栏重名菜单并移除冗余入口**：在 `PlayerCommands.swift` 将自定义 `CommandMenu(L10n.menuWindow)` 替换为 `CommandGroup(before: .windowList)` 归入系统「窗口」菜单（保留媒体详情、播放列表、窗口置顶及分隔线），并移除 `Menu(L10n.fitToVideo)` 及其废弃本地化键值；
 - **窗口比例调节收拢至右键菜单**：按 [`提案 027`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Documentation/FEATURE_PROPOSALS.md) 在 `1.6.0` 于视频画布右键菜单提供 `50% / 75% / 100%` 与「恢复默认」入口，并完善 `fitWindow(scale:)` 的 `minSize` 释放、`.maximized` 复位、OSD 提示、边界置灰门控及全屏/纯音频禁用保护。
+
+---
+
+## ISSUE-021: macOS 多显示器扩展屏全屏播放时，副屏移动鼠标误触发控件唤醒与沉浸态退出
+
+- **关联 GitHub Issue**: [#7 (macos双屏鼠标移动问题)](https://github.com/meowvia/SilkPlayer/issues/7)
+- **提出时间**: 2026-11-14
+- **影响范围**: macOS 双屏/多屏扩展工作流、全屏沉浸式观影
+- **严重程度**: Medium
+- **当前状态**: **已复现并定位根因，已列入 1.7.0 修复计划**
+
+### 1. 缺陷现象
+在多显示器（如 Mac mini / MacBook 连接 2 个或多个外接屏幕）环境下：
+- 屏幕 A：SilkPlayer 处于全屏播放状态，进入沉浸式播放（控制栏、顶栏、时间轴与鼠标光标已自动淡出隐藏）；
+- 屏幕 B：用户在另一块屏幕上浏览网页或处理其他日常工作；
+- **异常表现**：用户在屏幕 B 移动鼠标、点击或滚动滚轮时，屏幕 A 上的 SilkPlayer 误将该键鼠事件判定为对播放窗口的用户活动，导致屏幕 A 立即退出沉浸态，强行弹出底栏进度条、顶栏及控制控件，严重破坏多屏工作与观影体验。
+
+### 2. 代码核查与根因分析
+1. **`PlayerHUDView.swift:setupMouseMonitor` 窗口过滤逻辑漏洞**：
+   - 现存监听实现：
+     ```swift
+     mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .rightMouseDown, .leftMouseDragged, .scrollWheel]) { [weak player] event in
+         ...
+         guard let p = player else { return event }
+         if let hostWin = p.hostWindow, let evWin = event.window, evWin !== hostWin {
+             return event
+         }
+         ...
+         self.registerUserActivity()
+         return event
+     }
+     ```
+   - **根本原因 1（`event.window == nil` 逃逸）**：在 macOS 多屏幕间滑动光标、或者光标划过桌面/非应用窗口时，AppKit 派发的 `NSEvent.window` 往往为 `nil`。此时 `if let evWin = event.window` 判定为 `false`，导致拦截失效，事件直接穿透执行到 `registerUserActivity()`；
+   - **根本原因 2（物理视窗外坐标未过滤）**：即使在当前应用处于活跃状态时，该监听器也未对鼠标物理全局坐标（`NSEvent.mouseLocation`）进行窗口命中检测（Hit-test）。当鼠标在扩展屏幕（屏幕 B）物理空间内移动时，坐标完全在播放窗口（屏幕 A）的 `hostWin.frame` 之外，却依然触发了 `registerUserActivity() -> player.reportUserActivity() -> isHUDVisible = true`。
+
+### 3. 1.7.0 精确定向修复计划
+1. **增加物理视窗与屏幕边界硬拦截**：
+   在 `PlayerHUDView.swift:setupMouseMonitor` 中对鼠标事件进行双重门控：
+   - **窗口归属校验**：明确排除非主播放窗口事件；
+   - **坐标命中拦截**：利用 `hostWin.frame.contains(NSEvent.mouseLocation)` 进行全局物理屏幕坐标过滤；若光标未落在播放器窗口物理范围内（包括在其他扩展屏幕或外部桌面移动），绝对禁止调用 `registerUserActivity()`。
+2. **全屏非聚焦态行为强化**：
+   当全屏播放窗口处于非主键窗口（`!hostWin.isKeyWindow`）且鼠标未在其区域内时，严格保持静默沉浸态，绝不自发重置自动隐藏计时器。
+3. **自动化测试守卫**：
+   在 `Tests/SilkPlayerTests/` 中新增 Test 64，模拟全屏与非激活态下跨屏幕/窗口外事件派发，验证 `isHUDVisible` 保持 `false` 不受干扰。
+
 
 
 
