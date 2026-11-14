@@ -20,6 +20,9 @@ public struct SilkPlaylistDrawerView: View {
     @State private var isDrawerDropTargeted: Bool = false
     @State private var isAwaitingClearConfirm: Bool = false
     @State private var clearConfirmResetTask: Task<Void, Never>? = nil
+    @State private var isSearchExpanded: Bool = false
+    @State private var searchText: String = ""
+    @FocusState private var isSearchFocused: Bool
 
     public init(
         player: PlayerCore,
@@ -182,39 +185,85 @@ public struct SilkPlaylistDrawerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // MARK: - Filtered Playlist Items & Pinyin Matcher
+    private var filteredItems: [(index: Int, item: PlaylistItem)] {
+        let enumerated = Array(playlist.items.enumerated().map { ($0.offset, $0.element) })
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard isSearchExpanded, !query.isEmpty else {
+            return enumerated
+        }
+        return enumerated.filter { _, item in
+            matchPlaylistItem(item, query: query)
+        }
+    }
+
+    private func matchPlaylistItem(_ item: PlaylistItem, query: String) -> Bool {
+        let titleLower = item.title.lowercased()
+        if titleLower.contains(query) { return true }
+        let fileNameLower = (item.path as NSString).lastPathComponent.lowercased()
+        if fileNameLower.contains(query) { return true }
+
+        let tokens = SilkPinyinMatcher.pinyinTokens(for: item.title)
+        if tokens.contains(query) { return true }
+
+        let queryParts = query.split(separator: " ").map(String.init)
+        if queryParts.count > 1 {
+            let matchesAll = queryParts.allSatisfy { part in
+                titleLower.contains(part) || fileNameLower.contains(part) || tokens.contains(part)
+            }
+            if matchesAll { return true }
+        }
+        return false
+    }
+
     // MARK: - Playlist Scroll View
     private var playlistScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: true) {
-                LazyVStack(spacing: 2) {
-                    ForEach(Array(playlist.items.enumerated()), id: \.element.id) { index, item in
-                        PlaylistItemRowView(
-                            index: index,
-                            item: item,
-                            isCurrent: index == playlist.currentIndex,
-                            isPlaying: player.isPlaying,
-                            isHovered: hoveredIndex == index,
-                            onSelect: {
-                                onSelectPlaylistItem(item)
-                            },
-                            onReveal: {
-                                let url = URL(fileURLWithPath: item.path)
-                                NSWorkspace.shared.activateFileViewerSelecting([url])
-                            },
-                            onDelete: {
-                                withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                                    playlist.removeItem(at: index)
-                                }
-                            },
-                            onHoverChange: { isInside in
-                                hoveredIndex = isInside ? index : nil
-                            }
-                        )
-                        .id(item.id)
+                let itemsToDisplay = filteredItems
+                if itemsToDisplay.isEmpty && !searchText.isEmpty {
+                    VStack(spacing: 8) {
+                        Spacer(minLength: 24)
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 20))
+                            .foregroundColor(.white.opacity(0.35))
+                        Text(L10n.tr("No matching items", "无匹配项目"))
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundColor(.white.opacity(0.60))
+                        Spacer(minLength: 24)
                     }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    LazyVStack(spacing: 2) {
+                        ForEach(itemsToDisplay, id: \.item.id) { index, item in
+                            PlaylistItemRowView(
+                                index: index,
+                                item: item,
+                                isCurrent: index == playlist.currentIndex,
+                                isPlaying: player.isPlaying,
+                                isHovered: hoveredIndex == index,
+                                onSelect: {
+                                    onSelectPlaylistItem(item)
+                                },
+                                onReveal: {
+                                    let url = URL(fileURLWithPath: item.path)
+                                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                                },
+                                onDelete: {
+                                    withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                        playlist.removeItem(at: index)
+                                    }
+                                },
+                                onHoverChange: { isInside in
+                                    hoveredIndex = isInside ? index : nil
+                                }
+                            )
+                            .id(item.id)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 8)
             }
             .onAppear {
                 if let current = playlist.currentItem {
@@ -235,75 +284,145 @@ public struct SilkPlaylistDrawerView: View {
     private var playlistFooterToolbar: some View {
         VStack(spacing: 0) {
             Divider().opacity(0.15)
-            HStack(spacing: 6) {
-                Button(action: {
-                    addMediaViaPicker()
-                }) {
-                    HStack(spacing: 3.5) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text(L10n.tr("Add Media...", "添加媒体…"))
-                            .font(.system(size: 10.5, weight: .medium))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
-                    .foregroundColor(.white.opacity(0.85))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4.5)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .focusEffectDisabled()
-
-                Spacer(minLength: 4)
-
-                if !playlist.isEmpty {
-                    Button(action: {
-                        if isAwaitingClearConfirm {
-                            clearConfirmResetTask?.cancel()
-                            clearConfirmResetTask = nil
-                            isAwaitingClearConfirm = false
-                            withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                                playlist.clear()
-                            }
-                        } else {
-                            isAwaitingClearConfirm = true
-                            clearConfirmResetTask?.cancel()
-                            clearConfirmResetTask = Task { @MainActor in
-                                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                                guard !Task.isCancelled else { return }
-                                withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                                    isAwaitingClearConfirm = false
+            if isSearchExpanded {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.60))
+                    TextField(L10n.tr("Search playlist or initials...", "搜索片名、拼音简拼…"), text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white)
+                        .focused($isSearchFocused)
+                        .onExitCommand {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                if !searchText.isEmpty {
+                                    searchText = ""
+                                } else {
+                                    isSearchExpanded = false
+                                    isSearchFocused = false
                                 }
                             }
                         }
+                    if !searchText.isEmpty {
+                        Button(action: {
+                            searchText = ""
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.white.opacity(0.55))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Button(action: {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            searchText = ""
+                            isSearchExpanded = false
+                            isSearchFocused = false
+                        }
+                    }) {
+                        Image(systemName: "chevron.right.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.65))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.tr("Close search (Esc)", "关闭搜索 (Esc)"))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+            } else {
+                HStack(spacing: 6) {
+                    Button(action: {
+                        addMediaViaPicker()
                     }) {
                         HStack(spacing: 3.5) {
-                            Image(systemName: isAwaitingClearConfirm ? "exclamationmark.triangle.fill" : "trash")
-                                .font(.system(size: 9.5))
-                            Text(isAwaitingClearConfirm ? L10n.tr("Confirm Clear", "确定清空") : L10n.clearAll)
+                            Image(systemName: "plus")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(L10n.tr("Add Media...", "添加媒体…"))
                                 .font(.system(size: 10.5, weight: .medium))
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
-                        .foregroundColor(isAwaitingClearConfirm ? Color(nsColor: .systemRed) : (isFooterClearHovered ? Color(nsColor: .systemRed) : .white.opacity(0.65)))
+                        .foregroundColor(.white.opacity(0.85))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4.5)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isAwaitingClearConfirm ? Color.red.opacity(0.24) : (isFooterClearHovered ? Color.red.opacity(0.14) : Color.white.opacity(0.06)))
-                        )
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
                     }
                     .buttonStyle(.plain)
                     .focusable(false)
                     .focusEffectDisabled()
-                    .onHover { isFooterClearHovered = $0 }
-                    .help(isAwaitingClearConfirm ? L10n.tr("Click again to confirm clearing playlist", "再次点击以确认清空播放列表") : L10n.tr("Clear All (Empty Playlist)", "一键清空播放列表"))
+
+                    Spacer(minLength: 4)
+
+                    // PROPOSAL-022: Quick search trigger button with ⌘F
+                    Button(action: {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            isSearchExpanded = true
+                            isSearchFocused = true
+                        }
+                    }) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundColor(.white.opacity(0.70))
+                            .frame(width: 24, height: 24)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
+                    }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .focusEffectDisabled()
+                    .keyboardShortcut("f", modifiers: .command)
+                    .help(L10n.tr("Search playlist (⌘F)", "搜索播放列表 (⌘F)"))
+
+                    if !playlist.isEmpty {
+                        Button(action: {
+                            if isAwaitingClearConfirm {
+                                clearConfirmResetTask?.cancel()
+                                clearConfirmResetTask = nil
+                                isAwaitingClearConfirm = false
+                                withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                    playlist.clear()
+                                }
+                            } else {
+                                isAwaitingClearConfirm = true
+                                clearConfirmResetTask?.cancel()
+                                clearConfirmResetTask = Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                                    guard !Task.isCancelled else { return }
+                                    withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                        isAwaitingClearConfirm = false
+                                    }
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 3.5) {
+                                Image(systemName: isAwaitingClearConfirm ? "exclamationmark.triangle.fill" : "trash")
+                                    .font(.system(size: 9.5))
+                                Text(isAwaitingClearConfirm ? L10n.tr("Confirm Clear", "确定清空") : L10n.clearAll)
+                                    .font(.system(size: 10.5, weight: .medium))
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                            .foregroundColor(isAwaitingClearConfirm ? Color(nsColor: .systemRed) : (isFooterClearHovered ? Color(nsColor: .systemRed) : .white.opacity(0.65)))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4.5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(isAwaitingClearConfirm ? Color.red.opacity(0.24) : (isFooterClearHovered ? Color.red.opacity(0.14) : Color.white.opacity(0.06)))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                        .focusEffectDisabled()
+                        .onHover { isFooterClearHovered = $0 }
+                        .help(isAwaitingClearConfirm ? L10n.tr("Click again to confirm clearing playlist", "再次点击以确认清空播放列表") : L10n.tr("Clear All (Empty Playlist)", "一键清空播放列表"))
+                    }
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
         }
     }
 
@@ -1274,6 +1393,26 @@ public final class SilkDrawerHandleNSView: NSView {
         ctx.fillPath()
 
         ctx.restoreGState()
+    }
+}
+
+// MARK: - Lightweight Multimodal Pinyin Matcher
+public enum SilkPinyinMatcher {
+    public static func pinyinTokens(for input: String) -> String {
+        guard !input.isEmpty else { return "" }
+        let lowered = input.lowercased()
+        if lowered.allSatisfy(\.isASCII) {
+            return lowered
+        }
+        let mutable = NSMutableString(string: input)
+        CFStringTransform(mutable, nil, kCFStringTransformToLatin, false)
+        CFStringTransform(mutable, nil, kCFStringTransformStripCombiningMarks, false)
+        let latin = (mutable as String).lowercased()
+        let words = latin.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        let fullJoined = words.joined()
+        let initials = words.compactMap { $0.first.map(String.init) }.joined()
+        let spaced = words.joined(separator: " ")
+        return "\(lowered) \(spaced) \(fullJoined) \(initials)"
     }
 }
 
