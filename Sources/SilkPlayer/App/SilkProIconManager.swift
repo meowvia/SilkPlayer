@@ -13,7 +13,8 @@ public enum SilkProIconManager {
 
     /// Cached Standard Icon Image
     private static let standardIconImage: NSImage? = {
-        if let stdIconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns") ??
+        if let stdIconURL = Bundle.main.url(forResource: "AppIcon_Standard", withExtension: "icns") ??
+                            Bundle.main.url(forResource: "AppIcon", withExtension: "icns") ??
                             Bundle.main.url(forResource: "AppIcon_1024", withExtension: "png") {
             return NSImage(contentsOf: stdIconURL)
         }

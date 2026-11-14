@@ -175,13 +175,14 @@ install_name_tool -add_rpath "@loader_path/../Frameworks" "${APP_BUNDLE}/Content
 audit_bundle_dependencies "${APP_BUNDLE}" "Staging .app Bundle"
 
 cp "${PROJECT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
-if [[ "${VERSION}" == *"-pro"* && -f "${PROJECT_DIR}/Resources/AppIcon_Pro.icns" ]]; then
-    cp "${PROJECT_DIR}/Resources/AppIcon_Pro.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
-elif [[ -f "${PROJECT_DIR}/Resources/AppIcon.icns" ]]; then
+if [[ -f "${PROJECT_DIR}/Resources/AppIcon.icns" ]]; then
     cp "${PROJECT_DIR}/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
 fi
 if [[ -f "${PROJECT_DIR}/Resources/AppIcon_Pro.icns" ]]; then
     cp "${PROJECT_DIR}/Resources/AppIcon_Pro.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon_Pro.icns"
+fi
+if [[ -f "${PROJECT_DIR}/Resources/AppIcon_Standard.icns" ]]; then
+    cp "${PROJECT_DIR}/Resources/AppIcon_Standard.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon_Standard.icns"
 fi
 if [[ -f "${PROJECT_DIR}/Resources/AppIcon_Pro_1024.png" ]]; then
     cp "${PROJECT_DIR}/Resources/AppIcon_Pro_1024.png" "${APP_BUNDLE}/Contents/Resources/AppIcon_Pro_1024.png"

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import SilkCoreKit
 
 /// Empty Playback Canvas for SilkPlayer.
 /// Features pure minimalist Apple aesthetics, iridescent Silk ambient backdrops,
@@ -11,6 +12,7 @@ public struct EmptyPlaybackView: View {
     var onFileDropped: ((URL) -> Void)?
     var onFilesDropped: (([URL]) -> Void)?
 
+    @ObservedObject private var licenseEngine = SilkProLicenseEngine.shared
     @State private var isDropTargeted: Bool = false
     @State private var isHoveringLogo: Bool = false
 
@@ -33,7 +35,11 @@ public struct EmptyPlaybackView: View {
 
             // 2. Ambient Gradient & Vignette
             RadialGradient(
-                gradient: Gradient(colors: [
+                gradient: Gradient(colors: licenseEngine.isProActive ? [
+                    Color(red: 0.96, green: 0.62, blue: 0.15).opacity(isHoveringLogo ? 0.18 : 0.09),
+                    Color(red: 0.18, green: 0.14, blue: 0.11).opacity(0.45),
+                    Color(red: 0.08, green: 0.06, blue: 0.05).opacity(0.92)
+                ] : [
                     Color.cyan.opacity(isHoveringLogo ? 0.16 : 0.08),
                     Color(red: 0.06, green: 0.08, blue: 0.14).opacity(0.45),
                     Color(red: 0.03, green: 0.04, blue: 0.07).opacity(0.88)
@@ -71,7 +77,42 @@ public struct EmptyPlaybackView: View {
 
             // 4. Centered Interactive Logo (Pure Minimalist Entrypoint)
             Button(action: onOpenFile) {
-                SilkBrandLogoView(size: 104, isInteractive: true)
+                VStack(spacing: 12) {
+                    SilkBrandLogoView(size: 104, isInteractive: true)
+
+                    if licenseEngine.isProActive {
+                        HStack(spacing: 5) {
+                            Text("SilkPlayer")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.88))
+
+                            Text("PRO")
+                                .font(.system(size: 9.5, weight: .heavy, design: .rounded))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 1.0, green: 0.88, blue: 0.65),
+                                            Color(red: 0.95, green: 0.65, blue: 0.25)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .fill(Color(red: 0.22, green: 0.16, blue: 0.12).opacity(0.95))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .stroke(Color(red: 0.95, green: 0.65, blue: 0.25).opacity(0.65), lineWidth: 0.6)
+                                )
+                                .shadow(color: Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.25), radius: 3, x: 0, y: 1)
+                        }
+                        .opacity(isHoveringLogo ? 1.0 : 0.82)
+                    }
+                }
             }
             .buttonStyle(.plain)
             .focusable(false)
