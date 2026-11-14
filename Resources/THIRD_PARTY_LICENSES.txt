@@ -1,0 +1,88 @@
+================================================================================
+SilkPlayer Open Source Notices & Third-Party Software Licenses
+================================================================================
+
+This document contains licensing and copyright notices for third-party open source
+software components bundled, linked, or utilized by SilkPlayer.
+
+--------------------------------------------------------------------------------
+1. Host Application: SilkPlayer (Frontend & Interface)
+--------------------------------------------------------------------------------
+Copyright (C) 2026 SilkPlayer Contributors / meowvia
+
+The SilkPlayer application frontend and interface code is licensed under the
+GNU Lesser General Public License version 3.0 (LGPL-3.0).
+Source code is available at: https://github.com/meowvia/SilkPlayer
+
+--------------------------------------------------------------------------------
+2. Multimedia Core Frameworks: FFmpeg (v6.1.2)
+--------------------------------------------------------------------------------
+FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+Copyright (c) 2000-2024 the FFmpeg developers.
+
+SilkPlayer dynamically links against the following FFmpeg shared frameworks:
+  - Libavformat.framework
+  - Libavcodec.framework
+  - Libavutil.framework
+  - Libswresample.framework
+  - Libswscale.framework
+
+These libraries are built strictly with:
+  --enable-shared --disable-static --enable-version3 --disable-gpl --disable-nonfree
+
+FFmpeg is licensed under the GNU Lesser General Public License version 3.0 (LGPL-3.0).
+In accordance with LGPL-3.0 Section 4, users have the right to modify these
+libraries and relink them with SilkPlayer.
+
+Upstream Source: https://ffmpeg.org/releases/ffmpeg-6.1.2.tar.xz
+SHA-256: 3b624649725ecdc96573b2ca895e0f56545f9119049c6934c9f13042127202b8
+Build and relinking instructions can be found in Documentation/THIRD_PARTY.md.
+
+--------------------------------------------------------------------------------
+3. AV1 Decoding Library: dav1d (v1.2.1)
+--------------------------------------------------------------------------------
+Copyright (c) 2018-2023, VideoLAN and dav1d authors.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--------------------------------------------------------------------------------
+4. Proprietary Core Engine & Pro Extensions: SilkCoreKit
+--------------------------------------------------------------------------------
+Copyright (C) 2026 SilkPlayer. All rights reserved.
+
+The SilkCoreKit binary module (containing proprietary Metal tone mapping shaders,
+local media indexing engine, and licensing engines) is independent proprietary
+software developed by the author. It contains zero GPL-licensed code and is
+physically decoupled from the open-source frontend.
+
+--------------------------------------------------------------------------------
+5. GNU Lesser General Public License (LGPL) Version 3
+--------------------------------------------------------------------------------
+Version 3, 29 June 2007
+Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+
+This version of the GNU Lesser General Public License incorporates the terms
+and conditions of version 3 of the GNU General Public License, supplemented
+by the additional permissions listed in the full LGPL-3.0 text at:
+https://www.gnu.org/licenses/lgpl-3.0.txt
+https://www.gnu.org/licenses/gpl-3.0.txt

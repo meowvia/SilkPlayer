@@ -559,14 +559,16 @@ public struct SilkSettingsView: View {
                 }
 
                 Button {
-                    if let url = URL(string: "https://github.com/meowvia/SilkPlayer/blob/main/LICENSE") {
+                    if let resourceURL = Bundle.main.url(forResource: "THIRD_PARTY_LICENSES", withExtension: "txt") {
+                        NSWorkspace.shared.open(resourceURL)
+                    } else if let url = URL(string: "https://github.com/meowvia/SilkPlayer/blob/main/Documentation/THIRD_PARTY.md") {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "doc.text")
                             .font(.system(size: 11.5))
-                        Text("LGPL-3.0")
+                        Text(L10n.tr("Licenses & Notices", "开源许可与致谢"))
                             .font(.system(size: 12))
                     }
                     .padding(.horizontal, 10)
