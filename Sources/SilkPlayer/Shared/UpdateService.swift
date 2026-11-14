@@ -116,17 +116,17 @@ public final class UpdateService {
         request.setValue("SilkPlayer/\(currentAppVersion)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
 
-        Task.detached(priority: .utility) { [weak self] in
+        Task(priority: .utility) { [weak self] in
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                    await MainActor.run { completion(false, nil) }
+                    completion(false, nil)
                     return
                 }
 
                 guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let rawTagName = json["tag_name"] as? String else {
-                    await MainActor.run { completion(false, nil) }
+                    completion(false, nil)
                     return
                 }
 
@@ -134,28 +134,26 @@ public final class UpdateService {
                 let assets = json["assets"] as? [[String: Any]]
                 let resolvedDownloadURL = Self.resolveDownloadURLString(version: remoteVersion, assets: assets)
 
-                await MainActor.run {
-                    guard let self = self else { return }
-                    let current = self.currentAppVersion
-                    let comparison = Self.compareVersions(remoteVersion, current)
+                guard let self = self else { return }
+                let current = self.currentAppVersion
+                let comparison = Self.compareVersions(remoteVersion, current)
 
-                    if comparison == .orderedDescending {
-                        self.latestVersion = remoteVersion
-                        self.latestDownloadURL = resolvedDownloadURL
-                        self.hasPendingUpdate = true
-                        UserDefaults.standard.set(remoteVersion, forKey: self.userDefaultsLatestVersionKey)
-                        UserDefaults.standard.set(resolvedDownloadURL, forKey: self.userDefaultsLatestDownloadURLKey)
-                        completion(true, remoteVersion)
-                    } else {
-                        self.latestDownloadURL = nil
-                        self.hasPendingUpdate = false
-                        UserDefaults.standard.removeObject(forKey: self.userDefaultsLatestVersionKey)
-                        UserDefaults.standard.removeObject(forKey: self.userDefaultsLatestDownloadURLKey)
-                        completion(false, nil)
-                    }
+                if comparison == .orderedDescending {
+                    self.latestVersion = remoteVersion
+                    self.latestDownloadURL = resolvedDownloadURL
+                    self.hasPendingUpdate = true
+                    UserDefaults.standard.set(remoteVersion, forKey: self.userDefaultsLatestVersionKey)
+                    UserDefaults.standard.set(resolvedDownloadURL, forKey: self.userDefaultsLatestDownloadURLKey)
+                    completion(true, remoteVersion)
+                } else {
+                    self.latestDownloadURL = nil
+                    self.hasPendingUpdate = false
+                    UserDefaults.standard.removeObject(forKey: self.userDefaultsLatestVersionKey)
+                    UserDefaults.standard.removeObject(forKey: self.userDefaultsLatestDownloadURLKey)
+                    completion(false, nil)
                 }
             } catch {
-                await MainActor.run { completion(false, nil) }
+                completion(false, nil)
             }
         }
     }
@@ -235,21 +233,19 @@ public final class UpdateService {
         let tempDir = FileManager.default.temporaryDirectory
         let targetDMG = tempDir.appendingPathComponent(dmgName)
 
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task(priority: .userInitiated) { [weak self] in
             do {
                 let (tempLocalURL, _) = try await URLSession.shared.download(from: downloadURL)
                 try? FileManager.default.removeItem(at: targetDMG)
                 try FileManager.default.moveItem(at: tempLocalURL, to: targetDMG)
 
-                await MainActor.run {
-                    self?.downloadProgress = 1.0
-                    self?.launchInPlaceUpdateScript(dmgPath: targetDMG.path)
-                }
+                guard let self = self else { return }
+                self.downloadProgress = 1.0
+                self.launchInPlaceUpdateScript(dmgPath: targetDMG.path)
             } catch {
-                await MainActor.run {
-                    self?.isDownloading = false
-                    self?.alertErrorMessage = L10n.tr("Download failed: ", "下载失败: ") + error.localizedDescription
-                }
+                guard let self = self else { return }
+                self.isDownloading = false
+                self.alertErrorMessage = L10n.tr("Download failed: ", "下载失败: ") + error.localizedDescription
             }
         }
     }
