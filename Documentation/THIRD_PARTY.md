@@ -9,6 +9,7 @@ SilkPlayer relies on open-source libraries and native platform frameworks. This 
 | Component | License | Origin / Repository | Linkage | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
 | **FFmpeg** (6.1.2) | **LGPL-3.0** (构建参数 `--disable-gpl --enable-version3`，不含 GPL 组件) | [FFmpeg Official](https://ffmpeg.org) | Dynamic Frameworks (`Libavformat`, `Libavcodec`, `Libswscale`, `Libavutil`, `Libswresample`) | Media container demuxing (MKV, MP4, WebM, etc.), audio decoding, and software video fallbacks. |
+| **dav1d** (1.2.1) | **BSD-2-Clause** | [VideoLAN dav1d](https://code.videolan.org/videolan/dav1d) | Static integration into `Libavcodec.framework` | AV1 high-efficiency video decoding. |
 | **libplacebo / mpv** | **LGPL-2.1+ / GPL-2.0+** | [libplacebo](https://code.videolan.org/videolan/libplacebo) / [mpv](https://github.com/mpv-player/mpv) | Reference Only (No compiled code linked) | Reference color science and international standard (ITU-R BT.2124 / SMPTE ST 2084) specification verification. |
 
 ---
@@ -244,6 +245,7 @@ The following system frameworks are provided by Apple Inc. as part of the macOS 
 - **SilkPlayer Repository Licensing**: This public repository of SilkPlayer is licensed under the **GNU Lesser General Public License 3.0 (LGPL-3.0)**.
 - **Proprietary Architecture & Physical Isolation**: Proprietary intellectual property, including the SilkPlayback Engine (hardware decode & audio master clock), SilkRender Pipeline (Metal 3 & Dolby Vision Profile 5 IPTPQc2 GPU reshaping pipeline), and SilkThumb Engine (fast-seek & LRU thumbnail caching architectures), are physically decoupled and isolated in `SilkCoreKit`.
 - **Public Open-Source Notice**: All public frontend source code of SilkPlayer is accessible under LGPL-3.0 terms.
+- **Application Bundle License Embedding**: Every compiled application bundle embeds full license texts and third-party notices under `Contents/Resources/Licenses/` (`LICENSE`, `LICENSE.GPL`, `THIRD_PARTY_LICENSES.txt`, and `SILKCOREKIT_LICENSE.md`).
 - **Third-Party Open-Source Notice**: Third-party components bundled or linked retain their respective upstream copyrights and licensing terms. See individual upstream repositories for corresponding upstream source code.
 
 ---

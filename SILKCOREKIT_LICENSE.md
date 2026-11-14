@@ -1,4 +1,4 @@
-# SilkCoreKit Binary License Agreement (Draft / 许可协议草案)
+# SilkCoreKit Binary License Agreement (许可协议)
 
 Copyright (c) 2026 meowvia. All Rights Reserved.
 
@@ -9,20 +9,24 @@ By downloading, copying, or using the precompiled binary package of SilkCoreKit 
 ---
 
 ### 1. Grant of License
-Subject to the terms and restrictions herein, the author grants you a revocable, non-exclusive, non-transferable, royalty-free personal license to:
-- Use the binary framework solely as an embedded playback and rendering component integrated within the SilkPlayer application.
-- Use the binary framework for personal, non-commercial media playback on compatible macOS devices (Apple Silicon).
+Subject to the terms and restrictions herein, the author grants you a revocable, non-exclusive, non-transferable license to:
+- **Community / Standard Edition**: Use the precompiled binary framework solely as an embedded playback and rendering component integrated within the SilkPlayer application for personal, non-commercial media playback on compatible macOS devices.
+- **Pro Edition**: Use the advanced playback, rendering, and cloud synchronization features of the binary framework in accordance with a valid commercial license key or active subscription granted by meowvia.
 
 ### 2. License Restrictions
-Except as expressly permitted by applicable mandatory law, you agree NOT to, and will not permit any third party to:
-- Decompile, disassemble, reverse engineer, decrypt, extract, or otherwise attempt to derive source code, Metal shaders, or algorithms from the `SilkCoreKit` binary library.
-- Redistribute, sell, lease, rent, license, sub-license, host, or commercially exploit the `SilkCoreKit` binary library as a standalone package or inside third-party applications without explicit prior written authorization.
+Except as expressly permitted by applicable mandatory law or as set forth below, you agree NOT to, and will not permit any third party to:
+- Decompile, disassemble, reverse engineer, decrypt, extract, or otherwise attempt to derive source code, Metal shaders, or proprietary algorithms from the `SilkCoreKit` binary library.
+- Redistribute, sell, lease, rent, license, sub-license, host, or commercially exploit the `SilkCoreKit` binary library as a standalone package or inside third-party applications without explicit prior written authorization from meowvia.
 - Modify, patch, or tamper with the binary symbols, export tables, metadata, or cryptographic signatures of `SilkCoreKit`.
 - Remove, obscure, or alter any copyright notices, trademarks, or proprietary rights notices embedded in or affixed to `SilkCoreKit`.
+
+**LGPL-3.0 Safe Harbor & Debugging Carve-Out**:
+Nothing in this Section 2 or this Agreement shall restrict, limit, or impair the licensee's rights under Section 4 of the GNU Lesser General Public License v3.0 (LGPL-3.0) to inspect, debug, modify, or relink dynamically linked third-party LGPL libraries (specifically the embedded FFmpeg dynamic frameworks), or to conduct reverse engineering strictly to the extent necessary to debug modifications to such dynamically linked LGPL libraries.
 
 ### 3. Architectural Boundary & Dual-License Structure
 - **Boundary Isolation**: `SilkCoreKit` is an independent, closed-source proprietary core library physically and architecturally decoupled from the host application across the standard Swift Package Manager binaryTarget interface (`.binaryTarget(name: "SilkCoreKit", ...)`).
 - **Frontend Independence**: The public host player repository (SilkPlayer) is distributed under the GNU Lesser General Public License v3.0 (LGPL-3.0). Modifications, forks, or contributions to the LGPL-licensed host player frontend do NOT grant any rights to the proprietary source code, internal algorithms, or commercial assets of `SilkCoreKit`.
+- **Redistribution Terms**: Redistribution of compiled binary packages of SilkPlayer embedding `SilkCoreKit` is permitted for official releases and non-commercial personal forks, provided all third-party license notices, this Agreement, and applicable LGPL notices remain intact. Commercial redistribution or bundling requires prior written authorization.
 
 ### 4. No Warranty & Limitation of Liability
 `SILKCOREKIT` IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF OR INABILITY TO USE THE SOFTWARE.

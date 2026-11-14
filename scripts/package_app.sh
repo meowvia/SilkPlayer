@@ -187,6 +187,25 @@ if [[ -d "${PROJECT_DIR}/Resources/Turntable" ]]; then
     cp -R "${PROJECT_DIR}/Resources/Turntable" "${APP_BUNDLE}/Contents/Resources/"
 fi
 
+# Embed licenses and third-party notices into Contents/Resources/Licenses
+mkdir -p "${APP_BUNDLE}/Contents/Resources/Licenses"
+cp "${PROJECT_DIR}/LICENSE" "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE"
+if [[ -f "${PROJECT_DIR}/LICENSE.GPL" ]]; then
+    cp "${PROJECT_DIR}/LICENSE.GPL" "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE.GPL"
+fi
+if [[ -f "${PROJECT_DIR}/Resources/THIRD_PARTY_LICENSES.txt" ]]; then
+    cp "${PROJECT_DIR}/Resources/THIRD_PARTY_LICENSES.txt" "${APP_BUNDLE}/Contents/Resources/Licenses/THIRD_PARTY_LICENSES.txt"
+fi
+if [[ -f "${PROJECT_DIR}/SILKCOREKIT_LICENSE.md" ]]; then
+    cp "${PROJECT_DIR}/SILKCOREKIT_LICENSE.md" "${APP_BUNDLE}/Contents/Resources/Licenses/SILKCOREKIT_LICENSE.md"
+fi
+
+# Assert license completeness
+if [[ ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE" || ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/THIRD_PARTY_LICENSES.txt" ]]; then
+    echo "Error: Bundle missing required license assets in Contents/Resources/Licenses!" >&2
+    exit 1
+fi
+
 # Copy SwiftPM resource bundles if present
 find "${PROJECT_DIR}/.build" -path "*/Release/*.bundle" -type d | while read -r b; do
     cp -R "${b}" "${APP_BUNDLE}/Contents/Resources/"

@@ -751,13 +751,19 @@ public struct SilkSettingsView: View {
                 aboutInfoRow(
                     icon: "cpu",
                     title: L10n.tr("Decode Core", "解码核心"),
-                    value: "SilkCoreKit · VideoToolbox HW"
+                    value: "SilkCoreKit · VideoToolbox HW · FFmpeg (LGPL)"
                 )
                 Divider().opacity(0.12).padding(.vertical, 3)
                 aboutInfoRow(
                     icon: "checkmark.seal",
-                    title: L10n.tr("License", "开源协议"),
+                    title: L10n.tr("Application Shell", "应用框架"),
                     value: "GNU LGPL v3.0"
+                )
+                Divider().opacity(0.12).padding(.vertical, 3)
+                aboutInfoRow(
+                    icon: "lock.shield",
+                    title: L10n.tr("Core Engine", "核心引擎"),
+                    value: "SilkCoreKit Proprietary (meowvia)"
                 )
             }
             .padding(.horizontal, 24)
@@ -801,14 +807,12 @@ public struct SilkSettingsView: View {
                 }
 
                 Button {
-                    if let url = URL(string: "https://github.com/meowvia/SilkPlayer/blob/main/LICENSE") {
-                        NSWorkspace.shared.open(url)
-                    }
+                    openLicensesNotice()
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "doc.text")
                             .font(.system(size: 11.5))
-                        Text("LGPL-3.0")
+                        Text(L10n.tr("Licenses & Notices", "开源与第三方许可"))
                             .font(.system(size: 12))
                     }
                     .padding(.horizontal, 10)
@@ -824,6 +828,20 @@ public struct SilkSettingsView: View {
                 .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func openLicensesNotice() {
+        if let bundlePath = Bundle.main.resourcePath {
+            let licensesPath = (bundlePath as NSString).appendingPathComponent("Licenses/THIRD_PARTY_LICENSES.txt")
+            let fileURL = URL(fileURLWithPath: licensesPath)
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                NSWorkspace.shared.open(fileURL)
+                return
+            }
+        }
+        if let url = URL(string: "https://github.com/meowvia/SilkPlayer/blob/main/Documentation/THIRD_PARTY.md") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private func aboutInfoRow(icon: String, title: String, value: String) -> some View {
