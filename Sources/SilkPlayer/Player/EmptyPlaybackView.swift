@@ -81,36 +81,40 @@ public struct EmptyPlaybackView: View {
                     SilkBrandLogoView(size: 104, isInteractive: true)
 
                     if licenseEngine.isProActive {
-                        HStack(spacing: 5) {
-                            Text("SilkPlayer")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.88))
-
-                            Text("PRO")
-                                .font(.system(size: 9.5, weight: .heavy, design: .rounded))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(red: 1.0, green: 0.88, blue: 0.65),
-                                            Color(red: 0.95, green: 0.65, blue: 0.25)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+                        Text("PRO")
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 1.0, green: 0.88, blue: 0.65),
+                                        Color(red: 0.95, green: 0.65, blue: 0.25)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2.5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .fill(Color(red: 0.22, green: 0.16, blue: 0.12).opacity(0.95))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 0.95, green: 0.65, blue: 0.25).opacity(0.8),
+                                                Color(red: 0.65, green: 0.35, blue: 0.15).opacity(0.4)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 0.8
                                     )
-                                )
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1.5)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                        .fill(Color(red: 0.22, green: 0.16, blue: 0.12).opacity(0.95))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                        .stroke(Color(red: 0.95, green: 0.65, blue: 0.25).opacity(0.65), lineWidth: 0.6)
-                                )
-                                .shadow(color: Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.25), radius: 3, x: 0, y: 1)
-                        }
-                        .opacity(isHoveringLogo ? 1.0 : 0.82)
+                            )
+                            .shadow(color: Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.25), radius: 3, x: 0, y: 1)
+                            .opacity(isHoveringLogo ? 1.0 : 0.85)
                     }
                 }
             }
