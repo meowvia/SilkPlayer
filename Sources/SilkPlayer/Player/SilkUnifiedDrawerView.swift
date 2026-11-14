@@ -18,6 +18,8 @@ public struct SilkPlaylistDrawerView: View {
     @State private var hoveredIndex: Int? = nil
     @State private var isFooterClearHovered: Bool = false
     @State private var isDrawerDropTargeted: Bool = false
+    @State private var isAwaitingClearConfirm: Bool = false
+    @State private var clearConfirmResetTask: Task<Void, Never>? = nil
 
     public init(
         player: PlayerCore,
@@ -258,31 +260,46 @@ public struct SilkPlaylistDrawerView: View {
 
                 if !playlist.isEmpty {
                     Button(action: {
-                        withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                            playlist.clear()
+                        if isAwaitingClearConfirm {
+                            clearConfirmResetTask?.cancel()
+                            clearConfirmResetTask = nil
+                            isAwaitingClearConfirm = false
+                            withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                playlist.clear()
+                            }
+                        } else {
+                            isAwaitingClearConfirm = true
+                            clearConfirmResetTask?.cancel()
+                            clearConfirmResetTask = Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                                guard !Task.isCancelled else { return }
+                                withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                    isAwaitingClearConfirm = false
+                                }
+                            }
                         }
                     }) {
                         HStack(spacing: 3.5) {
-                            Image(systemName: "trash")
+                            Image(systemName: isAwaitingClearConfirm ? "exclamationmark.triangle.fill" : "trash")
                                 .font(.system(size: 9.5))
-                            Text(L10n.clearAll)
+                            Text(isAwaitingClearConfirm ? L10n.tr("Confirm Clear", "确定清空") : L10n.clearAll)
                                 .font(.system(size: 10.5, weight: .medium))
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
-                        .foregroundColor(isFooterClearHovered ? Color(nsColor: .systemRed) : .white.opacity(0.65))
+                        .foregroundColor(isAwaitingClearConfirm ? Color(nsColor: .systemRed) : (isFooterClearHovered ? Color(nsColor: .systemRed) : .white.opacity(0.65)))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4.5)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(isFooterClearHovered ? Color.red.opacity(0.14) : Color.white.opacity(0.06))
+                                .fill(isAwaitingClearConfirm ? Color.red.opacity(0.24) : (isFooterClearHovered ? Color.red.opacity(0.14) : Color.white.opacity(0.06)))
                         )
                     }
                     .buttonStyle(.plain)
                     .focusable(false)
                     .focusEffectDisabled()
                     .onHover { isFooterClearHovered = $0 }
-                    .help(L10n.tr("Clear All (Empty Playlist)", "一键清空播放列表"))
+                    .help(isAwaitingClearConfirm ? L10n.tr("Click again to confirm clearing playlist", "再次点击以确认清空播放列表") : L10n.tr("Clear All (Empty Playlist)", "一键清空播放列表"))
                 }
             }
             .padding(.horizontal, 10)
