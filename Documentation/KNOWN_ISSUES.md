@@ -29,6 +29,7 @@
 | ISSUE-019 | 竖屏/极窄窗口（`.minimal` 档）底栏音量按钮未隐藏导致与“下一首”按钮重叠冲突 | 视频 HUD 底栏 / SilkPlayer (PlayerHUDView, HUDVolumeSlider) | Medium | **已修复**（`1.6.0` 已落地） | 1.6.0 |
 | ISSUE-020 | 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题 | 顶部菜单栏 / SilkPlayer (PlayerCommands, PlayerCore) | Low | **已解决**（`1.6.0` 已移除并由右键菜单方案替代） | 1.6.0 |
 | ISSUE-021 | macOS 多显示器扩展屏全屏播放时，副屏移动鼠标误触发控件唤醒与沉浸态退出 | 全屏与交互 / SilkPlayer (PlayerHUDView) | Medium | 已复现确认，列入 1.7.0 修复计划 | 1.6.0 |
+| ISSUE-022 | 播放竖屏视频后关闭，播放窗口未复位为标准横向尺寸导致空状态视窗形状异常 | 窗口几何与生命周期 / SilkPlayer (AppShellView & WindowGeometry) | Medium | 已复现确认，列入 1.7.0 修复计划 | 1.6.0 |
 
 ---
 
@@ -927,6 +928,51 @@ public enum WindowPresentationState: Equatable {
    当全屏播放窗口处于非主键窗口（`!hostWin.isKeyWindow`）且鼠标未在其区域内时，严格保持静默沉浸态，绝不自发重置自动隐藏计时器。
 3. **自动化测试守卫**：
    在 `Tests/SilkPlayerTests/` 中新增 Test 64，模拟全屏与非激活态下跨屏幕/窗口外事件派发，验证 `isHUDVisible` 保持 `false` 不受干扰。
+
+---
+
+## ISSUE-022: 播放竖屏视频后关闭，播放窗口未复位为标准横向尺寸导致空状态视窗形状异常
+
+- **关联 GitHub Issue**: [#9 (先播放竖屏视频后关闭，播放器界面形状异常)](https://github.com/meowvia/SilkPlayer/issues/9)
+- **提出时间**: 2026-11-14
+- **影响范围**: 竖屏/短视频播放后退出、空状态欢迎界面布局
+- **严重程度**: Medium
+- **当前状态**: **已复现并定位根因，已列入 1.7.0 修复计划**
+
+### 1. 缺陷现象
+用户操作路径：
+1. 打开并播放竖屏视频（如 9:16 分辨率的短视频，尺寸 1080×1920 或 720×1280）；
+2. 播放器自动启用智能贴合，将窗口自适应调整为竖向细长长方形（如宽 450、高 800，或实测截图中的 640×821）；
+3. 用户关闭当前媒体播放（按 Esc 键、点击顶栏关闭媒体 X 按钮，或按快捷键 `⌘W`）；
+4. **异常表现**：当前视频关闭后，视窗切换回“拖拽视频至此处播放”的空状态欢迎界面（[`EmptyPlaybackView`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/EmptyPlaybackView.swift)），但**窗口物理尺寸完全停留在竖屏长条状态，没有恢复为标准的 16:9 横向桌面窗口（960×540）**，导致欢迎界面的 Logo、拖拽引导文案被严重挤压变形，呈现极度不协调的手机视窗比例。
+
+### 2. 代码核查与根因分析
+1. **`AppShellView.swift:stopPlayback()` 缺失视窗几何复位逻辑**：
+   - 现有退出播放实现：
+     ```swift
+     private func stopPlayback() {
+         ...
+         player.stop()
+         withAnimation(.easeInOut(duration: 0.22)) {
+             navigationModel.state = .idle
+         }
+     }
+     ```
+   - 在退出播放切回 `.idle` 状态时，仅调用了 `player.stop()` 清空播放核心状态，完全未对宿主窗口的几何矩形（`window.frame`）与最小尺寸约束（`window.minSize`）做复位处理；
+2. **竖屏视频播放时写入了纵向几何与极窄约束**：
+   - 在播放竖屏视频时，[`PlayerCore+WindowGeometry.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/PlayerCore+WindowGeometry.swift) 将窗口设为了纵向比例，并将 `minContentSize` 锁定在竖屏比例；
+   - 当播放停止回到欢迎界面时，窗口残留着上一个竖屏媒体的尺寸与约束，且由于 `didCenterInitialColdLaunchWindow` 仅在冷启动运行一次，导致窗口被永久卡在纵向狭窄比例。
+
+### 3. 1.7.0 精确定向修复计划
+1. **退出播放时的自适应纵横比复位门控**：
+   在 `stopPlayback()` 与返回欢迎界面的关键路径中，检测当前窗口是否处于竖屏状态（`window.frame.width < window.frame.height`）或非标准比例：
+   - 若当前为竖屏残留尺寸，自动取之前记忆的横向尺寸（`lastLandscapeContentSize`）或系统默认基准横屏尺寸（`960 × 540`）；
+   - 以当前窗口中心为基准（居中平滑展开）执行带动画平滑复位：
+     `window.setFrame(centeredLandscapeFrame, display: true, animate: true)`；
+   - 彻底释放竖屏 `minSize`，将其重置为标准横向空状态最小约束（`480 × 270`）。
+2. **自动化测试守卫**：
+   在 `Tests/SilkPlayerTests/` 中新增 Test 65，模拟竖屏媒体播放后触发 `stopPlayback()`，断言窗口纵横比成功复位为 `>= 1.0` 的标准横向比例。
+
 
 
 
