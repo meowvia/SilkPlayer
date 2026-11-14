@@ -454,18 +454,8 @@ public struct PlayerHUDView: View {
         .padding(.horizontal, tier.outerBottomHorizontalPadding)
         .padding(.top, 24)
         .padding(.bottom, 14)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color.clear,
-                    Color.black.opacity(0.10),
-                    Color.black.opacity(0.40)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
-        )
+        .background(Color.clear)
+        .shadow(color: .black.opacity(0.60), radius: 2.0, x: 0, y: 1.0)
     }
 
     // MARK: - Center Transport Group (Symmetrical & Physically Centered)
