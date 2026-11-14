@@ -43,25 +43,63 @@ public struct MediaFileClassifier: Sendable {
         return .unsupported
     }
 
-    /// Automatically locates companion subtitle files matching the media basename in the parent directory
+    /// Automatically locates companion subtitle files matching the media basename in the parent directory and Subs/ subfolders
     public static func findCompanionSubtitles(for url: URL) -> [URL] {
         guard url.isFileURL else { return [] }
+        let fm = FileManager.default
         let parentDir = url.deletingLastPathComponent()
         let baseName = url.deletingPathExtension().lastPathComponent.lowercased()
-        guard let contents = try? FileManager.default.contentsOfDirectory(
-            at: parentDir,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
-            return []
-        }
         let subExtensions: Set<String> = ["ass", "ssa", "srt", "vtt", "sub"]
-        return contents.filter { fileURL in
-            let ext = fileURL.pathExtension.lowercased()
-            guard subExtensions.contains(ext) else { return false }
-            let name = fileURL.deletingPathExtension().lastPathComponent.lowercased()
-            return name.hasPrefix(baseName) || name == baseName
+
+        var candidates: [URL] = []
+        var searchedDirs: [URL] = [parentDir]
+
+        // PROPOSAL-008: Check for companion subtitle folders in parent directory: Subs, subtitles, Sub
+        let potentialSubDirNames = ["subs", "subtitles", "sub"]
+        if let parentContents = try? fm.contentsOfDirectory(at: parentDir, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
+            for item in parentContents {
+                var isDir: ObjCBool = false
+                if fm.fileExists(atPath: item.path, isDirectory: &isDir), isDir.boolValue {
+                    let folderName = item.lastPathComponent.lowercased()
+                    if potentialSubDirNames.contains(folderName) {
+                        searchedDirs.append(item)
+                    }
+                }
+            }
         }
+
+        var seenPaths = Set<String>()
+        for dir in searchedDirs {
+            let isSubsFolder = dir != parentDir
+            if isSubsFolder {
+                if let enumerator = fm.enumerator(at: dir, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+                    for case let fileURL as URL in enumerator {
+                        let ext = fileURL.pathExtension.lowercased()
+                        guard subExtensions.contains(ext) else { continue }
+                        let name = fileURL.deletingPathExtension().lastPathComponent.lowercased()
+                        if name.hasPrefix(baseName) || name == baseName || name.contains(baseName) || baseName.contains(name) {
+                            if seenPaths.insert(fileURL.path).inserted {
+                                candidates.append(fileURL)
+                            }
+                        }
+                    }
+                }
+            } else {
+                if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+                    for fileURL in contents {
+                        let ext = fileURL.pathExtension.lowercased()
+                        guard subExtensions.contains(ext) else { continue }
+                        let name = fileURL.deletingPathExtension().lastPathComponent.lowercased()
+                        if name.hasPrefix(baseName) || name == baseName {
+                            if seenPaths.insert(fileURL.path).inserted {
+                                candidates.append(fileURL)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return candidates
     }
 
     /// Scans a directory or external volume for playable video files (respects autoScanSubfolders setting)
