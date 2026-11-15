@@ -49,7 +49,7 @@ public struct AppShellView: View {
     }
 
     private var isProLibraryActive: Bool {
-        canUseLANFeatures
+        canUseLANFeatures && !libraryEngine.sources.isEmpty
     }
 
     private var shouldHidePlaylistDrawerForPro: Bool {
@@ -973,8 +973,7 @@ public struct LeftLANSourceHandleTab: View {
 
     public var body: some View {
         HStack(spacing: 0) {
-            let activeTheme = SilkLibraryTheme.current()
-            let isLight = useWarmLightStyle || activeTheme.isLight
+            let isLight = useWarmLightStyle
             SilkDrawerHandleRepresentable(
                 isDrawerVisible: isDrawerVisible,
                 isLeadingEdge: true,
