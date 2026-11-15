@@ -10,6 +10,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp?.setActivationPolicy(.regular)
         SilkProIconManager.syncApplicationIcon(isProActive: SilkProLicenseEngine.shared.isProActive)
         NSApp?.activate(ignoringOtherApps: true)
+        Task { @MainActor in
+            await SilkUsageAnalytics.shared.recordLaunchIfEnabled()
+        }
         let args = CommandLine.arguments.dropFirst()
         var validFiles: [String] = []
         for arg in args where !arg.hasPrefix("-") {

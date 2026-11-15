@@ -303,6 +303,14 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         settings.proLibraryTheme = .shenghui
         XCTAssertEqual(settings.proLibraryTheme, .shenghui)
         XCTAssertFalse(settings.proLibraryTheme.isLight)
+
+        settings.proLibraryTheme = .yaojin
+        XCTAssertEqual(settings.proLibraryTheme, .yaojin)
+        XCTAssertFalse(settings.proLibraryTheme.isLight)
+
+        settings.proLibraryTheme = .qingci
+        XCTAssertEqual(settings.proLibraryTheme, .qingci)
+        XCTAssertTrue(settings.proLibraryTheme.isLight)
     }
 
     // MARK: - 4. SMB Input Parsing & Share Enumeration Tests
@@ -520,9 +528,11 @@ final class ProLibraryAndLicenseTests: XCTestCase {
     func testAdNoiseStrippingAndSeriesFolderMerge() async throws {
         guard !isCIMockEnvironment else { return }
 
-        XCTAssertEqual(SilkLibraryTheme.allCases.map(\.displayName).count, 2)
+        XCTAssertEqual(SilkLibraryTheme.allCases.map(\.displayName).count, 4)
         XCTAssertTrue(SilkLibraryTheme.allCases.contains(.shenghui))
+        XCTAssertTrue(SilkLibraryTheme.allCases.contains(.yaojin))
         XCTAssertTrue(SilkLibraryTheme.allCases.contains(.nuanbai))
+        XCTAssertTrue(SilkLibraryTheme.allCases.contains(.qingci))
 
         let tempDir = try makeTempDir()
         let dbURL = tempDir.appendingPathComponent("noise_merge.sqlite")

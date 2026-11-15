@@ -24,8 +24,24 @@ public struct SilkSettingsView: View {
         SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
     }
 
+    private var isProThemed: Bool {
+        licenseEngine.isProActive
+    }
+
     private var isWarmWhitePro: Bool {
-        licenseEngine.isProActive && currentTheme == .nuanbai
+        isProThemed
+    }
+
+    private var primaryTextColor: Color {
+        isProThemed ? currentTheme.primaryText : .primary
+    }
+
+    private var secondaryTextColor: Color {
+        isProThemed ? currentTheme.secondaryText : .secondary
+    }
+
+    private var dividerOpacity: Double {
+        isProThemed ? (currentTheme.isLight ? 0.35 : 0.20) : 0.12
     }
 
     public init() {}
@@ -167,6 +183,10 @@ public struct SilkSettingsView: View {
                         Circle()
                             .fill(Color.red)
                             .frame(width: 6, height: 6)
+                            .overlay(
+                                Circle()
+                                    .stroke(isProThemed ? currentTheme.cardSurface : Color(nsColor: .windowBackgroundColor), lineWidth: 1.2)
+                            )
                             .offset(x: 4, y: -2)
                     }
                 }
@@ -239,11 +259,11 @@ public struct SilkSettingsView: View {
                     } else {
                         // 免费版仅保留 macOS 原生“外观模式”（跟随系统/浅色/深色），主题锁定深灰带 PRO 徽标
                         freeAppearanceRow
-                        Divider().opacity(0.12).padding(.vertical, 3)
+                        Divider().opacity(dividerOpacity).padding(.vertical, 3)
                         freeLockedThemeRow
                     }
 
-                    Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
+                    Divider().opacity(dividerOpacity).padding(.vertical, 3)
 
                     // App Language
                     languageRow
@@ -268,7 +288,7 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 32)
 
-                    Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
+                    Divider().opacity(dividerOpacity).padding(.vertical, 3)
 
                     // Fullscreen Clock
                     HStack {
@@ -287,7 +307,7 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 32)
 
-                    Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
+                    Divider().opacity(dividerOpacity).padding(.vertical, 3)
 
                     // Screenshots Directory
                     HStack {
@@ -312,7 +332,7 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 32)
 
-                    Divider().opacity(isWarmWhitePro ? 0.35 : 0.12).padding(.vertical, 3)
+                    Divider().opacity(dividerOpacity).padding(.vertical, 3)
 
                     // Screenshot Format
                     HStack {
@@ -327,6 +347,32 @@ public struct SilkSettingsView: View {
                         .frame(width: 170)
                     }
                     .frame(height: 32)
+                }
+            }
+
+            VStack(spacing: 6) {
+                sectionTitle(L10n.tr("Privacy", "隐私"))
+                settingsFormCard {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(L10n.tr("Anonymous launch statistics", "匿名启动统计"))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(primaryTextColor)
+                            Text(L10n.tr(
+                                "Sends a random installation ID, launch event, and app version to help measure first-seen and returning installations. No media paths or playback content. Turn off to stop and request deletion.",
+                                "仅发送随机安装标识、启动事件和版本，用于统计首次观测与回访安装；不发送媒体路径或播放内容。关闭后停止统计并请求删除该安装记录。"
+                            ))
+                            .font(.system(size: 10))
+                            .foregroundColor(secondaryTextColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                        Toggle("", isOn: $settings.anonymousUsageAnalyticsEnabled)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                    }
+                    .padding(.vertical, 3)
                 }
             }
 
@@ -394,7 +440,7 @@ public struct SilkSettingsView: View {
             .opacity(0.60)
             .help(L10n.tr("Activate SilkPlayer Pro in About to unlock themes", "请在「设置 → 关于」激活 SilkPlayer Pro 解锁主题功能"))
         }
-        .frame(height: 34)
+        .frame(minHeight: 36)
     }
 
     private var proThemeRow: some View {
@@ -403,14 +449,14 @@ public struct SilkSettingsView: View {
                 HStack(spacing: 5) {
                     Text(L10n.tr("Interface Theme", "界面主题"))
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
+                        .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
 
                     proThemeBadge(isUnlocked: true)
                 }
 
-                Text(L10n.tr("Slate drives Dark appearance · Warm White drives Light appearance", "深灰黑胶联动系统深色 (DarkAqua) · 雅致暖白联动系统浅色 (Aqua)"))
+                Text(L10n.tr("Synchronizes app appearance, media library, and music mode", "联动全局外观、媒体库与音乐模式配色"))
                     .font(.system(size: 10))
-                    .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
+                    .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
             }
 
             Spacer()
@@ -421,9 +467,9 @@ public struct SilkSettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 170)
+            .frame(minWidth: 170)
         }
-        .frame(height: 34)
+        .frame(minHeight: 36)
     }
 
     private var languageRow: some View {
@@ -467,7 +513,7 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 34)
 
-                    Divider().opacity(0.12).padding(.vertical, 2)
+                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
 
                     // Continuous Playback
                     HStack {
@@ -485,7 +531,7 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 34)
 
-                    Divider().opacity(0.12).padding(.vertical, 2)
+                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
 
                     // Dual Playlist Mode
                     HStack {
@@ -503,7 +549,7 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 34)
 
-                    Divider().opacity(0.12).padding(.vertical, 2)
+                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
 
                     // Resume Playback Progress
                     HStack {
@@ -521,7 +567,7 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 34)
 
-                    Divider().opacity(0.12).padding(.vertical, 2)
+                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
 
                     // Playback History
                     HStack {
@@ -571,7 +617,7 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 30)
 
-                    Divider().opacity(0.12).padding(.vertical, 2)
+                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
 
                     // Scroll Wheel Action
                     HStack {
@@ -588,7 +634,7 @@ public struct SilkSettingsView: View {
                     }
                     .frame(height: 30)
 
-                    Divider().opacity(0.12).padding(.vertical, 2)
+                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
 
                     // Double Click Action
                     HStack {
@@ -632,7 +678,7 @@ public struct SilkSettingsView: View {
                             ),
                             isOn: $settings.proLibraryHomeEnabled
                         )
-                        Divider().opacity(0.12).padding(.vertical, 4)
+                        Divider().opacity(dividerOpacity).padding(.vertical, 4)
                         lanToggleRow(
                             title: L10n.tr("Auto-Scan Sources on Launch", "启动时自动更新媒体源"),
                             subtitle: L10n.tr(
@@ -643,7 +689,7 @@ public struct SilkSettingsView: View {
                         )
 
                         if !licenseEngine.isProActive {
-                            Divider().opacity(0.12).padding(.vertical, 4)
+                            Divider().opacity(dividerOpacity).padding(.vertical, 4)
                             HStack(spacing: 6) {
                                 Image(systemName: "info.circle")
                                     .font(.system(size: 11))
@@ -682,7 +728,7 @@ public struct SilkSettingsView: View {
                                     .foregroundColor(.primary)
                             }
 
-                            Divider().opacity(0.12)
+                            Divider().opacity(dividerOpacity)
 
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -957,19 +1003,19 @@ public struct SilkSettingsView: View {
                     title: L10n.tr("Rendering Pipeline", "渲染管线"),
                     value: "Apple Silicon Metal Direct (Zero-Copy)"
                 )
-                Divider().opacity(0.12).padding(.vertical, 3)
+                Divider().opacity(dividerOpacity).padding(.vertical, 3)
                 aboutInfoRow(
                     icon: "cpu",
                     title: L10n.tr("Decode Core", "解码核心"),
                     value: "SilkCoreKit · VideoToolbox HW · FFmpeg (LGPL)"
                 )
-                Divider().opacity(0.12).padding(.vertical, 3)
+                Divider().opacity(dividerOpacity).padding(.vertical, 3)
                 aboutInfoRow(
                     icon: "checkmark.seal",
                     title: L10n.tr("Application Shell", "应用框架"),
                     value: "GNU LGPL v3.0"
                 )
-                Divider().opacity(0.12).padding(.vertical, 3)
+                Divider().opacity(dividerOpacity).padding(.vertical, 3)
                 aboutInfoRow(
                     icon: "lock.shield",
                     title: L10n.tr("Core Engine", "核心引擎"),

@@ -134,15 +134,8 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
 
     /// Pro edition theme selection. Backed by `SilkLibraryTheme.userDefaultsKey`.
     public var proLibraryTheme: SilkLibraryTheme {
-        get {
-            if let raw = UserDefaults.standard.string(forKey: SilkLibraryTheme.userDefaultsKey),
-               let parsed = SilkLibraryTheme(rawValue: raw) {
-                return parsed
-            }
-            return .shenghui
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: SilkLibraryTheme.userDefaultsKey)
+        didSet {
+            UserDefaults.standard.set(proLibraryTheme.rawValue, forKey: SilkLibraryTheme.userDefaultsKey)
             applyAppearance()
         }
     }
@@ -171,6 +164,16 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             UserDefaults.standard.set(appLanguage.rawValue, forKey: "appLanguage")
             L10n.invalidateLanguageCache()
             NotificationCenter.default.post(name: .silkLanguageDidChange, object: nil)
+        }
+    }
+    /// Anonymous launch measurement used to compare first-seen and returning installations.
+    /// Enabled by default; users can disable it in General settings.
+    public var anonymousUsageAnalyticsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(anonymousUsageAnalyticsEnabled, forKey: "anonymousUsageAnalyticsEnabled")
+            Task { @MainActor in
+                await SilkUsageAnalytics.shared.setEnabled(anonymousUsageAnalyticsEnabled)
+            }
         }
     }
     public var keepWindowOnTop: Bool {
@@ -405,6 +408,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             let isZh = Locale.preferredLanguages.first?.hasPrefix("zh") ?? true
             self.appLanguage = isZh ? .zhHans : .en
         }
+        self.anonymousUsageAnalyticsEnabled = UserDefaults.standard.object(forKey: "anonymousUsageAnalyticsEnabled") as? Bool ?? true
         self.keepWindowOnTop = UserDefaults.standard.bool(forKey: "keepWindowOnTop")
         self.autoResizeWindow = UserDefaults.standard.object(forKey: "autoResizeWindow") as? Bool ?? true
         self.showLocalTimeInFullscreen = UserDefaults.standard.object(forKey: "showLocalTimeInFullscreen") as? Bool ?? true
@@ -452,6 +456,8 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         self.proHideLegacyPlaylistDrawer = UserDefaults.standard.object(forKey: "proHideLegacyPlaylistDrawer") as? Bool ?? false
         self.proDedicatedAudioLibrary = UserDefaults.standard.object(forKey: "proDedicatedAudioLibrary") as? Bool ?? true
         self.proAutoScanOnLaunch = UserDefaults.standard.object(forKey: "proAutoScanOnLaunch") as? Bool ?? true
+        let rawTheme = UserDefaults.standard.string(forKey: SilkLibraryTheme.userDefaultsKey) ?? SilkLibraryTheme.shenghui.rawValue
+        self.proLibraryTheme = SilkLibraryTheme(rawValue: rawTheme) ?? .shenghui
 
         // Load progress history dictionary
         if let dict = UserDefaults.standard.dictionary(forKey: "playbackProgressHistory") as? [String: Double] {
@@ -463,23 +469,16 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 
     public func applyAppearance() {
-        if SilkProLicenseEngine.shared.isProActive {
-            switch proLibraryTheme {
-            case .nuanbai:
-                NSApp?.appearance = NSAppearance(named: .aqua)
-            case .shenghui:
-                NSApp?.appearance = NSAppearance(named: .darkAqua)
-            @unknown default:
-                NSApp?.appearance = NSAppearance(named: .darkAqua)
-            }
-        } else {
-            switch appearanceMode {
-            case .system:
-                NSApp?.appearance = nil
-            case .light:
-                NSApp?.appearance = NSAppearance(named: .aqua)
-            case .dark:
-                NSApp?.appearance = NSAppearance(named: .darkAqua)
+        let appearance = effectiveNSAppearance
+        NSApp?.appearance = appearance
+        if let settingsWin = PlayerWindowManager.shared.settingsWindow {
+            settingsWin.appearance = appearance
+        }
+        for session in PlayerWindowManager.shared.sessions {
+            if let win = session.window {
+                if session.player?.isPlaying != true || session.player?.isAudioOnly == true {
+                    win.appearance = appearance
+                }
             }
         }
     }

@@ -962,7 +962,9 @@ extension SilkMediaLibraryEngine: @unchecked Sendable {}
 
 public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Codable {
     case shenghui = "shenghui"
+    case yaojin = "yaojin"
     case nuanbai = "nuanbai"
+    case qingci = "qingci"
 
     public var id: String { rawValue }
     public static let userDefaultsKey = "proLibraryThemeId"
@@ -978,29 +980,136 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var displayName: String {
         switch self {
         case .shenghui: return "深灰"
+        case .yaojin: return "曜金"
         case .nuanbai: return "暖白"
+        case .qingci: return "青瓷"
         }
     }
 
-    public var isLight: Bool { self == .nuanbai }
-    public var swatchColor: Color { .accentColor }
-    public var accentColor: Color { .accentColor }
-    public var backgroundBase: Color { .black }
-    public var backgroundHighlight: Color { .black }
-    public var cardSurface: Color { .black }
-    public var cardFocusedSurface: Color { .black }
-    public var pillSurface: Color { .white.opacity(0.08) }
-    public var pillSelectedSurface: Color { .accentColor.opacity(0.2) }
-    public var borderColor: Color { .white.opacity(0.1) }
-    public var surfaceFill: Color { .black }
-    public var surfaceElevatedFill: Color { .black }
-    public var surfaceBorder: Color { .white.opacity(0.1) }
-    public var dividerColor: Color { .white.opacity(0.12) }
-    public var primaryText: Color { .white }
-    public var secondaryText: Color { .white.opacity(0.7) }
+    public var isLight: Bool {
+        switch self {
+        case .shenghui, .yaojin: return false
+        case .nuanbai, .qingci: return true
+        }
+    }
+
+    public var nsAppearance: NSAppearance? {
+        isLight ? NSAppearance(named: .aqua) : NSAppearance(named: .darkAqua)
+    }
+
+    public var swatchColor: Color {
+        switch self {
+        case .shenghui: return Color(red: 0.31, green: 0.53, blue: 0.85)
+        case .yaojin: return Color(red: 0.878, green: 0.624, blue: 0.243)
+        case .nuanbai: return Color(red: 0.980, green: 0.965, blue: 0.941)
+        case .qingci: return Color(red: 0.863, green: 0.914, blue: 0.898)
+        }
+    }
+
+    public var accentColor: Color {
+        switch self {
+        case .shenghui: return Color(red: 0.31, green: 0.53, blue: 0.85)
+        case .yaojin: return Color(red: 0.878, green: 0.624, blue: 0.243)
+        case .nuanbai: return Color(red: 0.784, green: 0.408, blue: 0.180)
+        case .qingci: return Color(red: 0.165, green: 0.482, blue: 0.435)
+        }
+    }
+
+    public var backgroundBase: Color {
+        switch self {
+        case .shenghui: return Color(red: 0.118, green: 0.122, blue: 0.133)
+        case .yaojin: return Color(red: 0.071, green: 0.063, blue: 0.055)
+        case .nuanbai: return Color(red: 0.980, green: 0.965, blue: 0.941)
+        case .qingci: return Color(red: 0.945, green: 0.961, blue: 0.953)
+        }
+    }
+
+    public var backgroundHighlight: Color {
+        switch self {
+        case .shenghui: return Color(red: 0.140, green: 0.148, blue: 0.165)
+        case .yaojin: return Color(red: 0.110, green: 0.094, blue: 0.082)
+        case .nuanbai: return Color(red: 0.953, green: 0.914, blue: 0.859)
+        case .qingci: return Color(red: 0.890, green: 0.922, blue: 0.910)
+        }
+    }
+
+    public var cardSurface: Color {
+        switch self {
+        case .shenghui: return Color(red: 0.149, green: 0.157, blue: 0.173).opacity(0.92)
+        case .yaojin: return Color(red: 0.125, green: 0.108, blue: 0.094).opacity(0.94)
+        case .nuanbai: return Color.white.opacity(0.96)
+        case .qingci: return Color.white.opacity(0.95)
+        }
+    }
+
+    public var cardFocusedSurface: Color {
+        switch self {
+        case .shenghui: return accentColor.opacity(0.14)
+        case .yaojin: return Color(red: 0.878, green: 0.624, blue: 0.243).opacity(0.15)
+        case .nuanbai: return Color(red: 0.965, green: 0.933, blue: 0.890)
+        case .qingci: return Color(red: 0.898, green: 0.937, blue: 0.925)
+        }
+    }
+
+    public var pillSurface: Color {
+        switch self {
+        case .shenghui: return Color.white.opacity(0.065)
+        case .yaojin: return Color(red: 0.96, green: 0.88, blue: 0.74).opacity(0.075)
+        case .nuanbai: return Color(red: 0.941, green: 0.902, blue: 0.839)
+        case .qingci: return Color(red: 0.863, green: 0.906, blue: 0.894)
+        }
+    }
+
+    public var pillSelectedSurface: Color {
+        accentColor.opacity(isLight ? 0.18 : 0.22)
+    }
+
+    public var borderColor: Color {
+        switch self {
+        case .shenghui: return Color.white.opacity(0.095)
+        case .yaojin: return Color(red: 0.92, green: 0.78, blue: 0.52).opacity(0.16)
+        case .nuanbai: return Color(red: 0.894, green: 0.827, blue: 0.749)
+        case .qingci: return Color(red: 0.776, green: 0.839, blue: 0.820)
+        }
+    }
+
+    public var dividerColor: Color {
+        switch self {
+        case .shenghui: return Color.white.opacity(0.22)
+        case .yaojin: return Color(red: 0.92, green: 0.78, blue: 0.52).opacity(0.22)
+        case .nuanbai: return Color(red: 0.922, green: 0.863, blue: 0.796)
+        case .qingci: return Color(red: 0.808, green: 0.863, blue: 0.847)
+        }
+    }
+
+    public var primaryText: Color {
+        switch self {
+        case .shenghui: return Color(red: 0.925, green: 0.933, blue: 0.949)
+        case .yaojin: return Color(red: 0.961, green: 0.937, blue: 0.902)
+        case .nuanbai: return Color(red: 0.169, green: 0.137, blue: 0.110)
+        case .qingci: return Color(red: 0.094, green: 0.141, blue: 0.129)
+        }
+    }
+
+    public var secondaryText: Color {
+        switch self {
+        case .shenghui: return Color(red: 0.604, green: 0.627, blue: 0.667)
+        case .yaojin: return Color(red: 0.639, green: 0.588, blue: 0.533)
+        case .nuanbai: return Color(red: 0.431, green: 0.369, blue: 0.314)
+        case .qingci: return Color(red: 0.337, green: 0.420, blue: 0.396)
+        }
+    }
+
+    public var volumeBoostColor: Color {
+        isLight ? Color(red: 0.82, green: 0.18, blue: 0.22) : Color(red: 0.92, green: 0.45, blue: 0.12)
+    }
+
     public var tertiaryText: Color { .white.opacity(0.5) }
     public var controlFill: Color { .white.opacity(0.08) }
     public var controlHoverFill: Color { .white.opacity(0.14) }
+    public var surfaceFill: Color { backgroundBase }
+    public var surfaceElevatedFill: Color { cardSurface }
+    public var surfaceBorder: Color { borderColor }
     public var colorScheme: ColorScheme { isLight ? .light : .dark }
 }
 

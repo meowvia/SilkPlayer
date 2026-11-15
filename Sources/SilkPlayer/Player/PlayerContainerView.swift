@@ -124,14 +124,21 @@ public struct PlayerContainerView: View {
                 }
 
                 // Transient On-Screen Display (OSD) HUD (Seek, Play/Pause, Track, Adjustments, Screenshot)
-                // Centered at Top with uniform margin across windowed & fullscreen modes (macOS standard)
+                // Centered at Top in video; pinned above bottom bar in music mode to prevent vinyl occlusion
                 if let osd = player.activeOSD {
+                    let activeTheme = SilkLibraryTheme.current()
                     VStack {
-                        PlayerOSDView(notification: osd)
-                            .padding(.top, player.isAudioOnly ? 58 : (player.isFullscreen ? 76 : 84))
-                        Spacer()
+                        if player.isAudioOnly {
+                            Spacer()
+                            PlayerOSDView(notification: osd)
+                                .padding(.bottom, 72)
+                        } else {
+                            PlayerOSDView(notification: osd)
+                                .padding(.top, player.isFullscreen ? 76 : 84)
+                            Spacer()
+                        }
                     }
-                    .environment(\.colorScheme, .dark)
+                    .environment(\.colorScheme, (player.isAudioOnly && activeTheme.isLight) ? .light : .dark)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(false)
                     .zIndex(40)

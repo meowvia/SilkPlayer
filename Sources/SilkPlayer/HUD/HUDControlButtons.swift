@@ -236,8 +236,12 @@ struct HUDSpeedMenuButton: View {
     @State private var isHovered = false
     @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
 
-    private var isWarmWhiteMusic: Bool {
-        player.isAudioOnly && selectedThemeRaw == SilkLibraryTheme.nuanbai.rawValue
+    private var currentTheme: SilkLibraryTheme {
+        SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
+    }
+
+    private var isMusicMode: Bool {
+        player.isAudioOnly
     }
 
     var body: some View {
@@ -253,8 +257,8 @@ struct HUDSpeedMenuButton: View {
                 .monospacedDigit()
                 .foregroundColor(
                     player.speed != 1.0
-                        ? (isWarmWhiteMusic ? SilkLibraryTheme.nuanbai.accentColor : .cyan)
-                        : (isWarmWhiteMusic ? SilkLibraryTheme.nuanbai.primaryText : .white.opacity(0.88))
+                        ? (isMusicMode ? currentTheme.accentColor : .cyan)
+                        : (isMusicMode ? currentTheme.primaryText : .white.opacity(0.88))
                 )
                 .frame(minWidth: 32)
                 .frame(height: 26)
@@ -262,16 +266,16 @@ struct HUDSpeedMenuButton: View {
                 .background(
                     Capsule()
                         .fill(
-                            isWarmWhiteMusic
-                                ? (player.speed != 1.0 ? SilkLibraryTheme.nuanbai.accentColor.opacity(0.15) : (isHovered ? SilkLibraryTheme.nuanbai.pillSurface : Color.clear))
+                            isMusicMode
+                                ? (player.speed != 1.0 ? currentTheme.accentColor.opacity(0.18) : (isHovered ? currentTheme.pillSurface : Color.clear))
                                 : Color.white.opacity(isHovered ? 0.14 : (player.speed != 1.0 ? 0.12 : 0.06))
                         )
                 )
                 .overlay(
                     Capsule()
                         .strokeBorder(
-                            isWarmWhiteMusic
-                                ? (player.speed != 1.0 ? SilkLibraryTheme.nuanbai.accentColor.opacity(0.4) : SilkLibraryTheme.nuanbai.borderColor)
+                            isMusicMode
+                                ? (player.speed != 1.0 ? currentTheme.accentColor.opacity(0.4) : currentTheme.borderColor)
                                 : (player.speed != 1.0 ? Color.cyan.opacity(0.4) : Color.white.opacity(0.15)),
                             lineWidth: 0.6
                         )
@@ -285,7 +289,7 @@ struct HUDSpeedMenuButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .hudTooltip(L10n.tr("Playback Speed (Click to choose)", "倍速播放 (点击选择常规倍速)"), edge: .top)
+        .hudTooltip(player.isAudioOnly ? "" : L10n.tr("Playback Speed (Click to choose)", "倍速播放 (点击选择常规倍速)"), edge: .top)
         .help(L10n.tr("Playback Speed: \(String(format: "%.2fx", player.speed)) (Click to choose)", "倍速播放: \(String(format: "%.2fx", player.speed)) (点击选择常规倍速)"))
     }
 

@@ -49,7 +49,7 @@ public struct AppShellView: View {
     }
 
     private var isProLibraryActive: Bool {
-        canUseLANFeatures && !libraryEngine.sources.isEmpty
+        canUseLANFeatures
     }
 
     private var shouldHidePlaylistDrawerForPro: Bool {
@@ -57,7 +57,7 @@ public struct AppShellView: View {
     }
 
     private var useWarmLightEdgeHandle: Bool {
-        !isPlaying && isProLibraryActive && SilkLibraryTheme(rawValue: proLibraryThemeRaw) == .nuanbai
+        !isPlaying && isProLibraryActive && (SilkLibraryTheme(rawValue: proLibraryThemeRaw)?.isLight == true)
     }
 
     private var rootMinWidth: CGFloat {
@@ -146,6 +146,7 @@ public struct AppShellView: View {
                             }
                         )
                         .edgesIgnoringSafeArea(.all)
+                        .environment(\.colorScheme, .dark)
                         .transition(.opacity)
                     }
 
@@ -249,7 +250,7 @@ public struct AppShellView: View {
                                         }
                                     }
                                 )
-                                .environment(\.colorScheme, .dark)
+                                .environment(\.colorScheme, (SilkLibraryTheme(rawValue: proLibraryThemeRaw)?.isLight == true) ? .light : .dark)
                                 .transition(SilkAnimation.transition(reduceMotion: reduceMotion, standard: .move(edge: .leading)))
                                 Spacer()
                             }
@@ -267,6 +268,11 @@ public struct AppShellView: View {
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
         }
         .preferredColorScheme(settings.effectiveColorScheme)
+        .onChange(of: proLibraryThemeRaw) { _, newRaw in
+            if let theme = SilkLibraryTheme(rawValue: newRaw), settings.proLibraryTheme != theme {
+                settings.proLibraryTheme = theme
+            }
+        }
         .id(settings.appLanguage)
         .frame(minWidth: rootMinWidth, minHeight: rootMinHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -967,17 +973,19 @@ public struct LeftLANSourceHandleTab: View {
 
     public var body: some View {
         HStack(spacing: 0) {
+            let activeTheme = SilkLibraryTheme.current()
+            let isLight = useWarmLightStyle || activeTheme.isLight
             SilkDrawerHandleRepresentable(
                 isDrawerVisible: isDrawerVisible,
                 isLeadingEdge: true,
-                customHandleWidth: useWarmLightStyle ? 8.0 : nil,
-                customFillColor: useWarmLightStyle
+                customHandleWidth: isLight ? 8.0 : nil,
+                customFillColor: isLight
                     ? NSColor(calibratedRed: 0.941, green: 0.902, blue: 0.839, alpha: 0.96)
                     : nil,
-                customStrokeColor: useWarmLightStyle
+                customStrokeColor: isLight
                     ? NSColor(calibratedRed: 0.784, green: 0.408, blue: 0.180, alpha: 0.85)
                     : nil,
-                customArrowColor: useWarmLightStyle
+                customArrowColor: isLight
                     ? NSColor(calibratedRed: 0.784, green: 0.408, blue: 0.180, alpha: 0.95)
                     : nil,
                 onHoverChange: onHoverChange,
