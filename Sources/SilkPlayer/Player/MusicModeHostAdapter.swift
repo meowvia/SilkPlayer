@@ -116,10 +116,6 @@ public final class SilkMusicPlayerHost: SilkMusicModeHost {
 
     public func cyclePlaybackModeAndShowOSD() {
         playlist.togglePlaybackMode()
-        player.showOSD(.pictureAdjustment(
-            name: L10n.tr("Playback Mode", "播放模式"),
-            value: playlist.playbackMode.title
-        ))
         objectWillChange.send()
     }
 
