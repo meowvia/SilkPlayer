@@ -808,6 +808,43 @@ public struct SilkSettingsView: View {
         return full.replacingOccurrences(of: "-pro", with: "").replacingOccurrences(of: "-dev", with: "")
     }
 
+    private var proSuperscriptBadge: some View {
+        Text("PRO")
+            .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [
+                        Color(red: 1.0, green: 0.88, blue: 0.65),
+                        Color(red: 0.95, green: 0.65, blue: 0.25)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .padding(.horizontal, 4.5)
+            .padding(.vertical, 1.5)
+            .background(
+                RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                    .fill(Color(red: 0.22, green: 0.16, blue: 0.12).opacity(0.95))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.95, green: 0.65, blue: 0.25).opacity(0.8),
+                                Color(red: 0.65, green: 0.35, blue: 0.15).opacity(0.4)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.75
+                    )
+            )
+            .shadow(color: Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.25), radius: 2.5, x: 0, y: 1)
+            .fixedSize()
+    }
+
     private var aboutSection: some View {
         VStack(spacing: 0) {
             Spacer().frame(height: 10)
@@ -827,49 +864,22 @@ public struct SilkSettingsView: View {
                         )
                 }
 
-                Text("SilkPlayer")
-                    .font(.system(size: 21, weight: .bold))
-                    .foregroundColor(.primary)
-                    .overlay(alignment: .topTrailing) {
-                        if licenseEngine.isProActive {
-                            Text("PRO")
-                                .font(.system(size: 8.5, weight: .heavy, design: .rounded))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(red: 1.0, green: 0.88, blue: 0.65),
-                                            Color(red: 0.95, green: 0.65, blue: 0.25)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .padding(.horizontal, 4.5)
-                                .padding(.vertical, 1.5)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                                        .fill(Color(red: 0.22, green: 0.16, blue: 0.12).opacity(0.95))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(red: 0.95, green: 0.65, blue: 0.25).opacity(0.8),
-                                                    Color(red: 0.65, green: 0.35, blue: 0.15).opacity(0.4)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 0.75
-                                        )
-                                )
-                                .shadow(color: Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.25), radius: 2.5, x: 0, y: 1)
-                                .fixedSize()
-                                .alignmentGuide(.trailing) { d in d[.leading] - 3 }
-                                .alignmentGuide(.top) { d in d[.bottom] - 8 }
-                        }
+                HStack(alignment: .top, spacing: 5) {
+                    if licenseEngine.isProActive {
+                        // Invisible symmetrical placeholder to guarantee SilkPlayer stays 100% centered with Logo
+                        proSuperscriptBadge
+                            .hidden()
                     }
+
+                    Text("SilkPlayer")
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundColor(.primary)
+
+                    if licenseEngine.isProActive {
+                        proSuperscriptBadge
+                            .offset(y: -4)
+                    }
+                }
 
                 Text(L10n.tr(
                     "Native · Minimal · Ultra-light · Effortless",
