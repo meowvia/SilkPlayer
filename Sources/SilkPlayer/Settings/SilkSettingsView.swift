@@ -60,15 +60,15 @@ public struct SilkSettingsView: View {
                 // Centered macOS Segmented Toolbar Header
                 topTabBar
                     .frame(width: 452)
-                    .padding(.top, 16)
-                    .padding(.bottom, 12)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
 
                 Divider()
-                    .opacity(isWarmWhitePro ? 0.35 : 0.25)
+                    .opacity(isProThemed ? (currentTheme.isLight ? 0.35 : 0.20) : 0.25)
 
-                // Tab Content Body (Fixed 520 × 422 pt)
+                // Tab Content Body (Anchored to top, never encroaches header)
                 tabContent
-                    .frame(width: 520, height: 422)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
         .frame(width: 520, height: 490)
@@ -246,141 +246,124 @@ public struct SilkSettingsView: View {
 
     // MARK: - 1. General Tab (通用)
     private var generalSection: some View {
-        VStack(spacing: 16) {
-            Spacer().frame(height: 2)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 12) {
+                // Group 1: 界面外观与个性化
+                VStack(spacing: 5) {
+                    sectionTitle(L10n.tr("Appearance & Theme", "外观与主题"))
+                    settingsFormCard {
+                        if licenseEngine.isProActive {
+                            // Pro 版由“界面主题”直接驱动外观（暖白联动浅色 Aqua，深灰联动深色 DarkAqua）
+                            proThemeRow
+                        } else {
+                            // 免费版仅保留 macOS 原生“外观模式”（跟随系统/浅色/深色），主题锁定深灰带 PRO 徽标
+                            freeAppearanceRow
+                            Divider().opacity(dividerOpacity).padding(.vertical, 3)
+                            freeLockedThemeRow
+                        }
 
-            // Group 1: 界面外观与个性化
-            VStack(spacing: 6) {
-                sectionTitle(L10n.tr("Appearance & Theme", "外观与主题"))
-                settingsFormCard {
-                    if licenseEngine.isProActive {
-                        // Pro 版由“界面主题”直接驱动外观（暖白联动浅色 Aqua，深灰联动深色 DarkAqua）
-                        proThemeRow
-                    } else {
-                        // 免费版仅保留 macOS 原生“外观模式”（跟随系统/浅色/深色），主题锁定深灰带 PRO 徽标
-                        freeAppearanceRow
                         Divider().opacity(dividerOpacity).padding(.vertical, 3)
-                        freeLockedThemeRow
+
+                        // App Language
+                        languageRow
                     }
-
-                    Divider().opacity(dividerOpacity).padding(.vertical, 3)
-
-                    // App Language
-                    languageRow
                 }
-            }
 
-            // Group 2: 视窗与存储管理
-            VStack(spacing: 6) {
-                sectionTitle(L10n.tr("Window & Storage", "视窗与存储管理"))
-                settingsFormCard {
-                    // Window Mode
-                    HStack {
-                        Text(L10n.tr("Startup Window", "启动视窗行为"))
-                            .font(.system(size: 13))
-                            .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
-                        Spacer()
-                        Picker("", selection: $settings.windowMode) {
-                            Text(L10n.tr("Remember Last Position", "记忆上次位置")).tag(WindowMode.singleWindow)
-                            Text(L10n.tr("Center on Screen", "屏幕居中打开")).tag(WindowMode.multipleWindows)
-                        }
-                        .frame(width: 170)
-                    }
-                    .frame(height: 32)
-
-                    Divider().opacity(dividerOpacity).padding(.vertical, 3)
-
-                    // Fullscreen Clock
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Show Clock in Fullscreen", "全屏右上角显示时钟"))
+                // Group 2: 视窗与存储管理
+                VStack(spacing: 5) {
+                    sectionTitle(L10n.tr("Window & Storage", "视窗与存储管理"))
+                    settingsFormCard {
+                        // Window Mode
+                        HStack {
+                            Text(L10n.tr("Startup Window", "启动视窗行为"))
                                 .font(.system(size: 13))
-                                .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
-                            Text(L10n.tr("Displays system clock HUD during fullscreen playback", "全屏播放时在右上角常驻显示系统时钟"))
-                                .font(.system(size: 10.5))
-                                .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $settings.showLocalTimeInFullscreen)
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-                    }
-                    .frame(height: 32)
-
-                    Divider().opacity(dividerOpacity).padding(.vertical, 3)
-
-                    // Screenshots Directory
-                    HStack {
-                        Text(L10n.tr("Screenshots Directory", "截图保存目录"))
-                            .font(.system(size: 13))
-                            .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
-                        Spacer()
-                        HStack(spacing: 8) {
-                            Text(settings.screenshotDirectory)
-                                .font(.system(size: 11.5))
-                                .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .frame(maxWidth: 180, alignment: .trailing)
-
-                            Button(L10n.tr("Change…", "更改…")) {
-                                selectFolder()
+                                .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                            Spacer()
+                            Picker("", selection: $settings.windowMode) {
+                                Text(L10n.tr("Remember Last Position", "记忆上次位置")).tag(WindowMode.singleWindow)
+                                Text(L10n.tr("Center on Screen", "屏幕居中打开")).tag(WindowMode.multipleWindows)
                             }
-                            .font(.system(size: 11.5))
-                            .controlSize(.small)
+                            .frame(width: 170)
                         }
-                    }
-                    .frame(height: 32)
+                        .frame(height: 32)
 
-                    Divider().opacity(dividerOpacity).padding(.vertical, 3)
+                        Divider().opacity(dividerOpacity).padding(.vertical, 3)
 
-                    // Screenshot Format
-                    HStack {
-                        Text(L10n.tr("Screenshot Format", "截图保存格式"))
-                            .font(.system(size: 13))
-                            .foregroundColor(isWarmWhitePro ? currentTheme.primaryText : .primary)
-                        Spacer()
-                        Picker("", selection: $settings.screenshotFormat) {
-                            Text(L10n.tr("PNG (Lossless)", "PNG (无损原画)")).tag("png")
-                            Text(L10n.tr("JPEG (Compact)", "JPEG (紧凑压缩)")).tag("jpeg")
+                        // Screenshots Directory
+                        HStack {
+                            Text(L10n.tr("Screenshots Directory", "截图保存目录"))
+                                .font(.system(size: 13))
+                                .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                            Spacer()
+                            HStack(spacing: 8) {
+                                Text(settings.screenshotDirectory)
+                                    .font(.system(size: 11.5))
+                                    .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .frame(maxWidth: 180, alignment: .trailing)
+
+                                Button(L10n.tr("Change…", "更改…")) {
+                                    selectFolder()
+                                }
+                                .font(.system(size: 11.5))
+                                .controlSize(.small)
+                            }
                         }
-                        .frame(width: 170)
+                        .frame(height: 32)
+
+                        Divider().opacity(dividerOpacity).padding(.vertical, 3)
+
+                        // Screenshot Format
+                        HStack {
+                            Text(L10n.tr("Screenshot Format", "截图保存格式"))
+                                .font(.system(size: 13))
+                                .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                            Spacer()
+                            Picker("", selection: $settings.screenshotFormat) {
+                                Text(L10n.tr("PNG (Lossless)", "PNG (无损原画)")).tag("png")
+                                Text(L10n.tr("JPEG (Compact)", "JPEG (紧凑压缩)")).tag("jpeg")
+                            }
+                            .frame(width: 170)
+                        }
+                        .frame(height: 32)
                     }
-                    .frame(height: 32)
                 }
-            }
 
-            VStack(spacing: 6) {
-                sectionTitle(L10n.tr("Privacy", "隐私"))
-                settingsFormCard {
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(L10n.tr("Anonymous launch statistics", "匿名启动统计"))
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(primaryTextColor)
-                            Text(L10n.tr(
-                                "Sends a random installation ID, launch event, and app version to help measure first-seen and returning installations. No media paths or playback content. Turn off to stop and request deletion.",
-                                "仅发送随机安装标识、启动事件和版本，用于统计首次观测与回访安装；不发送媒体路径或播放内容。关闭后停止统计并请求删除该安装记录。"
-                            ))
-                            .font(.system(size: 10))
-                            .foregroundColor(secondaryTextColor)
-                            .fixedSize(horizontal: false, vertical: true)
+                // Group 3: 隐私与诊断
+                VStack(spacing: 5) {
+                    sectionTitle(L10n.tr("Privacy & Diagnostics", "隐私与诊断"))
+                    settingsFormCard {
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(L10n.tr("Anonymous launch statistics", "匿名启动统计"))
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(primaryTextColor)
+                                Text(L10n.tr(
+                                    "Sends a random installation ID, launch event, and app version to help measure first-seen and returning installations. No media paths or playback content. Turn off to stop and request deletion.",
+                                    "仅发送随机安装标识、启动事件和版本，用于统计首次观测与回访安装；不发送媒体路径或播放内容。关闭后停止统计并请求删除该安装记录。"
+                                ))
+                                .font(.system(size: 10))
+                                .foregroundColor(secondaryTextColor)
+                                .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                            Toggle("", isOn: $settings.anonymousUsageAnalyticsEnabled)
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
                         }
-                        Spacer(minLength: 0)
-                        Toggle("", isOn: $settings.anonymousUsageAnalyticsEnabled)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
+                        .padding(.vertical, 2)
                     }
-                    .padding(.vertical, 3)
                 }
-            }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 4)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Appearance & Theme Rows (Free vs Pro Separation)
@@ -467,7 +450,8 @@ public struct SilkSettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .frame(minWidth: 170)
+            .tint(currentTheme.accentColor)
+            .frame(minWidth: 175)
         }
         .frame(minHeight: 36)
     }
@@ -490,174 +474,198 @@ public struct SilkSettingsView: View {
 
     // MARK: - 2. Playback Tab (播放)
     private var playbackSection: some View {
-        VStack(spacing: 16) {
-            Spacer().frame(height: 2)
-
-            // Group 1: 播放与连续性
-            VStack(spacing: 6) {
-                sectionTitle(L10n.tr("Playback & Continuity", "播放与连续性"))
-                settingsFormCard {
-                    // Auto Play on Load
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Auto Play", "自动播放"))
-                                .font(.system(size: 13))
-                            Text(L10n.tr("Automatically start playback when opening media", "载入视频时自动开始播放"))
-                                .font(.system(size: 10.5))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $settings.autoPlayOnLoad)
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-                    }
-                    .frame(height: 34)
-
-                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
-
-                    // Continuous Playback
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Continuous Playback", "连续播放"))
-                                .font(.system(size: 13))
-                            Text(L10n.tr("Automatically play next item in playlist", "播放结束时自动连播下一集"))
-                                .font(.system(size: 10.5))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $settings.autoPlayNextItem)
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-                    }
-                    .frame(height: 34)
-
-                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
-
-                    // Dual Playlist Mode
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Dual Playlist Mode", "双列表模式"))
-                                .font(.system(size: 13))
-                            Text(L10n.tr("Separates video and music queues in drawer", "在侧边抽屉中分列管理视频与音乐"))
-                                .font(.system(size: 10.5))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $settings.dualPlaylistMode)
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-                    }
-                    .frame(height: 34)
-
-                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
-
-                    // Resume Playback Progress
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Resume Playback", "记住播放进度"))
-                                .font(.system(size: 13))
-                            Text(L10n.tr("Resume playback from last saved position", "再次打开同一视频从上次断点恢复"))
-                                .font(.system(size: 10.5))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $settings.resumePlayback)
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-                    }
-                    .frame(height: 34)
-
-                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
-
-                    // Playback History
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.tr("Playback History", "媒体播放历史"))
-                                .font(.system(size: 13))
-                                .foregroundColor(.primary)
-                            Text(L10n.tr("Remembers progress and breakpoint memories", "记住播放历史记录与断点数据"))
-                                .font(.system(size: 10.5))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $settings.keepRecentHistory)
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-
-                        Button(role: .destructive) {
-                            settings.clearAllHistory()
-                            showHistoryClearedAlert = true
-                        } label: {
-                            Text(L10n.tr("Clear…", "清除…"))
-                                .font(.system(size: 11.5))
-                        }
-                        .controlSize(.small)
-                    }
-                    .frame(height: 34)
-                }
-            }
-
-            // Group 2: 操控交互与导航
-            VStack(spacing: 6) {
-                sectionTitle(L10n.tr("Controls & Navigation", "操控交互与导航"))
-                settingsFormCard {
-                    // Seek Step Duration
-                    HStack {
-                        Text(L10n.tr("Seek Step Duration", "进度快进步长"))
-                            .font(.system(size: 13))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Picker("", selection: $settings.shortSeekStep) {
-                            Text("5 " + L10n.tr("Seconds", "秒")).tag(5.0)
-                            Text("10 " + L10n.tr("Seconds", "秒")).tag(10.0)
-                            Text("15 " + L10n.tr("Seconds", "秒")).tag(15.0)
-                            Text("30 " + L10n.tr("Seconds", "秒")).tag(30.0)
-                        }
-                        .frame(width: 170)
-                    }
-                    .frame(height: 30)
-
-                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
-
-                    // Scroll Wheel Action
-                    HStack {
-                        Text(L10n.tr("Scroll Wheel Action", "滚轮滚动操作"))
-                            .font(.system(size: 13))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Picker("", selection: $settings.scrollWheelAction) {
-                            ForEach(ScrollWheelAction.allCases) { action in
-                                Text(action.displayName).tag(action)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 12) {
+                // Group 1: 播放与连续性
+                VStack(spacing: 5) {
+                    sectionTitle(L10n.tr("Playback & Continuity", "播放与连续性"))
+                    settingsFormCard {
+                        // Auto Play on Load
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.tr("Auto Play", "自动播放"))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                                Text(L10n.tr("Automatically start playback when opening media", "载入视频时自动开始播放"))
+                                    .font(.system(size: 10.5))
+                                    .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
                             }
+                            Spacer()
+                            Toggle("", isOn: $settings.autoPlayOnLoad)
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
                         }
-                        .frame(width: 170)
-                    }
-                    .frame(height: 30)
+                        .frame(height: 32)
 
-                    Divider().opacity(dividerOpacity).padding(.vertical, 2)
+                        Divider().opacity(dividerOpacity).padding(.vertical, 2)
 
-                    // Double Click Action
-                    HStack {
-                        Text(L10n.tr("Double-Click Action", "双击画面操作"))
-                            .font(.system(size: 13))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Picker("", selection: $settings.doubleClickAction) {
-                            ForEach(DoubleClickAction.allCases) { action in
-                                Text(action.displayName).tag(action)
+                        // Continuous Playback
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.tr("Continuous Playback", "连续播放"))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                                Text(L10n.tr("Automatically play next item in playlist", "播放结束时自动连播下一集"))
+                                    .font(.system(size: 10.5))
+                                    .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
                             }
+                            Spacer()
+                            Toggle("", isOn: $settings.autoPlayNextItem)
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
                         }
-                        .frame(width: 170)
-                    }
-                    .frame(height: 30)
-                }
-            }
+                        .frame(height: 32)
 
-            Spacer(minLength: 0)
+                        Divider().opacity(dividerOpacity).padding(.vertical, 2)
+
+                        // Dual Playlist Mode
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.tr("Dual Playlist Mode", "双列表模式"))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                                Text(L10n.tr("Separates video and music queues in drawer", "在侧边抽屉中分列管理视频与音乐"))
+                                    .font(.system(size: 10.5))
+                                    .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $settings.dualPlaylistMode)
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                        }
+                        .frame(height: 32)
+
+                        Divider().opacity(dividerOpacity).padding(.vertical, 2)
+
+                        // Resume Playback Progress
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.tr("Resume Playback", "记住播放进度"))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                                Text(L10n.tr("Resume playback from last saved position", "再次打开同一视频从上次断点恢复"))
+                                    .font(.system(size: 10.5))
+                                    .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $settings.resumePlayback)
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                        }
+                        .frame(height: 32)
+
+                        Divider().opacity(dividerOpacity).padding(.vertical, 2)
+
+                        // Playback History
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.tr("Playback History", "媒体播放历史"))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                                Text(L10n.tr("Remembers progress and breakpoint memories", "记住播放历史记录与断点数据"))
+                                    .font(.system(size: 10.5))
+                                    .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $settings.keepRecentHistory)
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+
+                            Button(role: .destructive) {
+                                settings.clearAllHistory()
+                                showHistoryClearedAlert = true
+                            } label: {
+                                Text(L10n.tr("Clear…", "清除…"))
+                                    .font(.system(size: 11.5))
+                            }
+                            .controlSize(.small)
+                        }
+                        .frame(height: 32)
+                    }
+                }
+
+                // Group 2: 操控交互与全屏显示
+                VStack(spacing: 5) {
+                    sectionTitle(L10n.tr("Controls & On-Screen Display", "操控交互与全屏显示"))
+                    settingsFormCard {
+                        // Fullscreen Clock
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.tr("Show Clock in Fullscreen", "全屏右上角显示时钟"))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                                Text(L10n.tr("Displays system clock HUD during fullscreen playback", "全屏播放时在右上角常驻显示系统时钟"))
+                                    .font(.system(size: 10.5))
+                                    .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $settings.showLocalTimeInFullscreen)
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                        }
+                        .frame(height: 32)
+
+                        Divider().opacity(dividerOpacity).padding(.vertical, 2)
+
+                        // Seek Step Duration
+                        HStack {
+                            Text(L10n.tr("Seek Step Duration", "进度快进步长"))
+                                .font(.system(size: 13))
+                                .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                            Spacer()
+                            Picker("", selection: $settings.shortSeekStep) {
+                                Text("5 " + L10n.tr("Seconds", "秒")).tag(5.0)
+                                Text("10 " + L10n.tr("Seconds", "秒")).tag(10.0)
+                                Text("15 " + L10n.tr("Seconds", "秒")).tag(15.0)
+                                Text("30 " + L10n.tr("Seconds", "秒")).tag(30.0)
+                            }
+                            .frame(width: 170)
+                        }
+                        .frame(height: 30)
+
+                        Divider().opacity(dividerOpacity).padding(.vertical, 2)
+
+                        // Scroll Wheel Action
+                        HStack {
+                            Text(L10n.tr("Scroll Wheel Action", "滚轮滚动操作"))
+                                .font(.system(size: 13))
+                                .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                            Spacer()
+                            Picker("", selection: $settings.scrollWheelAction) {
+                                ForEach(ScrollWheelAction.allCases) { action in
+                                    Text(action.displayName).tag(action)
+                                }
+                            }
+                            .frame(width: 170)
+                        }
+                        .frame(height: 30)
+
+                        Divider().opacity(dividerOpacity).padding(.vertical, 2)
+
+                        // Double Click Action
+                        HStack {
+                            Text(L10n.tr("Double-Click Action", "双击画面操作"))
+                                .font(.system(size: 13))
+                                .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                            Spacer()
+                            Picker("", selection: $settings.doubleClickAction) {
+                                ForEach(DoubleClickAction.allCases) { action in
+                                    Text(action.displayName).tag(action)
+                                }
+                            }
+                            .frame(width: 170)
+                        }
+                        .frame(height: 30)
+                    }
+                }
+
+                Spacer(minLength: 4)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - 3. LAN Tab (局域网)
