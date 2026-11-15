@@ -53,7 +53,7 @@ public struct AppShellView: View {
     }
 
     private var shouldHidePlaylistDrawerForPro: Bool {
-        isProLibraryActive
+        (!isPlaying && licenseEngine.isProActive) || isProLibraryActive
     }
 
     private var useWarmLightEdgeHandle: Bool {
