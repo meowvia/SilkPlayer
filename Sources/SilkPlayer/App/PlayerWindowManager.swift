@@ -24,6 +24,8 @@ extension Notification.Name {
     public var onKeyDownHandler: (@MainActor (NSEvent) -> NSEvent?)?
     public var onFullScreenChangedHandler: (@MainActor (Bool) -> Void)?
     public var closePlaybackHandler: (@MainActor () -> Void)?
+    public var playPreviousHandler: (@MainActor () -> Void)?
+    public var playNextHandler: (@MainActor () -> Void)?
     public var windowDelegate: PlayerWindowDelegate?
 
     public init(

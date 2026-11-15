@@ -47,10 +47,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        if SilkStatusBarManager.shared.isBackgroundPlaybackActive {
+            return false
+        }
         return true
     }
 
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if SilkStatusBarManager.shared.isBackgroundPlaybackActive {
+            SilkStatusBarManager.shared.exitBackgroundMode()
+            return true
+        }
         if !flag {
             PlayerWindowManager.shared.openNewWindow()
             return true

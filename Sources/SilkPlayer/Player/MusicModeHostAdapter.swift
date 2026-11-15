@@ -142,6 +142,10 @@ public final class SilkMusicPlayerHost: SilkMusicModeHost {
         player.isInspectorVisible = false
     }
 
+    public func minimizeToStatusBar() {
+        SilkStatusBarManager.shared.enterBackgroundMode(window: player.hostWindow)
+    }
+
     public func beginWindowDrag(on window: NSWindow, with event: NSEvent) {
         MusicWindowDragCoordinator.shared.beginDrag(on: window, with: event)
     }

@@ -124,14 +124,14 @@ public struct PlayerContainerView: View {
                 }
 
                 // Transient On-Screen Display (OSD) HUD (Seek, Play/Pause, Track, Adjustments, Screenshot)
-                // Centered at Top in video; pinned above bottom bar in music mode to prevent vinyl occlusion
+                // Centered at Top in video; positioned below titlebar in music mode to eliminate up-next banner occlusion
                 if let osd = player.activeOSD {
                     let activeTheme = SilkLibraryTheme.current()
                     VStack {
                         if player.isAudioOnly {
-                            Spacer()
                             PlayerOSDView(notification: osd)
-                                .padding(.bottom, 72)
+                                .padding(.top, 46)
+                            Spacer()
                         } else {
                             PlayerOSDView(notification: osd)
                                 .padding(.top, player.isFullscreen ? 76 : 84)

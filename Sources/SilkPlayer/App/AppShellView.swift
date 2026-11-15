@@ -749,6 +749,12 @@ public struct AppShellView: View {
         session.closePlaybackHandler = { [self] in
             self.stopPlayback()
         }
+        session.playPreviousHandler = { [self] in
+            self.playPrevious()
+        }
+        session.playNextHandler = { [self] in
+            self.playNext()
+        }
         session.openFilePickerHandler = { [self] in
             self.openSingleFile()
         }

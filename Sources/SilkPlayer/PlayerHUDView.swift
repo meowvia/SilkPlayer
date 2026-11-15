@@ -257,8 +257,17 @@ public struct PlayerHUDView: View {
                             .allowsHitTesting(false)
                     }
 
-                    // Trailing Quick Action Buttons: Pin, Inspector, Close
+                    // Trailing Quick Action Buttons: Minimize to Status Bar, Pin, Inspector, Close
                     HStack(spacing: 8) {
+                        // Minimize to Status Bar (Background Playback)
+                        HUDCircleButton(
+                            icon: "menubar.arrow.up.rectangle",
+                            isActive: false,
+                            helpText: L10n.tr("Minimize to Status Bar", "收起至状态栏后台播放")
+                        ) {
+                            SilkStatusBarManager.shared.enterBackgroundMode(window: player.hostWindow ?? NSApp.keyWindow)
+                        }
+
                         // Window Pin / Always on Top Button
                         HUDCircleButton(
                             icon: settings.keepWindowOnTop ? "pin.fill" : "pin",

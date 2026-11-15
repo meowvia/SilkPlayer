@@ -1425,6 +1425,7 @@ public protocol SilkMusicModeHost: ObservableObject {
     func selectQueueItem(id: UUID, in category: SilkMusicMediaCategory)
     func sortAudioQueue(optionID: String, forceDirectionAscending: Bool?)
     func toggleAudioSortDirection()
+    func minimizeToStatusBar()
     func makeProgressSectionView(windowWidth: CGFloat, isCollapsed: Bool) -> AnyView
     func makeSpeedMenuButtonView() -> AnyView
     func makeVinylDiscView(diameter: CGFloat, isPlaying: Bool) -> AnyView
@@ -1486,4 +1487,8 @@ public final class SilkCloudSyncService: ObservableObject {
     }
     public func publish(record: SilkCloudSyncRecord) {}
     public func pullRemoteChanges() {}
+}
+
+public extension SilkMusicModeHost {
+    func minimizeToStatusBar() {}
 }
