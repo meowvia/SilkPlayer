@@ -336,12 +336,12 @@ public struct SilkSettingsView: View {
                     settingsFormCard {
                         HStack(alignment: .top, spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(L10n.tr("Anonymous launch statistics", "匿名启动统计"))
+                                Text(L10n.tr("Anonymous Crash & Diagnostics", "发送匿名崩溃与诊断数据"))
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(primaryTextColor)
                                 Text(L10n.tr(
-                                    "Sends a random installation ID, launch event, and app version to help measure first-seen and returning installations. No media paths or playback content. Turn off to stop and request deletion.",
-                                    "仅发送随机安装标识、启动事件和版本，用于统计首次观测与回访安装；不发送媒体路径或播放内容。关闭后停止统计并请求删除该安装记录。"
+                                    "Automatically sends anonymous error and performance diagnostics to improve playback stability.",
+                                    "自动发送匿名错误与性能数据，用于持续优化播放稳定性与兼容性。"
                                 ))
                                 .font(.system(size: 10))
                                 .foregroundColor(secondaryTextColor)
@@ -804,69 +804,72 @@ public struct SilkSettingsView: View {
 
     // MARK: - 4. About Tab (关于)
     private var appVersionLabel: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.8.0-pro"
+        let full = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0"
+        return full.replacingOccurrences(of: "-pro", with: "").replacingOccurrences(of: "-dev", with: "")
     }
 
     private var aboutSection: some View {
         VStack(spacing: 0) {
-            Spacer().frame(height: 18)
+            Spacer().frame(height: 10)
 
             // Header: App Icon + Title with Pro Badge + Slogan
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 if let appIcon = SilkProIconManager.currentDisplayIcon(isProActive: licenseEngine.isProActive) {
                     Image(nsImage: appIcon)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 64, height: 64)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .frame(width: 58, height: 58)
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
                         .shadow(color: Color.black.opacity(0.18), radius: 6, x: 0, y: 3)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
                                 .stroke(licenseEngine.isProActive ? Color(red: 0.85, green: 0.55, blue: 0.25).opacity(0.4) : Color.white.opacity(0.12), lineWidth: 1)
                         )
                 }
 
-                HStack(spacing: 8) {
-                    Text("SilkPlayer")
-                        .font(.system(size: 21, weight: .bold))
-                        .foregroundColor(.primary)
-
-                    if licenseEngine.isProActive {
-                        Text("PRO")
-                            .font(.system(size: 10, weight: .heavy, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 1.0, green: 0.88, blue: 0.65),
-                                        Color(red: 0.95, green: 0.65, blue: 0.25)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .padding(.horizontal, 6.5)
-                            .padding(.vertical, 2.5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                    .fill(Color(red: 0.22, green: 0.16, blue: 0.12).opacity(0.95))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(red: 0.95, green: 0.65, blue: 0.25).opacity(0.8),
-                                                Color(red: 0.65, green: 0.35, blue: 0.15).opacity(0.4)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 0.8
+                Text("SilkPlayer")
+                    .font(.system(size: 21, weight: .bold))
+                    .foregroundColor(.primary)
+                    .overlay(alignment: .topTrailing) {
+                        if licenseEngine.isProActive {
+                            Text("PRO")
+                                .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 1.0, green: 0.88, blue: 0.65),
+                                            Color(red: 0.95, green: 0.65, blue: 0.25)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
                                     )
-                            )
-                            .shadow(color: Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.25), radius: 3, x: 0, y: 1)
+                                )
+                                .padding(.horizontal, 4.5)
+                                .padding(.vertical, 1.5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                                        .fill(Color(red: 0.22, green: 0.16, blue: 0.12).opacity(0.95))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(red: 0.95, green: 0.65, blue: 0.25).opacity(0.8),
+                                                    Color(red: 0.65, green: 0.35, blue: 0.15).opacity(0.4)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 0.75
+                                        )
+                                )
+                                .shadow(color: Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.25), radius: 2.5, x: 0, y: 1)
+                                .fixedSize()
+                                .alignmentGuide(.trailing) { d in d[.leading] - 3 }
+                                .alignmentGuide(.top) { d in d[.bottom] - 8 }
+                        }
                     }
-                }
 
                 Text(L10n.tr(
                     "Native · Minimal · Ultra-light · Effortless",
@@ -874,55 +877,61 @@ public struct SilkSettingsView: View {
                 ))
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundColor(.secondary.opacity(0.9))
-                .padding(.top, 1)
             }
 
-            Spacer().frame(height: 16)
+            Spacer().frame(height: 10)
 
-            // License Activation & Purchase (directly below Slogan; unbinding intentionally disabled)
+            // License Activation & Purchase
             settingsFormCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: licenseEngine.isProActive ? "checkmark.seal.fill" : "key.horizontal")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(licenseEngine.isProActive ? Color.green : Color.accentColor)
+                if licenseEngine.isProActive {
+                    VStack(spacing: 5) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 13.5, weight: .semibold))
+                                .foregroundStyle(Color.green)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(licenseEngine.isProActive
-                                 ? L10n.tr("Pro · Activated", "Pro · 已激活")
-                                 : L10n.tr("Activate Pro Features", "激活 Pro 功能"))
-                                .font(.system(size: 12.5, weight: .semibold))
+                            Text(L10n.tr("Pro · Activated", "Pro · 已激活"))
+                                .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.primary)
+                        }
 
-                            Text(L10n.tr("Version \(appVersionLabel)", "版本 \(appVersionLabel)"))
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(.secondary)
+                        Text(L10n.tr("Version \(appVersionLabel)", "版本 \(appVersionLabel)"))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.secondary)
 
-                            if let receipt = licenseEngine.activeReceipt {
-                                Text("\(receipt.licenseKeyMask) · \(receipt.hardwareId.prefix(8))")
-                                    .font(.system(size: 10.5, design: .monospaced))
-                                    .foregroundColor(.secondary.opacity(0.85))
-                                Text(L10n.tr(
-                                    "Pro features active · Pro amber icon enabled (restart if Dock does not refresh instantly)",
-                                    "Pro 功能与琥珀黑金图标已生效（若系统 Dock 栏未即时刷新，重启应用即可完全生效）"
-                                ))
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary.opacity(0.75))
-                                .padding(.top, 1)
-
-                                Button {
-                                    Task {
-                                        UserDefaults.standard.set(receipt.rawToken, forKey: "silk.pro.lastActiveReceipt")
-                                        await licenseEngine.deactivate()
-                                        SilkProIconManager.syncApplicationIcon(isProActive: false)
-                                    }
-                                } label: {
-                                    Text(L10n.tr("Deactivate / Experience Free Edition", "停用授权 / 体验免费版"))
-                                        .font(.system(size: 11))
+                        if let receipt = licenseEngine.activeReceipt {
+                            Button {
+                                Task {
+                                    UserDefaults.standard.set(receipt.rawToken, forKey: "silk.pro.lastActiveReceipt")
+                                    await licenseEngine.deactivate()
+                                    SilkProIconManager.syncApplicationIcon(isProActive: false)
                                 }
-                                .buttonStyle(.link)
-                                .padding(.top, 3)
-                            } else if !licenseEngine.isProActive {
+                            } label: {
+                                Text(L10n.tr("Deactivate / Experience Free Edition", "停用授权 / 体验免费版"))
+                                    .font(.system(size: 11))
+                            }
+                            .buttonStyle(.link)
+                            .padding(.top, 1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 3)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "key.horizontal")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.tr("Activate Pro Features", "激活 Pro 功能"))
+                                    .font(.system(size: 12.5, weight: .semibold))
+                                    .foregroundColor(.primary)
+
+                                Text(L10n.tr("Version \(appVersionLabel)", "版本 \(appVersionLabel)"))
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
+
                                 Text(L10n.tr(
                                     "Enter an activation key for SMB 2/3, NFS, and LAN media library.",
                                     "激活后可使用 SMB 2/3、NFS 共享挂载与局域网媒体库。"
@@ -944,12 +953,10 @@ public struct SilkSettingsView: View {
                                     .padding(.top, 2)
                                 }
                             }
+
+                            Spacer()
                         }
 
-                        Spacer()
-                    }
-
-                    if !licenseEngine.isProActive {
                         HStack(spacing: 8) {
                             TextField(
                                 L10n.tr("Enter activation key...", "输入激活码…"),
@@ -1002,7 +1009,7 @@ public struct SilkSettingsView: View {
             }
             .padding(.horizontal, 24)
 
-            Spacer().frame(height: 14)
+            Spacer().frame(height: 10)
 
             // Core Specs Inset Card
             settingsFormCard {
@@ -1027,12 +1034,12 @@ public struct SilkSettingsView: View {
                 aboutInfoRow(
                     icon: "lock.shield",
                     title: L10n.tr("Core Engine", "核心引擎"),
-                    value: "SilkCoreKit Proprietary (meowvia)"
+                    value: "SilkCoreKit Proprietary"
                 )
             }
             .padding(.horizontal, 24)
 
-            Spacer(minLength: 24)
+            Spacer(minLength: 8)
 
             // Action Links & Updates (pushed cleanly toward lower third)
             HStack(spacing: 14) {
@@ -1084,12 +1091,12 @@ public struct SilkSettingsView: View {
                 }
             }
 
-            Spacer().frame(height: 12)
+            Spacer().frame(height: 8)
 
             Text("Copyright © 2026 SilkPlayer. All rights reserved.")
                 .font(.system(size: 10.5))
                 .foregroundColor(.secondary.opacity(0.6))
-                .padding(.bottom, 16)
+                .padding(.bottom, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
