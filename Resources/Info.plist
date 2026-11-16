@@ -26,9 +26,10 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.8.0-pro</string>
+    <key>CFBundleShortVersionString</key>
+    <string>2.0.0</string>
     <key>CFBundleVersion</key>
-    <string>1.8.0-pro</string>
+    <string>2.0.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>

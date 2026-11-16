@@ -26,8 +26,11 @@
 | ISSUE-016 | 音乐模式收起态退出后保存 `228pt` 高度（设计目标 `224pt`）及锁屏期实机复测缺口 | 窗口几何与生命周期 / SilkPlayer (AppDelegate & PlayerWindowManager) | Low | 已修复并实机验证 (1.7.0-music-preview) | 1.7.0-music-preview |
 | ISSUE-017 | 音乐模式快速拖拽窗口与光标分离（及视频模式/主界面起手快甩偏移待合入 1.7.0 优化） | 窗口拖拽与几何协调 / SilkPlayer (MusicModeView, PlayerCore+WindowGeometry, VideoView, EmptyPlaybackView) | High | 预览版已修复；视频/主界面优化登记待合入 1.7.0 正式版 | 1.7.0-music-preview |
 | ISSUE-018 | 冷启动被 `WindowGroup` 桌面平铺状态 (`tilingPosition: 9`) 恢复为铺满屏尺寸 | 窗口生命周期与冷启动几何 / SilkPlayer (SilkPlayerApp, AppShellView, AppDelegate, PlayerCore+WindowGeometry) | High | 预览版已修复；冷启动防平铺隔离登记待合入 1.7.0 正式版 | 1.7.0-music-preview |
-| ISSUE-019 | 竖屏/极窄窗口（`.minimal` 档）底栏音量按钮未隐藏导致与“下一首”按钮重叠冲突 | 视频 HUD 底栏 / SilkPlayer (PlayerHUDView, HUDVolumeSlider) | Medium | 已登记待修复（计划 `1.6.0` 解决并同步各活跃分支） | 1.6.0 / 1.7.0-music-preview |
-| ISSUE-020 | 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题 | 顶部菜单栏 / SilkPlayer (PlayerCommands, PlayerCore) | Low | 已登记待清理（计划 `1.6.0` 移除该菜单入口） | 1.6.0 / 1.7.0-music-preview |
+| ISSUE-019 | 竖屏/极窄窗口（`.minimal` 档）底栏音量按钮未隐藏导致与“下一首”按钮重叠冲突 | 视频 HUD 底栏 / SilkPlayer (PlayerHUDView, HUDVolumeSlider) | Medium | 已修复 (1.6.0) | 1.6.0 |
+| ISSUE-020 | 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题 | 顶部菜单栏 / SilkPlayer (PlayerCommands, PlayerCore) | Low | 已解决 (1.6.0) | 1.6.0 |
+| ISSUE-021 | macOS 多显示器扩展屏全屏播放时，副屏移动鼠标误触发控件唤醒与沉浸态退出 | 全屏与交互 / SilkPlayer (PlayerHUDView) | Medium | 已修复 (1.7.0/2.0.0) | 1.6.0 |
+| ISSUE-022 | 播放竖屏视频后关闭，播放窗口未复位为标准横向尺寸导致空状态视窗形状异常 | 窗口几何与生命周期 / SilkPlayer (AppShellView & WindowGeometry) | Medium | 已修复 (1.7.0/2.0.0) | 1.6.0 |
+| ISSUE-023 | 多声道（DTS-ES 6.1 等）无损 LPCM 输出在立体声物理设备下引起 DAC 削顶爆音 | 纯音频与多声道播放 / SilkCoreKit (SilkAudioEngine) | High | 已修复 (1.7.0/2.0.0) | 2.0.0-pro |
 
 ---
 

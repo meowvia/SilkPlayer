@@ -175,6 +175,8 @@ install_name_tool -add_rpath "@loader_path/../Frameworks" "${APP_BUNDLE}/Content
 audit_bundle_dependencies "${APP_BUNDLE}" "Staging .app Bundle"
 
 cp "${PROJECT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
+plutil -replace CFBundleShortVersionString -string "${VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "${VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
 if [[ -f "${PROJECT_DIR}/Resources/AppIcon.icns" ]]; then
     cp "${PROJECT_DIR}/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
 fi
@@ -189,6 +191,12 @@ if [[ -f "${PROJECT_DIR}/Resources/AppIcon_Pro_1024.png" ]]; then
 fi
 if [[ -f "${PROJECT_DIR}/Resources/AppIcon_1024.png" ]]; then
     cp "${PROJECT_DIR}/Resources/AppIcon_1024.png" "${APP_BUNDLE}/Contents/Resources/AppIcon_1024.png"
+fi
+if [[ -f "${PROJECT_DIR}/Resources/THIRD_PARTY_LICENSES.txt" ]]; then
+    cp "${PROJECT_DIR}/Resources/THIRD_PARTY_LICENSES.txt" "${APP_BUNDLE}/Contents/Resources/THIRD_PARTY_LICENSES.txt"
+fi
+if [[ -f "${PROJECT_DIR}/LICENSE" ]]; then
+    cp "${PROJECT_DIR}/LICENSE" "${APP_BUNDLE}/Contents/Resources/LICENSE"
 fi
 for lproj in "${PROJECT_DIR}/Resources"/*.lproj; do
     if [[ -d "${lproj}" ]]; then

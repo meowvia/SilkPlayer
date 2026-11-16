@@ -31,7 +31,7 @@
   - 原设置窗口尺寸过大（540x680），依赖纵向滚动条，包含底层基础能力开关与冗余快捷键列表，存在非标准术语。
 - **技术实现路径**:
   - 彻底收拢为 3 大标准顶级 Tab：通用（General）、播放（Playback）、关于（About）；
-  - 视窗尺寸精准定格为标准 520 × 400 pt，采用标准表单两列键值排布，全 Tab 零纵向滚动条；
+  - 视窗尺寸精准定格为标准 520 × 490 pt，采用标准表单两列键值排布，全 Tab 零纵向滚动条；
   - 100% 采用 macOS 官方标准界面术语，硬解、防爆音与外挂字幕同名加载全局默认启用；
   - 关于页面嵌入官方真实 AppIcon 矢量资产 `AboutAppIconView`，版本标识规范化为 `1.6.0 (Build 2026.11) · Universal Binary`。
 - **交付资产**:
@@ -57,11 +57,11 @@
   - 实现克制且闭环的端内更新生态，保障零侵扰观影与用户配置数据无损。
 - **技术实现路径**:
   - 封装 `@Observable public final class UpdateService`；
-  - 冷启动后台异步检测 GitHub 最新版本；
+  - 冷启动后台异步检测 GitHub 最新版本，并通过 `resolveDownloadURLString(version:assets:preferredArch:)` 解析 Release 资产列表，优先下载 `-universal.dmg` 通用镜像（兼容单架构包回退）；
   - 弹窗直观显示最新版本号（“发现新版本 x.x.x，是否立即更新？”），仅提供“是”与“否”；
   - 点击“否”记录时间戳，开启 7 天绝对静默门禁，期间冷启动不再弹窗；
   - 设置面板“关于”Tab 图标常驻 6pt 微型红点（不受“否”影响）；
-  - 点击“是”端内下载架构匹配的 DMG 镜像，唤起后台静默替换脚本，原子替换 `/Applications/SilkPlayer.app` 并重启，100% 保护所有应用支持数据与偏好配置。
+  - 点击“是”端内下载匹配的 Universal DMG 镜像，唤起后台静默替换脚本，原子替换 `/Applications/SilkPlayer.app` 并重启，100% 保护所有应用支持数据与偏好配置。
 - **交付资产**:
   - `Sources/SilkPlayer/Shared/UpdateService.swift`
   - `AppDelegate.swift` 冷启动异步触发
@@ -96,37 +96,43 @@
   - 为满足用户官网截图、宣发排版与专业观影对像素级标准比例和统一尺寸的严苛需求，解决随手拉伸产生非标奇数像素与比例割裂感痛点。
 - **技术实现路径**:
   - `PlayerWindowDelegate` 接入 `windowWillStartLiveResize`、`windowWillResize` 与 `windowDidEndLiveResize`；
-  - 捕获当前实时帧尺寸与 AppKit 光标位置，注入 `PlayerCore` 状态机；
+  - 捕获当前实时窗口尺寸，更新 `WindowResizeHUDView` 状态；
   - 封装 `WindowDimensionFormatter`，精准识别 `16:9`、`16:10`、`4:3`、`21:9`、`2.39:1`、`1:1`，并在对齐片源分辨率时提供 `100% 原尺寸` 徽章；
-  - `WindowResizeDimensionHUD.swift` 实现极简等宽深色毛玻璃胶囊，安全视口内自适应贴近光标，松手后 0.35 秒平滑淡出，零遮挡观影。
+  - `WindowResizeDimensionHUD.swift` 实现极简等宽深色毛玻璃胶囊，顶部居中显示（距顶部 `12 pt`），松手后 0.35 秒平滑淡出，零遮挡观影。
 - **交付资产**:
   - `Sources/SilkPlayer/Player/WindowResizeDimensionHUD.swift`
   - `PlayerWindowManager.swift`、`PlayerCore.swift`、`AppShellView.swift`
   - `Tests/SilkPlayerTests/PlaylistTests.swift` 新增 Test 62 格式化与画幅判定断言。
 
+### 1.8 窗口比例菜单与 HUD/菜单栏问题收敛 (Proposal 027 · ISSUE-019 · ISSUE-020)
+- **右键窗口比例子菜单 (Proposal 027 / GitHub Issue #6)**：
+  - `VideoView.swift` (`MetalPlayerContainerView.buildContextMenu(for:)`) 与 `L10n.swift` (`windowSizeMenu` / `windowSizeReset`) 新增「窗口大小 / Window Size」子菜单，提供 `50%`、`75%`、`100%` 与「恢复默认 (`resetWindowSize()`)」，在全屏、纯音频（`!player.isAudioOnly`）或无已加载媒体时自动禁用，并按当前窗口包络与边界状态控制菜单勾选与置灰；
+  - `PlayerModels.swift` (`PlayerGeometry.adaptiveVideoContentSize` / `windowPresetContentSize` / `windowPresetMenuState` / `WindowScalePresetState`) 与 `Player/PlayerCore+WindowGeometry.swift` 统一收敛旋转与百分比开窗尺寸逻辑，确保所有档位在桌面可用区内保持原片比例且零画面/字幕裁切，并修复 `fitWindow(scale:)` 的 `window.minSize` 临时释放/恢复、`.maximized` 状态经 `PlayerWindowDelegate.resetInteractiveModeToNormal()` 复位及百分比 OSD 反馈。
+- **竖屏/窄窗口底栏音量滑块重叠与垂直弹出修复 (ISSUE-019)**：
+  - `PlayerHUDView.swift` 在 `.minimal` 档（`< 480 pt`）隐藏底栏音量控件并在 `moreMenuContent` 补充静音入口，同时在 [`HUDVolumeSlider.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/HUD/HUDVolumeSlider.swift) 引入宽度自适应垂直弹出模式：当窗口宽度 `< 950 pt`（全屏 `< 930 pt`）时保持底栏 `28 pt` 固定占位，悬停或拖拽时向上弹出 `32 × 92 pt` 垂直音量滑块，并收紧各档边距与间距；`PlaylistTests.swift` Test 63 同步验证 `.minimal` 隐藏与全档位非重叠空间余量。
+- **顶栏重名「窗口」菜单合并与冗余入口清理 (ISSUE-020)**：
+  - `PlayerCommands.swift` 将独立 `CommandMenu(L10n.menuWindow)` 替换为 `CommandGroup(before: .windowList)` 归入系统标准窗口菜单，并移除冗余 `Menu(L10n.fitToVideo)` 及其废弃本地化字段。
+
 ---
 
 ## 2. 自动化测试验证基准
 - **测试框架**: XCTest + Swift Testing 双引擎；
-- **测试套件**: 全量 62 项回归测试套件全量通过（100% PASS）；
+- **测试套件**: 全量回归测试通过（100% PASS，编译零告警）；
 - **基准固化**:
-  - Test 1-60：几何约束、播放列表、双轨分流、自然排序、Metal 容错等全部绿灯；
-  - Test 61：UpdateService 语义版本对比与 7 天静默频控测试绿灯；
-  - Test 62：窗口实时拉伸尺寸指示器与多画幅判定测试绿灯；
-  - SwiftTestingSanityTests：基准测试绿灯。
+  - `GeometryAndTransformTests`（7/7 通过）：几何边界约束、画幅自适应及右键百分比缩放（`50% / 75% / 100%`）与边界/全屏/纯音频门控测试（`testWindowPresetContentSizeAndBoundaryMenuGating`、`testFitWindowPercentageAndContextMenuStateGating`）；
+  - `PlaylistRegressionTests`（Test 1-63 全部断言通过）：播放列表、双轨分流、自然排序、Metal 容错、`UpdateService` Universal 资产解析与校验、HUD 实时尺寸及 `.minimal` 音量隐藏断言；
+  - `SwiftTestingSanityTests`（1/1 通过）：基础断言测试通过。
 
 ---
 
 ## 3. 正式发布安装镜像与 SHA-256 校验和
 - **工程 Git 基准**:
-  - 开源前端: `SilkPlayer`（Commit `6ccdcda`）
-  - 闭源内核: `SilkCoreKit`（Commit `a491ae1`）
+  - 开源前端: `SilkPlayer`（应用构建源码 Commit `7357597`，分支 `feature/v1.6.0`）
+  - 闭源内核: `SilkCoreKit`（Commit `1e49d6f`）
 - **发布安装镜像**:
-  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构): `f1356de01669e880de7192701013c4f183b1b38c42f71851d71d471cd07eca48`
-  - `SilkPlayer-1.6.0-arm64.dmg` (Apple Silicon 专用): `e991673a0ffae4a63cde8911dd3dd58d54fcfc2ecc5f545a3fa7a5968dea7e2f`
-  - `SilkPlayer-1.6.0-x86_64.dmg` (Intel 64 位专用): `7a90dbfa94820bd2fd08f29986a623fa75c12970f2fec051b8a9ba2f11b257b8`
+  - `SilkPlayer-1.6.0-universal.dmg` (Universal 通用双架构，Apple Silicon + Intel 64 位单镜像交付): `620d07e76e7a79bbbdf77bd5bed340d03cf46600b215811ab4449bcdb8116d61`
 - **动态库依赖审计 (@rpath)**:
-  - 零宿主绝对路径泄漏，所有动态库严格限定在 `@rpath/` 与系统库路径，通过 `package_app.sh` 自动化签名与 Hardened Runtime 校验，挂载校验 100% 通过。
+  - 零宿主绝对路径泄漏，所有动态库严格限定在 `@rpath/` 与系统库路径，通过 `package_app.sh` 自动化签名与 Hardened Runtime 校验，Universal 单镜像打包完成。
 - **本地应用状态**:
-  - `/Applications/SilkPlayer.app` 已就位更新为 `1.6.0` Universal 双架构正式版。
+  - `/Applications/SilkPlayer.app` 经全新清理安装为 `1.6.0` Universal 双架构发行版本。
 

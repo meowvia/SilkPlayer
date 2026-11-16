@@ -36,7 +36,7 @@ public enum HUDLayoutTier: Equatable {
 
     /// Whether the inline volume slider is shown on the bottom control bar.
     public func showsVolumeSlider(isAudioOnly: Bool) -> Bool {
-        isAudioOnly || self != .minimal
+        !isAudioOnly && self != .minimal
     }
 
     /// Whether the fullscreen toggle button is displayed on the bottom bar.
