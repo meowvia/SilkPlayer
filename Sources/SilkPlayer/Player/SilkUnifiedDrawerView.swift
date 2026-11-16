@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import SilkCoreKit
 
 /// Dedicated Pure Playlist Sidebar Drawer for SilkPlayer.
 /// Focused entirely on playlist duties: drag-and-drop, playback queue management,
@@ -14,6 +15,16 @@ public struct SilkPlaylistDrawerView: View {
     public var drawerWidth: CGFloat
     public var onSelectPlaylistItem: (PlaylistItem) -> Void
     public var onClose: () -> Void
+
+    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
+
+    private var theme: SilkLibraryTheme {
+        SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
+    }
+
+    private var isLight: Bool {
+        theme.isLight
+    }
 
     @State private var hoveredIndex: Int? = nil
     @State private var isFooterClearHovered: Bool = false
@@ -44,7 +55,7 @@ public struct SilkPlaylistDrawerView: View {
             headerBar
 
             Divider()
-                .opacity(0.18)
+                .opacity(isLight ? 0.35 : 0.18)
 
             // Playlist Body
             if playlist.isEmpty {
@@ -60,30 +71,38 @@ public struct SilkPlaylistDrawerView: View {
         .frame(maxHeight: .infinity)
         .background(
             ZStack {
-                Color.black.opacity(0.76)
-                VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
-                Rectangle().fill(.ultraThinMaterial)
+                if isLight {
+                    theme.backgroundBase.opacity(0.96)
+                    VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                    Rectangle().fill(.ultraThinMaterial)
+                } else {
+                    Color.black.opacity(0.76)
+                    VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                    Rectangle().fill(.ultraThinMaterial)
+                }
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.32),
-                            Color.white.opacity(0.12),
-                            Color.white.opacity(0.06),
-                            Color.white.opacity(0.18)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
+                    isLight
+                        ? AnyShapeStyle(theme.borderColor.opacity(0.85))
+                        : AnyShapeStyle(LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.32),
+                                Color.white.opacity(0.12),
+                                Color.white.opacity(0.06),
+                                Color.white.opacity(0.18)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )),
                     lineWidth: 0.8
                 )
         )
-        .shadow(color: Color.black.opacity(0.45), radius: 24, x: -6, y: 4)
-        .shadow(color: Color.black.opacity(0.20), radius: 6, x: -2, y: 2)
+        .shadow(color: isLight ? Color.black.opacity(0.12) : Color.black.opacity(0.45), radius: 24, x: -6, y: 4)
+        .shadow(color: isLight ? Color.black.opacity(0.06) : Color.black.opacity(0.20), radius: 6, x: -2, y: 2)
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers: providers)
         }
@@ -101,18 +120,18 @@ public struct SilkPlaylistDrawerView: View {
                 HStack(alignment: .center, spacing: 6) {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.70))
+                        .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.70))
                     Text(L10n.tr("Playlist", "播放列表"))
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.90))
+                        .foregroundColor(isLight ? theme.primaryText : .white.opacity(0.90))
                     if playlist.count > 0 {
                         Text("\(playlist.count)")
                             .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                             .monospacedDigit()
-                            .foregroundColor(.cyan)
+                            .foregroundColor(isLight ? theme.accentColor : .cyan)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1.5)
-                            .background(Capsule().fill(Color.cyan.opacity(0.18)))
+                            .background(Capsule().fill(isLight ? theme.accentColor.opacity(0.18) : Color.cyan.opacity(0.18)))
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 28)
@@ -139,18 +158,18 @@ public struct SilkPlaylistDrawerView: View {
                     Text("\(count)")
                         .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                         .monospacedDigit()
-                        .foregroundColor(isSelected ? .cyan : .white.opacity(0.40))
+                        .foregroundColor(isSelected ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.secondaryText.opacity(0.7) : .white.opacity(0.40)))
                         .padding(.horizontal, 4.5)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(isSelected ? Color.cyan.opacity(0.20) : Color.white.opacity(0.08)))
+                        .background(Capsule().fill(isSelected ? (isLight ? theme.accentColor.opacity(0.18) : Color.cyan.opacity(0.20)) : (isLight ? theme.pillSurface : Color.white.opacity(0.08))))
                 }
             }
-            .foregroundColor(isSelected ? .cyan : .white.opacity(0.65))
+            .foregroundColor(isSelected ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.secondaryText : .white.opacity(0.65)))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.12) : Color.clear)
+                    .fill(isSelected ? (isLight ? theme.pillSurface : Color.white.opacity(0.12)) : Color.clear)
             )
             .contentShape(Rectangle())
         }
@@ -164,18 +183,18 @@ public struct SilkPlaylistDrawerView: View {
             Spacer(minLength: 8)
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.05))
+                    .fill(isLight ? theme.pillSurface : Color.white.opacity(0.05))
                     .frame(width: 52, height: 52)
                 Image(systemName: settings.dualPlaylistMode ? (playlist.activeCategory == .video ? "film.stack" : "music.note.list") : "list.bullet.rectangle")
                     .font(.system(size: 22))
-                    .foregroundColor(.white.opacity(0.35))
+                    .foregroundColor(isLight ? theme.secondaryText.opacity(0.60) : .white.opacity(0.35))
             }
             Text(settings.dualPlaylistMode ? (playlist.activeCategory == .video ? L10n.tr("Video Playlist Empty", "视频列表为空") : L10n.tr("Music Playlist Empty", "音乐列表为空")) : L10n.tr("Playlist is Empty", "播放列表为空"))
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.75))
+                .foregroundColor(isLight ? theme.primaryText : .white.opacity(0.75))
             Text(settings.dualPlaylistMode ? (playlist.activeCategory == .video ? L10n.tr("Drop video files or folders here to add", "拖拽视频文件或文件夹至此处即可添加") : L10n.tr("Drop audio files or folders here to add", "拖拽音频文件或文件夹至此处即可添加")) : L10n.tr("Drop media files or folders here to add", "拖拽媒体文件或文件夹至此处即可添加"))
                 .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.40))
+                .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.40))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
 
@@ -226,10 +245,10 @@ public struct SilkPlaylistDrawerView: View {
                         Spacer(minLength: 24)
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 20))
-                            .foregroundColor(.white.opacity(0.35))
+                            .foregroundColor(isLight ? theme.secondaryText.opacity(0.60) : .white.opacity(0.35))
                         Text(L10n.tr("No matching items", "无匹配项目"))
                             .font(.system(size: 11.5, weight: .medium))
-                            .foregroundColor(.white.opacity(0.60))
+                            .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.60))
                         Spacer(minLength: 24)
                     }
                     .frame(maxWidth: .infinity)
@@ -242,6 +261,7 @@ public struct SilkPlaylistDrawerView: View {
                                 isCurrent: index == playlist.currentIndex,
                                 isPlaying: player.isPlaying,
                                 isHovered: hoveredIndex == index,
+                                theme: theme,
                                 onSelect: {
                                     onSelectPlaylistItem(item)
                                 },
@@ -283,16 +303,16 @@ public struct SilkPlaylistDrawerView: View {
     // MARK: - Footer Toolbar
     private var playlistFooterToolbar: some View {
         VStack(spacing: 0) {
-            Divider().opacity(0.15)
+            Divider().opacity(isLight ? 0.30 : 0.15)
             if isSearchExpanded {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.60))
+                        .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.60))
                     TextField(L10n.tr("Search playlist or initials...", "搜索片名、拼音简拼…"), text: $searchText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 11))
-                        .foregroundColor(.white)
+                        .foregroundColor(isLight ? theme.primaryText : .white)
                         .focused($isSearchFocused)
                         .onExitCommand {
                             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -310,7 +330,7 @@ public struct SilkPlaylistDrawerView: View {
                         }) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 10.5))
-                                .foregroundColor(.white.opacity(0.55))
+                                .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.55))
                         }
                         .buttonStyle(.plain)
                     }
@@ -323,14 +343,14 @@ public struct SilkPlaylistDrawerView: View {
                     }) {
                         Image(systemName: "chevron.right.circle.fill")
                             .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.65))
+                            .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.65))
                     }
                     .buttonStyle(.plain)
                     .help(L10n.tr("Close search (Esc)", "关闭搜索 (Esc)"))
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(isLight ? theme.pillSurface : Color.white.opacity(0.08)))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
             } else {
@@ -346,10 +366,10 @@ public struct SilkPlaylistDrawerView: View {
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundColor(isLight ? theme.primaryText : .white.opacity(0.85))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4.5)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+                        .background(RoundedRectangle(cornerRadius: 6).fill(isLight ? theme.pillSurface : Color.white.opacity(0.08)))
                     }
                     .buttonStyle(.plain)
                     .focusable(false)
@@ -366,9 +386,9 @@ public struct SilkPlaylistDrawerView: View {
                     }) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 10.5, weight: .medium))
-                            .foregroundColor(.white.opacity(0.70))
+                            .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.70))
                             .frame(width: 24, height: 24)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
+                            .background(RoundedRectangle(cornerRadius: 6).fill(isLight ? theme.pillSurface : Color.white.opacity(0.06)))
                     }
                     .buttonStyle(.plain)
                     .focusable(false)
@@ -405,12 +425,12 @@ public struct SilkPlaylistDrawerView: View {
                                     .lineLimit(1)
                                     .fixedSize(horizontal: true, vertical: false)
                             }
-                            .foregroundColor(isAwaitingClearConfirm ? Color(nsColor: .systemRed) : (isFooterClearHovered ? Color(nsColor: .systemRed) : .white.opacity(0.65)))
+                            .foregroundColor(isAwaitingClearConfirm ? Color(nsColor: .systemRed) : (isFooterClearHovered ? Color(nsColor: .systemRed) : (isLight ? theme.secondaryText : .white.opacity(0.65))))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4.5)
                             .background(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(isAwaitingClearConfirm ? Color.red.opacity(0.24) : (isFooterClearHovered ? Color.red.opacity(0.14) : Color.white.opacity(0.06)))
+                                    .fill(isAwaitingClearConfirm ? Color.red.opacity(0.24) : (isFooterClearHovered ? Color.red.opacity(0.14) : (isLight ? theme.pillSurface : Color.white.opacity(0.06))))
                             )
                         }
                         .buttonStyle(.plain)
@@ -863,6 +883,7 @@ public struct SilkMediaInspectorView: View {
 /// Mini 3-bar animated audio equalizer waveform for active playback in drawer.
 private struct DrawerEqualizerWaveform: View {
     let isPlaying: Bool
+    var accentColor: Color = .cyan
     @State private var animating: Bool = false
 
     var body: some View {
@@ -882,7 +903,7 @@ private struct DrawerEqualizerWaveform: View {
 
     private func bar(minHeight: CGFloat, maxHeight: CGFloat, duration: Double) -> some View {
         RoundedRectangle(cornerRadius: 1, style: .continuous)
-            .fill(Color.cyan)
+            .fill(accentColor)
             .frame(width: 2.2, height: (isPlaying && animating) ? maxHeight : minHeight)
             .animation(
                 isPlaying ? .easeInOut(duration: duration).repeatForever(autoreverses: true) : .easeOut(duration: 0.2),
@@ -898,10 +919,15 @@ private struct PlaylistItemRowView: View {
     let isCurrent: Bool
     let isPlaying: Bool
     let isHovered: Bool
+    var theme: SilkLibraryTheme = .shenghui
     let onSelect: () -> Void
     let onReveal: () -> Void
     let onDelete: () -> Void
     let onHoverChange: (Bool) -> Void
+
+    private var isLight: Bool {
+        theme.isLight
+    }
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -948,11 +974,11 @@ private struct PlaylistItemRowView: View {
         HStack(spacing: 3) {
             if isCurrent {
                 if isPlaying {
-                    DrawerEqualizerWaveform(isPlaying: true)
+                    DrawerEqualizerWaveform(isPlaying: true, accentColor: isLight ? theme.accentColor : .cyan)
                 } else {
                     Image(systemName: "pause.fill")
                         .font(.system(size: 8.5, weight: .bold))
-                        .foregroundColor(.cyan)
+                        .foregroundColor(isLight ? theme.accentColor : .cyan)
                 }
             }
 
@@ -960,14 +986,14 @@ private struct PlaylistItemRowView: View {
                 Text(badge)
                     .font(.system(size: 9.5, weight: isCurrent ? .bold : .semibold, design: .monospaced))
                     .monospacedDigit()
-                    .foregroundColor(isCurrent ? .cyan : .cyan.opacity(0.88))
+                    .foregroundColor(isCurrent ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.accentColor.opacity(0.92) : .cyan.opacity(0.88)))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             } else if !isCurrent {
                 Text(String(format: "%02d", index + 1))
                     .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                     .monospacedDigit()
-                    .foregroundColor(.white.opacity(0.38))
+                    .foregroundColor(isLight ? theme.secondaryText.opacity(0.70) : .white.opacity(0.38))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
@@ -979,14 +1005,14 @@ private struct PlaylistItemRowView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(sanitizedTitle.displayTitle)
                 .font(.system(size: 11.5, weight: isCurrent ? .semibold : .regular))
-                .foregroundColor(isCurrent ? .cyan : .white.opacity(0.90))
+                .foregroundColor(isCurrent ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.primaryText : .white.opacity(0.90)))
                 .lineLimit(1)
                 .truncationMode(.tail)
 
             if item.duration > 0 {
                 Text(formatPlaybackTime(item.duration))
                     .font(.system(size: 9.5, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.40))
+                    .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.40))
             }
         }
     }
@@ -996,9 +1022,9 @@ private struct PlaylistItemRowView: View {
             Button(action: onReveal) {
                 Image(systemName: "folder")
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.70))
+                    .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.70))
                     .frame(width: 20, height: 20)
-                    .background(Circle().fill(Color.white.opacity(0.12)))
+                    .background(Circle().fill(isLight ? theme.pillSurface : Color.white.opacity(0.12)))
             }
             .buttonStyle(.plain)
             .help(L10n.showInFinder)
@@ -1006,9 +1032,9 @@ private struct PlaylistItemRowView: View {
             Button(action: onDelete) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.70))
+                    .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.70))
                     .frame(width: 20, height: 20)
-                    .background(Circle().fill(Color.white.opacity(0.12)))
+                    .background(Circle().fill(isLight ? theme.pillSurface : Color.white.opacity(0.12)))
             }
             .buttonStyle(.plain)
             .help(L10n.tr("Remove from Playlist", "从列表中移除"))
@@ -1020,8 +1046,8 @@ private struct PlaylistItemRowView: View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(
                 isCurrent
-                    ? Color.cyan.opacity(0.16)
-                    : (isHovered ? Color.white.opacity(0.07) : Color.white.opacity(0.015))
+                    ? (isLight ? theme.accentColor.opacity(0.14) : Color.cyan.opacity(0.16))
+                    : (isHovered ? (isLight ? theme.pillSurface : Color.white.opacity(0.07)) : (isLight ? Color.clear : Color.white.opacity(0.015)))
             )
     }
 
@@ -1029,8 +1055,8 @@ private struct PlaylistItemRowView: View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
             .strokeBorder(
                 isCurrent
-                    ? Color.cyan.opacity(0.38)
-                    : (isHovered ? Color.white.opacity(0.12) : Color.clear),
+                    ? (isLight ? theme.accentColor.opacity(0.45) : Color.cyan.opacity(0.38))
+                    : (isHovered ? (isLight ? theme.borderColor.opacity(0.65) : Color.white.opacity(0.12)) : Color.clear),
                 lineWidth: 0.75
             )
     }
@@ -1098,6 +1124,12 @@ public struct PlaylistDrawerHandleTab: View {
     public var onHoverChange: ((Bool) -> Void)? = nil
     public let action: () -> Void
 
+    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
+
+    private var theme: SilkLibraryTheme {
+        SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
+    }
+
     public init(
         isDrawerVisible: Bool,
         drawerWidth: CGFloat,
@@ -1116,6 +1148,9 @@ public struct PlaylistDrawerHandleTab: View {
                 .allowsHitTesting(false)
             SilkDrawerHandleRepresentable(
                 isDrawerVisible: isDrawerVisible,
+                customFillColor: theme.isLight ? NSColor(theme.backgroundBase) : nil,
+                customStrokeColor: theme.isLight ? NSColor(theme.borderColor) : nil,
+                customArrowColor: theme.isLight ? NSColor(theme.accentColor) : nil,
                 onHoverChange: onHoverChange,
                 action: action
             )
