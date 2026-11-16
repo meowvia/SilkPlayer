@@ -34,7 +34,7 @@ public final class UpdateService {
     }
 
     public var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7.0"
     }
 
     public init() {

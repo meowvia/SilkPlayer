@@ -187,20 +187,39 @@ public struct AppShellView: View {
                 player.hostWindow?.contentResizeIncrements = NSSize(width: 1, height: 1)
                 let emptyMin = NSSize(width: 640, height: 360)
                 if let w = player.hostWindow, !w.styleMask.contains(.fullScreen), !player.isFullscreen {
-                    w.minSize = emptyMin
-                    w.contentMinSize = emptyMin
                     let screen = w.screen ?? NSScreen.main
                     let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-                    w.maxSize = screenFrame.size
-                    w.contentMaxSize = screenFrame.size
-                    // If current window is smaller than emptyMin, expand smoothly so trailing pull tab is never clipped offscreen
                     let currentFrame = w.frame
-                    if currentFrame.width < emptyMin.width || currentFrame.height < emptyMin.height {
-                        let newWidth = max(currentFrame.width, emptyMin.width)
-                        let newHeight = max(currentFrame.height, emptyMin.height)
-                        let newY = currentFrame.origin.y - (newHeight - currentFrame.height)
-                        let newFrame = NSRect(x: currentFrame.origin.x, y: newY, width: newWidth, height: newHeight)
-                        w.setFrame(newFrame, display: true, animate: true)
+
+                    // ISSUE-022: If closing after playing a portrait/vertical video (width < height)
+                    // or unusually narrow window, reset back to standard 960x540 landscape frame.
+                    if currentFrame.width < currentFrame.height || currentFrame.width < 720 {
+                        let defaultIdleSize = NSSize(width: 960, height: 540)
+                        let targetW = min(defaultIdleSize.width, screenFrame.width)
+                        let targetH = min(defaultIdleSize.height, screenFrame.height)
+                        let centerX = currentFrame.midX
+                        let centerY = currentFrame.midY
+                        let targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, centerX - (targetW / 2)))
+                        let targetY = max(screenFrame.minY, min(screenFrame.maxY - targetH, centerY - (targetH / 2)))
+                        let targetFrame = NSRect(x: targetX, y: targetY, width: targetW, height: targetH)
+                        w.minSize = emptyMin
+                        w.contentMinSize = emptyMin
+                        w.maxSize = screenFrame.size
+                        w.contentMaxSize = screenFrame.size
+                        w.setFrame(targetFrame, display: true, animate: true)
+                    } else {
+                        w.minSize = emptyMin
+                        w.contentMinSize = emptyMin
+                        w.maxSize = screenFrame.size
+                        w.contentMaxSize = screenFrame.size
+                        // If current window is smaller than emptyMin, expand smoothly so trailing pull tab is never clipped offscreen
+                        if currentFrame.width < emptyMin.width || currentFrame.height < emptyMin.height {
+                            let newWidth = max(currentFrame.width, emptyMin.width)
+                            let newHeight = max(currentFrame.height, emptyMin.height)
+                            let newY = currentFrame.origin.y - (newHeight - currentFrame.height)
+                            let newFrame = NSRect(x: currentFrame.origin.x, y: newY, width: newWidth, height: newHeight)
+                            w.setFrame(newFrame, display: true, animate: true)
+                        }
                     }
                 }
             }

@@ -473,7 +473,7 @@ public struct SilkSettingsView: View {
                         .foregroundColor(.primary)
 
                     HStack(spacing: 6) {
-                        Text("1.6.0 (Build 2026.11)")
+                        Text("1.7.0 (Build 2026.11)")
                         Text("·")
                         Text(L10n.tr("Universal Binary", "双架构通用二进制"))
                     }
