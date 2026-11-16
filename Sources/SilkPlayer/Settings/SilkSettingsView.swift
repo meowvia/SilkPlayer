@@ -28,6 +28,14 @@ public struct SilkSettingsView: View {
         licenseEngine.isProActive
     }
 
+    private var isIceBlue: Bool {
+        isProThemed && currentTheme.isIceBlue
+    }
+
+    private var isLightPro: Bool {
+        isProThemed && currentTheme.isLight
+    }
+
     private var isWarmWhitePro: Bool {
         isProThemed
     }
@@ -48,9 +56,33 @@ public struct SilkSettingsView: View {
 
     public var body: some View {
         ZStack {
-            if isWarmWhitePro {
+            if isLightPro {
                 currentTheme.backgroundBase
                     .edgesIgnoringSafeArea(.all)
+            } else if isIceBlue {
+                VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                    .edgesIgnoringSafeArea(.all)
+
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.12, blue: 0.22).opacity(0.48),
+                        Color(red: 0.02, green: 0.05, blue: 0.10).opacity(0.62)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .edgesIgnoringSafeArea(.all)
+
+                RadialGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.85, blue: 1.0).opacity(0.14),
+                        Color.clear
+                    ],
+                    center: .topLeading,
+                    startRadius: 30,
+                    endRadius: 480
+                )
+                .edgesIgnoringSafeArea(.all)
             } else {
                 VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
                     .edgesIgnoringSafeArea(.all)
@@ -72,7 +104,7 @@ public struct SilkSettingsView: View {
             }
         }
         .frame(width: 520, height: 490)
-        .tint(isWarmWhitePro ? currentTheme.accentColor : nil)
+        .tint(isProThemed ? currentTheme.accentColor : nil)
         .preferredColorScheme(settings.effectiveColorScheme)
         .background(
             SettingsWindowAppearanceSync(
@@ -160,13 +192,16 @@ public struct SilkSettingsView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isWarmWhitePro ? currentTheme.pillSurface : Color.primary.opacity(0.06))
+                .fill(isLightPro ? currentTheme.pillSurface : (isIceBlue ? Color.white.opacity(0.08) : Color.primary.opacity(0.06)))
         )
         .overlay(
-            isWarmWhitePro
-                ? RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(currentTheme.borderColor, lineWidth: 0.6)
-                : nil
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(
+                    isLightPro
+                        ? currentTheme.borderColor
+                        : (isIceBlue ? Color.white.opacity(0.20) : Color.clear),
+                    lineWidth: 0.65
+                )
         )
     }
 
@@ -195,16 +230,25 @@ public struct SilkSettingsView: View {
                     .font(.system(size: 12.5, weight: selectedTab == tag ? .medium : .regular))
             }
             .foregroundColor(selectedTab == tag
-                ? (isWarmWhitePro ? currentTheme.accentColor : .primary)
-                : (isWarmWhitePro ? currentTheme.secondaryText : .secondary))
+                ? (isProThemed ? currentTheme.accentColor : .primary)
+                : (isProThemed ? currentTheme.secondaryText : .secondary))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(
                 Group {
                     if selectedTab == tag {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(isWarmWhitePro ? currentTheme.cardSurface : Color(nsColor: .controlBackgroundColor))
-                            .shadow(color: Color.black.opacity(isWarmWhitePro ? 0.05 : 0.12), radius: 2, x: 0, y: 1)
+                        if isIceBlue {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.white.opacity(0.14))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .stroke(Color.white.opacity(0.28), lineWidth: 0.75)
+                                )
+                        } else {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(isLightPro ? currentTheme.cardSurface : Color(nsColor: .controlBackgroundColor))
+                                .shadow(color: Color.black.opacity(isLightPro ? 0.05 : 0.12), radius: 2, x: 0, y: 1)
+                        }
                     } else {
                         Color.clear
                     }
@@ -238,7 +282,7 @@ public struct SilkSettingsView: View {
         HStack {
             Text(text)
                 .font(.system(size: 11.5, weight: .semibold))
-                .foregroundColor(isWarmWhitePro ? currentTheme.secondaryText : .secondary)
+                .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
             Spacer()
         }
         .padding(.horizontal, 4)
@@ -1175,12 +1219,49 @@ public struct SilkSettingsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isWarmWhitePro ? currentTheme.cardSurface : Color(nsColor: .controlBackgroundColor).opacity(0.65))
+            ZStack {
+                if isLightPro {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(currentTheme.cardSurface)
+                } else if isIceBlue {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.65)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.12),
+                                    Color(red: 0.06, green: 0.14, blue: 0.24).opacity(0.38)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                } else {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(nsColor: .controlBackgroundColor).opacity(0.65))
+                }
+            }
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(isWarmWhitePro ? currentTheme.borderColor : Color.primary.opacity(0.07), lineWidth: isWarmWhitePro ? 0.75 : 0.5)
+                .stroke(
+                    isIceBlue
+                        ? AnyShapeStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.50),
+                                    Color(red: 0.05, green: 0.85, blue: 1.0).opacity(0.28),
+                                    Color.white.opacity(0.12)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        : (isLightPro ? AnyShapeStyle(currentTheme.borderColor) : AnyShapeStyle(Color.primary.opacity(0.07))),
+                    lineWidth: isIceBlue ? 0.95 : (isLightPro ? 0.75 : 0.5)
+                )
         )
     }
 

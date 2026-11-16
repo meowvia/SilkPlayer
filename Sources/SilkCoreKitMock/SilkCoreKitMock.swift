@@ -962,12 +962,25 @@ extension SilkMediaLibraryEngine: @unchecked Sendable {}
 
 public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Codable {
     case shenghui = "shenghui"
-    case yaojin = "yaojin"
+    case iceBlue = "iceBlue"
     case nuanbai = "nuanbai"
     case qingci = "qingci"
 
+    public static let liquidGlass = SilkLibraryTheme.iceBlue
+    public static let yaojin = SilkLibraryTheme.iceBlue
+
     public var id: String { rawValue }
     public static let userDefaultsKey = "proLibraryThemeId"
+
+    public init?(rawValue: String) {
+        switch rawValue {
+        case "shenghui": self = .shenghui
+        case "iceBlue", "liquidGlass", "yaojin": self = .iceBlue
+        case "nuanbai": self = .nuanbai
+        case "qingci": self = .qingci
+        default: return nil
+        }
+    }
 
     public static func current() -> SilkLibraryTheme {
         if let raw = UserDefaults.standard.string(forKey: userDefaultsKey),
@@ -980,7 +993,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var displayName: String {
         switch self {
         case .shenghui: return "深灰"
-        case .yaojin: return "曜金"
+        case .iceBlue: return "冰蓝"
         case .nuanbai: return "暖白"
         case .qingci: return "青瓷"
         }
@@ -988,9 +1001,17 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
 
     public var isLight: Bool {
         switch self {
-        case .shenghui, .yaojin: return false
+        case .shenghui, .iceBlue: return false
         case .nuanbai, .qingci: return true
         }
+    }
+
+    public var isIceBlue: Bool {
+        self == .iceBlue
+    }
+
+    public var isLiquidGlass: Bool {
+        self == .iceBlue
     }
 
     public var nsAppearance: NSAppearance? {
@@ -1000,7 +1021,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var swatchColor: Color {
         switch self {
         case .shenghui: return Color(red: 0.31, green: 0.53, blue: 0.85)
-        case .yaojin: return Color(red: 0.878, green: 0.624, blue: 0.243)
+        case .iceBlue: return Color(red: 0.05, green: 0.85, blue: 1.0)
         case .nuanbai: return Color(red: 0.980, green: 0.965, blue: 0.941)
         case .qingci: return Color(red: 0.863, green: 0.914, blue: 0.898)
         }
@@ -1009,7 +1030,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var accentColor: Color {
         switch self {
         case .shenghui: return Color(red: 0.31, green: 0.53, blue: 0.85)
-        case .yaojin: return Color(red: 0.878, green: 0.624, blue: 0.243)
+        case .iceBlue: return Color(red: 0.05, green: 0.85, blue: 1.0)
         case .nuanbai: return Color(red: 0.784, green: 0.408, blue: 0.180)
         case .qingci: return Color(red: 0.165, green: 0.482, blue: 0.435)
         }
@@ -1018,7 +1039,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var backgroundBase: Color {
         switch self {
         case .shenghui: return Color(red: 0.118, green: 0.122, blue: 0.133)
-        case .yaojin: return Color(red: 0.071, green: 0.063, blue: 0.055)
+        case .iceBlue: return Color(red: 0.04, green: 0.08, blue: 0.14).opacity(0.68)
         case .nuanbai: return Color(red: 0.980, green: 0.965, blue: 0.941)
         case .qingci: return Color(red: 0.945, green: 0.961, blue: 0.953)
         }
@@ -1027,7 +1048,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var backgroundHighlight: Color {
         switch self {
         case .shenghui: return Color(red: 0.140, green: 0.148, blue: 0.165)
-        case .yaojin: return Color(red: 0.110, green: 0.094, blue: 0.082)
+        case .iceBlue: return Color(red: 0.08, green: 0.16, blue: 0.26).opacity(0.52)
         case .nuanbai: return Color(red: 0.953, green: 0.914, blue: 0.859)
         case .qingci: return Color(red: 0.890, green: 0.922, blue: 0.910)
         }
@@ -1036,7 +1057,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var cardSurface: Color {
         switch self {
         case .shenghui: return Color(red: 0.149, green: 0.157, blue: 0.173).opacity(0.92)
-        case .yaojin: return Color(red: 0.125, green: 0.108, blue: 0.094).opacity(0.94)
+        case .iceBlue: return Color(red: 0.10, green: 0.18, blue: 0.28).opacity(0.38)
         case .nuanbai: return Color.white.opacity(0.96)
         case .qingci: return Color.white.opacity(0.95)
         }
@@ -1045,7 +1066,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var cardFocusedSurface: Color {
         switch self {
         case .shenghui: return accentColor.opacity(0.14)
-        case .yaojin: return Color(red: 0.878, green: 0.624, blue: 0.243).opacity(0.15)
+        case .iceBlue: return Color(red: 0.05, green: 0.85, blue: 1.0).opacity(0.22)
         case .nuanbai: return Color(red: 0.965, green: 0.933, blue: 0.890)
         case .qingci: return Color(red: 0.898, green: 0.937, blue: 0.925)
         }
@@ -1054,7 +1075,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var pillSurface: Color {
         switch self {
         case .shenghui: return Color.white.opacity(0.065)
-        case .yaojin: return Color(red: 0.96, green: 0.88, blue: 0.74).opacity(0.075)
+        case .iceBlue: return Color.white.opacity(0.12)
         case .nuanbai: return Color(red: 0.941, green: 0.902, blue: 0.839)
         case .qingci: return Color(red: 0.863, green: 0.906, blue: 0.894)
         }
@@ -1067,7 +1088,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var borderColor: Color {
         switch self {
         case .shenghui: return Color.white.opacity(0.095)
-        case .yaojin: return Color(red: 0.92, green: 0.78, blue: 0.52).opacity(0.16)
+        case .iceBlue: return Color(red: 0.70, green: 0.88, blue: 1.0).opacity(0.36)
         case .nuanbai: return Color(red: 0.894, green: 0.827, blue: 0.749)
         case .qingci: return Color(red: 0.776, green: 0.839, blue: 0.820)
         }
@@ -1076,7 +1097,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var dividerColor: Color {
         switch self {
         case .shenghui: return Color.white.opacity(0.22)
-        case .yaojin: return Color(red: 0.92, green: 0.78, blue: 0.52).opacity(0.22)
+        case .iceBlue: return Color(red: 0.65, green: 0.82, blue: 0.98).opacity(0.24)
         case .nuanbai: return Color(red: 0.922, green: 0.863, blue: 0.796)
         case .qingci: return Color(red: 0.808, green: 0.863, blue: 0.847)
         }
@@ -1085,7 +1106,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var primaryText: Color {
         switch self {
         case .shenghui: return Color(red: 0.925, green: 0.933, blue: 0.949)
-        case .yaojin: return Color(red: 0.961, green: 0.937, blue: 0.902)
+        case .iceBlue: return Color.white
         case .nuanbai: return Color(red: 0.169, green: 0.137, blue: 0.110)
         case .qingci: return Color(red: 0.094, green: 0.141, blue: 0.129)
         }
@@ -1094,7 +1115,7 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
     public var secondaryText: Color {
         switch self {
         case .shenghui: return Color(red: 0.604, green: 0.627, blue: 0.667)
-        case .yaojin: return Color(red: 0.639, green: 0.588, blue: 0.533)
+        case .iceBlue: return Color(red: 0.82, green: 0.90, blue: 0.98)
         case .nuanbai: return Color(red: 0.431, green: 0.369, blue: 0.314)
         case .qingci: return Color(red: 0.337, green: 0.420, blue: 0.396)
         }

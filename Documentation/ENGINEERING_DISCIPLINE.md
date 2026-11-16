@@ -22,13 +22,25 @@
   - 特性边界：开源前端，无商业授权锁、无强制付费限制，坚守永久免费承诺。
   - 发布镜像：统一命名为 `SilkPlayer-<version>-universal.dmg`。
 - **专业版（Pro Edition）**：
-  - 产品命名：严格使用 `SilkPlayer Pro`。
+  - 产品命名：商业发行命名为 `SilkPlayer Pro`，但**版本号严禁附加 `-pro` 标识**，直接使用标准语义化版本号 `2.0.0`（严禁写成 `2.0.0-pro`）。
   - 版本号规范：版本号起步为 `2.0.0`，严格归入 `2.x` 及后续大版本序列（严禁占用 1.x 次版本号）。
-  - 分支维护：在独立下游分支（如 `feature/v2.0.0-pro`）持续维护，严禁将 Pro 商业授权代码与闭源内核反向合入开源 `main` 主干。
-  - 发布镜像：统一命名为 `SilkPlayer-Pro-<version>-universal.dmg`。
-- **版本号格式**：版本命名统一去除 `v` 前缀（例如使用 `2.0.0-pro`，不使用 `v2.0.0-pro`）。
+  - 分支维护：在独立下游分支（如 `feature/v2.0.0`）持续维护，严禁将 Pro 商业授权代码与闭源内核反向合入开源 `main` 主干。
+  - 发布镜像：统一命名为 `SilkPlayer-Pro-<version>-universal.dmg`（如 `SilkPlayer-Pro-2.0.0-universal.dmg`）。
+- **版本号格式**：版本命名统一去除 `v` 前缀（例如使用 `2.0.0`，不使用 `v2.0.0` 或 `2.0.0-pro`）。
 
-### 1.4 Git 提交规范与作者标准
+### 1.4 双轨更新说明阐述规范 (Dual-Track Release Notes Standard)
+- 自 `2.0.0` 起，随着版本的持续迭代，所有公开发布的更新说明（Release Notes 与 Changelog）**必须强制结构化分列免费版与 Pro 版**，分别按以下三要素进行客观阐述，严禁混淆：
+  1. **【免费版 / Standard Edition】**：
+     - 新增特性 (Features)
+     - 优化改进 (Improvements)
+     - 问题修复 (Bug Fixes)
+  2. **【专业版 / Pro Edition】**：
+     - 新增特性 (Features)
+     - 优化改进 (Improvements)
+     - 问题修复 (Bug Fixes)
+- 无论是在 GitHub Releases、官网还是客户端内更新提示，均严格遵循此双轨分列结构。
+
+### 1.5 Git 提交规范与作者标准
 - 所有 Git 提交必须统一显式指定提交作者：`--author="meowvia <meowvia@users.noreply.github.com>"`。
 - 提交信息必须遵循 Conventional Commits 格式（如 `fix(theme): ...`、`feat(library): ...`），简明扼要表达变更内容。
 

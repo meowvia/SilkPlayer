@@ -304,8 +304,8 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         XCTAssertEqual(settings.proLibraryTheme, .shenghui)
         XCTAssertFalse(settings.proLibraryTheme.isLight)
 
-        settings.proLibraryTheme = .yaojin
-        XCTAssertEqual(settings.proLibraryTheme, .yaojin)
+        settings.proLibraryTheme = .iceBlue
+        XCTAssertEqual(settings.proLibraryTheme, .iceBlue)
         XCTAssertFalse(settings.proLibraryTheme.isLight)
 
         settings.proLibraryTheme = .qingci
@@ -530,7 +530,7 @@ final class ProLibraryAndLicenseTests: XCTestCase {
 
         XCTAssertEqual(SilkLibraryTheme.allCases.map(\.displayName).count, 4)
         XCTAssertTrue(SilkLibraryTheme.allCases.contains(.shenghui))
-        XCTAssertTrue(SilkLibraryTheme.allCases.contains(.yaojin))
+        XCTAssertTrue(SilkLibraryTheme.allCases.contains(.iceBlue))
         XCTAssertTrue(SilkLibraryTheme.allCases.contains(.nuanbai))
         XCTAssertTrue(SilkLibraryTheme.allCases.contains(.qingci))
 

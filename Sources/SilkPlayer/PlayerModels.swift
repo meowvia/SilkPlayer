@@ -28,7 +28,7 @@ public struct MediaFileClassifier: Sendable {
 
     public static let audioExtensions: Set<String> = [
         "mp3", "flac", "ape", "wav", "wave", "aac", "m4a", "ogg", "opus", "alac", "aiff", "aif",
-        "wma", "dsf", "dff", "dsd", "cue", "mka", "ac3", "eac3", "dts", "dtshd", "caf", "pcm", "mid", "midi"
+        "wma", "dsf", "dff", "dsd", "cue", "mka", "ac3", "eac3", "dts", "dtshd", "thd", "mlp", "wv", "tak", "tta", "caf", "pcm", "mid", "midi"
     ]
     
     public static func classify(url: URL) -> MediaType {
