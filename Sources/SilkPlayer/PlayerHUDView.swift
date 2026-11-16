@@ -996,7 +996,11 @@ public struct PlayerHUDView: View {
     private func skipPillsOverlay(tier: HUDLayoutTier) -> some View {
         let shouldShowIntro: Bool = {
             guard let introEnd = player.introEndTime, introEnd > 10.0 else { return false }
-            return player.currentTime < (introEnd - 1.5)
+            let introStart = player.introStartTime ?? 0.0
+            if introStart <= 5.0 {
+                return player.currentTime < (introEnd - 1.0)
+            }
+            return player.currentTime >= (introStart - 2.0) && player.currentTime < (introEnd - 1.0)
         }()
 
         let shouldShowOutro: Bool = {
@@ -1010,7 +1014,13 @@ public struct PlayerHUDView: View {
                     Button {
                         player.seek(to: introEnd)
                         if let path = player.currentFilePath {
-                            EpisodeSkipManager.shared.saveMemory(for: path, intro: introEnd, outro: player.outroStartTime, duration: player.duration)
+                            EpisodeSkipManager.shared.saveMemory(
+                                for: path,
+                                introStart: player.introStartTime,
+                                introEnd: introEnd,
+                                outroStart: player.outroStartTime,
+                                duration: player.duration
+                            )
                         }
                         player.showOSD(.track(type: L10n.tr("Skipped Intro", "已跳过片头"), title: "\(formatPlaybackTime(introEnd)) [按 ← 撤回]"))
                     } label: {
