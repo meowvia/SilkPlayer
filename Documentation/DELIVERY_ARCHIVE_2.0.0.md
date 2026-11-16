@@ -66,5 +66,6 @@ SilkPlayer 2.0.0 确立了统一版本号、双轨制能力交付的架构基准
 - **芯片架构**: Universal Binary (`arm64` + `x86_64`)
 - **发布镜像物理路径**:
   `/Volumes/2T/Projects/SilkPlayer/SilkPlayer/build/SilkPlayer-2.0.0-universal.dmg`
+- **SHA-256 校验和**: `361784f960713bb4e129be186c04ddb109f408f9d3f4e77ebc9ec486e3129392`
 - **动态库依赖审计**: `@rpath` 依赖审计 100% 通过（无宿主绝对路径泄漏）；
 - **代码签名**: Ad-hoc 深度代码签名校验通过。
