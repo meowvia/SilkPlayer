@@ -5,7 +5,7 @@ public struct PlaylistItem: Identifiable, Hashable, Sendable, Codable {
     public let id: UUID
     public let path: String
     public let title: String
-    public let duration: Double
+    public var duration: Double
     public let mediaItemId: UUID?
 
     public var url: URL {

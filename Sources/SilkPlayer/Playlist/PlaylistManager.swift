@@ -552,6 +552,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             ensureShuffleCandidate()
         }
         saveToStorage()
+        probeMissingDurations()
     }
 
     public func setPlaylist(playlistItems: [PlaylistItem], startingIndex: Int = 0) {
@@ -617,6 +618,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             ensureShuffleCandidate()
         }
         saveToStorage()
+        probeMissingDurations()
     }
 
     public func setSingleItem(path: String, title: String? = nil, duration: Double = 0.0) {
@@ -692,6 +694,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             }
         }
         saveToStorage()
+        probeMissingDurations()
     }
 
     @discardableResult
@@ -785,6 +788,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         }
 
         saveToStorage()
+        probeMissingDurations()
         return currentItem
     }
 
@@ -838,6 +842,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             recordRecentTrack(at: currentIndex)
         }
         saveToStorage()
+        probeMissingDurations()
         return currentItem
     }
 
@@ -872,6 +877,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             }
         }
         saveToStorage()
+        probeMissingDurations()
         return currentItem
     }
 
@@ -962,6 +968,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             ensureShuffleCandidate()
         }
         saveToStorage()
+        probeMissingDurations()
         return currentItem
     }
 
@@ -1525,5 +1532,47 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         userDefaults.removeObject(forKey: customShuffleQueueStorageKey)
         userDefaults.removeObject(forKey: customPlayHistoryStorageKey)
         userDefaults.removeObject(forKey: customRecentKeysStorageKey)
+    }
+
+    // MARK: - Asynchronous Missing Duration Probing
+    private var durationProbeTask: Task<Void, Never>? = nil
+
+    /// Updates the duration for any playlist item matching the specified path.
+    public func updateDuration(forPath path: String, duration: Double) {
+        guard duration > 0 else { return }
+        var changed = false
+        for i in 0..<videoItems.count {
+            if videoItems[i].path == path && videoItems[i].duration <= 0 {
+                videoItems[i].duration = duration
+                changed = true
+            }
+        }
+        for i in 0..<audioItems.count {
+            if audioItems[i].path == path && audioItems[i].duration <= 0 {
+                audioItems[i].duration = duration
+                changed = true
+            }
+        }
+        if changed {
+            syncUnifiedItems()
+        }
+    }
+
+    /// Asynchronously probes file durations in the background for items missing duration info.
+    public func probeMissingDurations() {
+        let missing = items.filter { $0.duration <= 0.0 }
+        guard !missing.isEmpty else { return }
+
+        durationProbeTask?.cancel()
+        durationProbeTask = Task.detached(priority: .utility) { [weak self] in
+            for item in missing {
+                guard !Task.isCancelled else { break }
+                let dur = await MediaDurationProbe.probeDuration(at: item.path)
+                guard dur > 0, !Task.isCancelled else { continue }
+                await MainActor.run { [weak self] in
+                    self?.updateDuration(forPath: item.path, duration: dur)
+                }
+            }
+        }
     }
 }

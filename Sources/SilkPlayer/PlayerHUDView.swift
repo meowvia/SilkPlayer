@@ -185,14 +185,6 @@ public struct PlayerHUDView: View {
                     Spacer()
                         .allowsHitTesting(false)
 
-                    // PROPOSAL-012: Contextual Floating Skip Pills for Intro & Outro
-                    if !player.isAudioOnly {
-                        skipPillsOverlay(tier: tier)
-                            .padding(.horizontal, tier == .minimal ? 12 : 24)
-                            .padding(.bottom, 4)
-                            .opacity(isHUDActive ? 1.0 : 0.85)
-                    }
-
                     bottomControls(tier: tier, width: availableWidth)
                         .opacity(isHUDActive ? 1.0 : 0.0)
                         .allowsHitTesting(isHUDActive)
@@ -989,89 +981,6 @@ public struct PlayerHUDView: View {
 
     private func triggerScreenshot() {
         player.takeScreenshot()
-    }
-
-    // MARK: - Contextual Floating Skip Pills (PROPOSAL-012)
-    @ViewBuilder
-    private func skipPillsOverlay(tier: HUDLayoutTier) -> some View {
-        let shouldShowIntro: Bool = {
-            guard let introEnd = player.introEndTime, introEnd > 10.0 else { return false }
-            let introStart = player.introStartTime ?? 0.0
-            if introStart <= 5.0 {
-                return player.currentTime < (introEnd - 1.0)
-            }
-            return player.currentTime >= (introStart - 2.0) && player.currentTime < (introEnd - 1.0)
-        }()
-
-        let shouldShowOutro: Bool = {
-            guard let outroStart = player.outroStartTime, outroStart > 0 else { return false }
-            return player.currentTime >= (outroStart - 3.0) && playlist.count > 1
-        }()
-
-        if shouldShowIntro || shouldShowOutro {
-            HStack {
-                if shouldShowIntro, let introEnd = player.introEndTime {
-                    Button {
-                        player.seek(to: introEnd)
-                        if let path = player.currentFilePath {
-                            EpisodeSkipManager.shared.saveMemory(
-                                for: path,
-                                introStart: player.introStartTime,
-                                introEnd: introEnd,
-                                outroStart: player.outroStartTime,
-                                duration: player.duration
-                            )
-                        }
-                        player.showOSD(.track(type: L10n.tr("Skipped Intro", "已跳过片头"), title: "\(formatPlaybackTime(introEnd)) [按 ← 撤回]"))
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "forward.fill")
-                                .font(.system(size: 9.5, weight: .bold))
-                            Text(L10n.tr("Skip Intro", "跳过片头"))
-                                .font(.system(size: 11.5, weight: .semibold))
-                            Text(formatPlaybackTime(introEnd))
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.65))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 5.5)
-                        .background(Capsule().fill(Color.black.opacity(0.65)))
-                        .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).clipShape(Capsule()))
-                        .overlay(Capsule().strokeBorder(LinearGradient(colors: [Color.yellow.opacity(0.6), Color.orange.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.8))
-                        .shadow(color: .black.opacity(0.4), radius: 6, x: 0, y: 2)
-                    }
-                    .buttonStyle(.plain)
-                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
-                }
-
-                Spacer()
-
-                if shouldShowOutro {
-                    Button {
-                        onPlayNext?()
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text(L10n.tr("Next Episode", "跳过片尾 · 连播下集"))
-                                .font(.system(size: 11.5, weight: .semibold))
-                            Image(systemName: "forward.end.fill")
-                                .font(.system(size: 9.5, weight: .bold))
-                        }
-                        .foregroundColor(.cyan)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 5.5)
-                        .background(Capsule().fill(Color.black.opacity(0.65)))
-                        .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).clipShape(Capsule()))
-                        .overlay(Capsule().strokeBorder(Color.cyan.opacity(0.5), lineWidth: 0.8))
-                        .shadow(color: .black.opacity(0.4), radius: 6, x: 0, y: 2)
-                    }
-                    .buttonStyle(.plain)
-                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: shouldShowIntro)
-            .animation(.easeInOut(duration: 0.25), value: shouldShowOutro)
-        }
     }
 }
 

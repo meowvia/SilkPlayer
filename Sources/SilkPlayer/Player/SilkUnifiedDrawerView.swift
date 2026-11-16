@@ -880,6 +880,38 @@ public struct SilkMediaInspectorView: View {
     }
 }
 
+/// Mini 3-bar subtle playing equalizer indicator located at the trailing edge of the active item card.
+private struct DrawerPlayingEqualizer: View {
+    let isPlaying: Bool
+    let accentColor: Color
+    @State private var animating: Bool = false
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 1.8) {
+            bar(minH: 3.5, maxH: 10.5, dur: 0.52)
+            bar(minH: 6.0, maxH: 13.5, dur: 0.38)
+            bar(minH: 4.0, maxH: 11.5, dur: 0.46)
+        }
+        .frame(width: 11, height: 14)
+        .onAppear {
+            if isPlaying { animating = true }
+        }
+        .onChange(of: isPlaying) { _, playing in
+            animating = playing
+        }
+    }
+
+    private func bar(minH: CGFloat, maxH: CGFloat, dur: Double) -> some View {
+        RoundedRectangle(cornerRadius: 0.8, style: .continuous)
+            .fill(accentColor)
+            .frame(width: 2.0, height: (isPlaying && animating) ? maxH : minH)
+            .animation(
+                isPlaying ? .easeInOut(duration: dur).repeatForever(autoreverses: true) : .easeOut(duration: 0.2),
+                value: animating
+            )
+    }
+}
+
 /// Standalone row view for each item in the playlist drawer to optimize SwiftUI type-checking.
 private struct PlaylistItemRowView: View {
     let index: Int
@@ -904,7 +936,10 @@ private struct PlaylistItemRowView: View {
                 HStack(spacing: 8) {
                     leadingIndicator
                     titleAndMeta
-                    Spacer(minLength: 0)
+                    Spacer(minLength: 8)
+                    if isCurrent {
+                        playingIndicator
+                    }
                 }
                 .padding(.leading, 8)
                 .padding(.trailing, 50)
@@ -927,6 +962,15 @@ private struct PlaylistItemRowView: View {
         .overlay(rowOverlay)
         .contentShape(Rectangle())
         .onHover { onHoverChange($0) }
+    }
+
+    private var playingIndicator: some View {
+        DrawerPlayingEqualizer(
+            isPlaying: isPlaying,
+            accentColor: isLight ? theme.accentColor : .cyan
+        )
+        .opacity(isHovered ? 0.0 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
     }
 
     private var rawFileName: String {

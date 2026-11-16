@@ -159,52 +159,6 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var selectedAudioTrackId: Int = 1
     @Published public var selectedSubtitleTrackId: Int = 0
     @Published public var chapters: [ChapterItem] = []
-    @Published public var introStartTime: Double? = nil
-    @Published public var introEndTime: Double? = nil
-    @Published public var outroStartTime: Double? = nil
-
-    // MARK: - Auto-Skip Intro & Transition Leaps (PROPOSAL-012)
-    public var undoSkipIntroTarget: Double? = nil
-    public var undoSkipIntroTime: Date = .distantPast
-
-    public var detectedIntroEndTime: Double? {
-        introEndTime
-    }
-
-    public func refreshEpisodeSkipRanges() {
-        let dur = duration > 0 ? duration : (cachedDuration > 0 ? cachedDuration : 0)
-        let range = EpisodeSkipManager.shared.resolveSkipRange(
-            duration: dur,
-            chapters: chapters,
-            filePath: currentFilePath
-        )
-        self.introStartTime = range.introStartTime
-        self.introEndTime = range.introEndTime
-        self.outroStartTime = range.outroStartTime
-        if let path = currentFilePath, (range.introEndTime != nil || range.outroStartTime != nil) {
-            EpisodeSkipManager.shared.saveMemory(
-                for: path,
-                introStart: range.introStartTime,
-                introEnd: range.introEndTime,
-                outroStart: range.outroStartTime,
-                duration: dur
-            )
-        }
-    }
-
-    public func detectAndAutoSkipIntroIfNeeded() {
-        guard AppSettings.shared.autoSkipIntro, !isAudioOnly else { return }
-        refreshEpisodeSkipRanges()
-        guard let introStart = introStartTime, let introEnd = introEndTime, introEnd > introStart else { return }
-        // Only perform immediate on-load leap if the intro starts directly at the beginning (no cold open)
-        if introStart <= 5.0 && currentTime < max(5.0, introEnd - 5.0) {
-            let prev = currentTime
-            undoSkipIntroTarget = prev
-            undoSkipIntroTime = Date()
-            seek(to: introEnd)
-            showOSD(.track(type: L10n.tr("Auto-Skipped Intro", "已自动跳过片头"), title: "\(formatPlaybackTime(introEnd)) [按 ← 撤回]"))
-        }
-    }
 
     // MARK: - HDR, Color & Picture Controls
     @Published public var isDebandEnabled: Bool = false
@@ -1062,10 +1016,6 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         self.chapters = player.chapters.enumerated().map { idx, ch in
             ChapterItem(id: idx, title: ch.title, time: ch.start)
         }
-        refreshEpisodeSkipRanges()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.detectAndAutoSkipIntroIfNeeded()
-        }
     }
 
     // MARK: - HDR, Color & Adjustments
@@ -1673,27 +1623,10 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             togglePlayPause()
             return nil
         case 123: // Left Arrow
-            if let undo = undoSkipIntroTarget, Date().timeIntervalSince(undoSkipIntroTime) <= 3.5 {
-                undoSkipIntroTarget = nil
-                seek(to: undo)
-                showOSD(.track(type: L10n.tr("Undo Skip", "撤回跳过"), title: formatPlaybackTime(undo)))
-                return nil
-            }
             let stepSec = flags.contains(.shift) ? AppSettings.shared.longSeekStep : AppSettings.shared.shortSeekStep
             step(seconds: -stepSec)
             return nil
         case 124: // Right Arrow
-            if let introStart = introStartTime, let introEnd = introEndTime, introEnd > introStart + 5.0 {
-                let inIntroWindow = (introStart <= 5.0) ? (currentTime < introEnd - 2.0) : (currentTime >= (introStart - 2.0) && currentTime < (introEnd - 1.0))
-                if inIntroWindow {
-                    let prevTime = currentTime
-                    undoSkipIntroTarget = prevTime
-                    undoSkipIntroTime = Date()
-                    seek(to: introEnd)
-                    showOSD(.track(type: L10n.tr("Skip Intro", "跳过片头"), title: "\(formatPlaybackTime(introEnd)) [按 ← 撤回]"))
-                    return nil
-                }
-            }
             let stepSec = flags.contains(.shift) ? AppSettings.shared.longSeekStep : AppSettings.shared.shortSeekStep
             step(seconds: stepSec)
             return nil
@@ -1851,21 +1784,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         if totalTime.isFinite && abs(self.cachedDuration - totalTime) > 0.001 {
             self.cachedDuration = totalTime
         }
-        if becameValidDuration || (self.introEndTime == nil && self.outroStartTime == nil && totalTime > 60.0 && !self.chapters.isEmpty) {
-            refreshEpisodeSkipRanges()
-        }
-        if AppSettings.shared.autoSkipIntro && !self.isAudioOnly,
-           let introStart = self.introStartTime,
-           let introEnd = self.introEndTime,
-           introEnd > introStart + 5.0,
-           introStart > 5.0 {
-            if currentTime >= introStart && currentTime < (introStart + 0.6) {
-                let prevTime = currentTime
-                self.undoSkipIntroTarget = prevTime
-                self.undoSkipIntroTime = Date()
-                self.seek(to: introEnd)
-                self.showOSD(.track(type: L10n.tr("Auto-Skipped Intro", "已自动跳过片头"), title: "\(formatPlaybackTime(introEnd)) [按 ← 撤回]"))
-            }
+        if totalTime.isFinite && totalTime > 0, let p = self.currentFilePath {
+            PlaylistManager.shared.updateDuration(forPath: p, duration: totalTime)
         }
         if becameValidDuration, self.isAudioOnly, let path = self.currentFilePath {
             AudioTrackMetadataService.shared.mergeLiveStreamInfo(

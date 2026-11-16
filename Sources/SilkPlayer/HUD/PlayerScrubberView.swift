@@ -191,26 +191,6 @@ public struct PlayerScrubberView: View {
                 }
             }()
 
-            let introStartX: CGFloat? = {
-                guard clock.duration > 0, let introStart = player.introStartTime, introStart < clock.duration else { return nil }
-                let fraction = CGFloat(max(0.0, min(1.0, introStart / clock.duration)))
-                return currentKnobRadius + fraction * currentTravelSpan
-            }()
-
-            let introMarkerX: CGFloat? = {
-                guard clock.duration > 0, let introEnd = player.introEndTime, introEnd > 0, introEnd < clock.duration else { return nil }
-                let fraction = CGFloat(max(0.0, min(1.0, introEnd / clock.duration)))
-                guard fraction > 0.005 && fraction < 0.995 else { return nil }
-                return currentKnobRadius + fraction * currentTravelSpan
-            }()
-
-            let outroMarkerX: CGFloat? = {
-                guard clock.duration > 0, let outroStart = player.outroStartTime, outroStart > 0, outroStart < clock.duration else { return nil }
-                let fraction = CGFloat(max(0.0, min(1.0, outroStart / clock.duration)))
-                guard fraction > 0.005 && fraction < 0.995 else { return nil }
-                return currentKnobRadius + fraction * currentTravelSpan
-            }()
-
             let playedWidth = max(0, min(totalWidth, currentKnobX))
 
             ZStack(alignment: .leading) {
@@ -296,54 +276,6 @@ public struct PlayerScrubberView: View {
                         }
                     }
 
-                    // PROPOSAL-012: Prominent Intro Marker & Span (Gold highlight)
-                    if let endX = introMarkerX {
-                        let iMarkerHeight = trackHeight + 3.5
-                        let iMarkerY = (size.height - iMarkerHeight) * 0.5
-
-                        // Subtle golden highlight span on the track representing intro duration
-                        if let startX = introStartX, endX > startX + 2.0 {
-                            let spanRect = CGRect(x: startX, y: trackY, width: endX - startX, height: trackHeight)
-                            graphics.fill(
-                                Path(roundedRect: spanRect, cornerRadius: 1.0),
-                                with: .color(Color(red: 1.0, green: 0.85, blue: 0.35).opacity(0.35))
-                            )
-                            if (player.introStartTime ?? 0.0) > 5.0 {
-                                graphics.fill(
-                                    Path(CGRect(x: startX - 1.0, y: iMarkerY, width: 2.0, height: iMarkerHeight)),
-                                    with: .color(Color.black.opacity(0.40))
-                                )
-                                graphics.fill(
-                                    Path(CGRect(x: startX - 0.5, y: iMarkerY, width: 1.0, height: iMarkerHeight)),
-                                    with: .color(Color(red: 1.0, green: 0.85, blue: 0.40).opacity(0.85))
-                                )
-                            }
-                        }
-
-                        // Gold highlight notch at introEnd
-                        graphics.fill(
-                            Path(CGRect(x: endX - 1.5, y: iMarkerY, width: 3.0, height: iMarkerHeight)),
-                            with: .color(Color.black.opacity(0.50))
-                        )
-                        graphics.fill(
-                            Path(CGRect(x: endX - 0.75, y: iMarkerY, width: 1.5, height: iMarkerHeight)),
-                            with: .color(Color(red: 1.0, green: 0.85, blue: 0.40))
-                        )
-                    }
-
-                    // PROPOSAL-012: Prominent Outro Marker Notch (Warm amber highlight notch)
-                    if let outroX = outroMarkerX {
-                        let oMarkerHeight = trackHeight + 3.5
-                        let oMarkerY = (size.height - oMarkerHeight) * 0.5
-                        graphics.fill(
-                            Path(CGRect(x: outroX - 1.5, y: oMarkerY, width: 3.0, height: oMarkerHeight)),
-                            with: .color(Color.black.opacity(0.50))
-                        )
-                        graphics.fill(
-                            Path(CGRect(x: outroX - 0.75, y: oMarkerY, width: 1.5, height: oMarkerHeight)),
-                            with: .color(Color(red: 1.0, green: 0.65, blue: 0.35))
-                        )
-                    }
                 }
                 .frame(width: totalWidth, height: geometry.size.height)
 
@@ -364,19 +296,7 @@ public struct PlayerScrubberView: View {
                     let activeFraction = fraction(for: activeAnchorX, totalWidth: totalWidth, isExpanded: isExpanded)
                     let rawTime = player.isScrubbing ? player.scrubTime : (activeFraction * clock.duration)
                     let activeChapter = player.chapters.last(where: { $0.time <= rawTime })
-                    let chapterTitle: String? = {
-                        let title = activeChapter?.title
-                        if let introEnd = player.introEndTime {
-                            let introStart = player.introStartTime ?? 0.0
-                            if rawTime >= (introStart - 0.5) && rawTime <= (introEnd + 0.5) {
-                                return "\(L10n.tr("Intro", "片头")) (\(formatPlaybackTime(introStart)) - \(formatPlaybackTime(introEnd)))"
-                            }
-                        }
-                        if let outroStart = player.outroStartTime, rawTime >= (outroStart - 0.5) {
-                            return "\(L10n.tr("Outro", "片尾")) (\(formatPlaybackTime(outroStart)) - \(formatPlaybackTime(clock.duration)))"
-                        }
-                        return title
-                    }()
+                    let chapterTitle: String? = activeChapter?.title
 
                     let isVertical = player.isEffectiveVertical
                     let cardHalfWidth: CGFloat = (isVertical || player.transform.isPerpendicular) ? 42 : 85
@@ -442,7 +362,7 @@ public struct PlayerScrubberView: View {
                         }
                         let dragFraction = fraction(for: value.location.x, totalWidth: geometry.size.width, isExpanded: true)
                         let rawTime = max(0.0, min(clock.duration, dragFraction * clock.duration))
-                        let targetTime = Self.snapTime(rawTime, duration: clock.duration, chapters: player.chapters, introStartTime: player.introStartTime, introTime: player.introEndTime, outroTime: player.outroStartTime)
+                        let targetTime = Self.snapTime(rawTime, duration: clock.duration, chapters: player.chapters)
                         player.updateScrubbing(to: targetTime)
                         if showsHoverPreview, abs(targetTime - lastHoverRequestedTime) >= 0.05 {
                             let isInitialScrub = (lastHoverRequestedTime < 0)
@@ -465,7 +385,7 @@ public struct PlayerScrubberView: View {
                         lastHoverRequestedTime = -1.0
                         let dragFraction = fraction(for: value.location.x, totalWidth: geometry.size.width, isExpanded: true)
                         let rawTime = max(0.0, min(clock.duration, dragFraction * clock.duration))
-                        let targetTime = Self.snapTime(rawTime, duration: clock.duration, chapters: player.chapters, introTime: player.introEndTime, outroTime: player.outroStartTime)
+                        let targetTime = Self.snapTime(rawTime, duration: clock.duration, chapters: player.chapters)
                         player.finishScrubbing(to: targetTime)
                         if showsHoverPreview, !isHovered {
                             thumbnailEngine.clearCurrent()
@@ -508,20 +428,11 @@ public struct PlayerScrubberView: View {
         return CGFloat(max(0, min(1, time / clock.duration)))
     }
 
-    // MARK: - Chapter & Intro/Outro Snapping Kinematics
-    /// Evaluates magnetic chapter/intro snapping with an adaptive threshold: max(2.0, duration * 0.012).
-    public static func snapTime(_ rawTime: Double, duration: Double, chapters: [ChapterItem], introStartTime: Double? = nil, introTime: Double? = nil, outroTime: Double? = nil) -> Double {
+    // MARK: - Chapter Snapping Kinematics
+    /// Evaluates magnetic chapter snapping with an adaptive threshold: max(2.0, duration * 0.012).
+    public static func snapTime(_ rawTime: Double, duration: Double, chapters: [ChapterItem]) -> Double {
         guard duration > 0 else { return rawTime }
         let threshold = max(2.0, duration * 0.012)
-        if let introStart = introStartTime, introStart > 5.0, abs(rawTime - introStart) <= threshold {
-            return introStart
-        }
-        if let intro = introTime, abs(rawTime - intro) <= threshold {
-            return intro
-        }
-        if let outro = outroTime, abs(rawTime - outro) <= threshold {
-            return outro
-        }
         for chapter in chapters {
             if abs(rawTime - chapter.time) <= threshold {
                 return chapter.time

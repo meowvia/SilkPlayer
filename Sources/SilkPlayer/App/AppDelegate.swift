@@ -8,6 +8,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp?.setActivationPolicy(.regular)
+        UserDefaults.standard.removeObject(forKey: "SilkEpisodeSkipMemory")
+        UserDefaults.standard.removeObject(forKey: "SilkAudioIntroCache")
+        UserDefaults.standard.removeObject(forKey: "SilkGoldenIntroTemplates")
         SilkProIconManager.syncApplicationIcon(isProActive: SilkProLicenseEngine.shared.isProActive)
         NSApp?.activate(ignoringOtherApps: true)
         Task { @MainActor in
