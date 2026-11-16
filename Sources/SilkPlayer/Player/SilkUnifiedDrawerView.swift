@@ -880,38 +880,6 @@ public struct SilkMediaInspectorView: View {
     }
 }
 
-/// Mini 3-bar animated audio equalizer waveform for active playback in drawer.
-private struct DrawerEqualizerWaveform: View {
-    let isPlaying: Bool
-    var accentColor: Color = .cyan
-    @State private var animating: Bool = false
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 2) {
-            bar(minHeight: 4, maxHeight: 11, duration: 0.55)
-            bar(minHeight: 8, maxHeight: 15, duration: 0.40)
-            bar(minHeight: 5, maxHeight: 12, duration: 0.50)
-        }
-        .frame(width: 14, height: 16)
-        .onAppear {
-            if isPlaying { animating = true }
-        }
-        .onChange(of: isPlaying) { _, playing in
-            animating = playing
-        }
-    }
-
-    private func bar(minHeight: CGFloat, maxHeight: CGFloat, duration: Double) -> some View {
-        RoundedRectangle(cornerRadius: 1, style: .continuous)
-            .fill(accentColor)
-            .frame(width: 2.2, height: (isPlaying && animating) ? maxHeight : minHeight)
-            .animation(
-                isPlaying ? .easeInOut(duration: duration).repeatForever(autoreverses: true) : .easeOut(duration: 0.2),
-                value: animating
-            )
-    }
-}
-
 /// Standalone row view for each item in the playlist drawer to optimize SwiftUI type-checking.
 private struct PlaylistItemRowView: View {
     let index: Int
@@ -971,34 +939,24 @@ private struct PlaylistItemRowView: View {
     }
 
     private var leadingIndicator: some View {
-        HStack(spacing: 3) {
-            if isCurrent {
-                if isPlaying {
-                    DrawerEqualizerWaveform(isPlaying: true, accentColor: isLight ? theme.accentColor : .cyan)
-                } else {
-                    Image(systemName: "pause.fill")
-                        .font(.system(size: 8.5, weight: .bold))
-                        .foregroundColor(isLight ? theme.accentColor : .cyan)
-                }
-            }
-
+        Group {
             if let badge = sanitizedTitle.episodeBadge {
                 Text(badge)
                     .font(.system(size: 9.5, weight: isCurrent ? .bold : .semibold, design: .monospaced))
                     .monospacedDigit()
-                    .foregroundColor(isCurrent ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.accentColor.opacity(0.92) : .cyan.opacity(0.88)))
+                    .foregroundColor(isCurrent ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.accentColor.opacity(0.85) : .cyan.opacity(0.80)))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
-            } else if !isCurrent {
+            } else {
                 Text(String(format: "%02d", index + 1))
-                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10.5, weight: isCurrent ? .bold : .medium, design: .monospaced))
                     .monospacedDigit()
-                    .foregroundColor(isLight ? theme.secondaryText.opacity(0.70) : .white.opacity(0.38))
+                    .foregroundColor(isCurrent ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.secondaryText.opacity(0.70) : .white.opacity(0.38)))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
         }
-        .frame(minWidth: sanitizedTitle.episodeBadge != nil ? (isCurrent ? 58 : 46) : 20, alignment: .leading)
+        .frame(minWidth: sanitizedTitle.episodeBadge != nil ? 46 : 22, alignment: .leading)
     }
 
     private var titleAndMeta: some View {
