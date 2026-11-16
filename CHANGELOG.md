@@ -5,6 +5,40 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-11-16
+
+### Added
+- **Playlist ⌘F Instant Search & Pinyin Initial Matching (Proposal 022)**:
+  - Added a responsive search overlay to the playlist drawer triggered by `⌘F`, supporting full Pinyin, Pinyin initials (e.g. `zwy` to match track titles), and case-insensitive fuzzy filtering.
+  - Smoothly navigates filtered results via keyboard arrow keys, supports inline track removal, and dismisses via `Esc` to restore the full playlist.
+- **Recursive Companion Subtitle Discovery (Proposal 008)**:
+  - Expanded companion subtitle search logic beyond the immediate parent directory to recursively scan nested `Subs/`, `subtitles/`, and `Sub/` folders.
+  - Automatically indexes and binds matching `ASS`, `SSA`, `SRT`, `VTT`, and `SUB` files to the active media session.
+- **Two-Step Playlist Clear Confirmation**:
+  - Implemented a 3-second two-step confirmation state machine on the drawer clear button, preventing accidental deletion of the active playlist.
+- **Full-Format High-Definition Audio Demuxing (`dts`, `dtshd`, `truehd`, `mlp`)**:
+  - Embedded Universal FFmpeg libraries with comprehensive demuxers and decoders for DTS-CD, DTS-ES, DTS-HD Master Audio, and Dolby TrueHD formats.
+
+### Changed
+- **Floating Cinema HUD & Gradient Backing Removal (Proposal 021)**:
+  - Completely eliminated the translucent dark gradient backing box beneath the timeline scrubber and transport controls, transitioning to an unoccluded floating cinema HUD with native subtle drop-shadows.
+- **Window Drag Initiation Optimization (ISSUE-017)**:
+  - Tuned window drag initiation threshold from `8.0pt` to `4.0pt` and forwarded raw `mouseDown` events to the native window server, eliminating initial grab latency when rapidly dragging the player window.
+- **Multichannel Stereo Downmixing Soft-Knee Limiter**:
+  - Implemented an in-place `tanh` soft-knee limiter (`applySoftLimiter`) in `SilkAudioEngine` to compress float peaks above 0.8 smoothly towards 1.0, eliminating square-wave clipping distortion and DAC popping on stereo devices.
+- **Audio Container Deep Probing**:
+  - Configured `10MB` probe buffer and `2.0s` analyze duration in `SilkDemuxer`, ensuring accurate stream layout resolution for complex container files upon initial load.
+
+### Fixed
+- **Multi-Screen Fullscreen Secondary Display Cursor Wakeup (ISSUE-021 / GitHub Issue #7)**:
+  - Added global physical screen coordinate bounding checks in `PlayerHUDView` mouse monitoring, ignoring cursor movements on secondary displays during fullscreen playback.
+- **Vertical Video Window Geometry Restoration (ISSUE-022 / GitHub Issue #9)**:
+  - Added aspect ratio recovery gating in `AppShellView`, automatically centering and restoring a standard 16:9 landscape frame (`960 × 540`) when closing portrait videos.
+- **Standard PCM Audio Stream False-Positive Sniffing Distortion**:
+  - Removed disruptive 2-byte packet sniffing from the audio engine pipeline, preventing random PCM waveform byte coincidences from erroneously triggering AC-3 decoder re-instantiation and high-frequency noise.
+- **Cold-Start Desktop Tiling Fill State Isolation (ISSUE-018)**:
+  - Purged macOS window tiling state persistence on cold launch, enforcing centered 960×540 default presentation.
+
 ## [1.6.0] - 2026-11-12
 
 ### Added
