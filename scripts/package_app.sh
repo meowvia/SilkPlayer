@@ -175,6 +175,8 @@ install_name_tool -add_rpath "@loader_path/../Frameworks" "${APP_BUNDLE}/Content
 audit_bundle_dependencies "${APP_BUNDLE}" "Staging .app Bundle"
 
 cp "${PROJECT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
+plutil -replace CFBundleShortVersionString -string "${VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "${VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
 if [[ -f "${PROJECT_DIR}/Resources/AppIcon.icns" ]]; then
     cp "${PROJECT_DIR}/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
 fi
