@@ -518,6 +518,25 @@ public struct SilkSettingsView: View {
 
                         Divider().opacity(dividerOpacity).padding(.vertical, 2)
 
+                        // Auto-Skip Intro & Transition Leaps (PROPOSAL-012)
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.tr("Auto-Skip Episode Intro", "智能跳过剧集片头"))
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(isProThemed ? currentTheme.primaryText : .primary)
+                                Text(L10n.tr("Automatically detect or inherit series intro duration to leap into main story", "自动识别章节或沿用同剧记忆跳至正片"))
+                                    .font(.system(size: 10.5))
+                                    .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $settings.autoSkipIntro)
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                        }
+                        .frame(height: 32)
+
+                        Divider().opacity(dividerOpacity).padding(.vertical, 2)
+
                         // Dual Playlist Mode
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {

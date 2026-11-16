@@ -159,34 +159,35 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var selectedAudioTrackId: Int = 1
     @Published public var selectedSubtitleTrackId: Int = 0
     @Published public var chapters: [ChapterItem] = []
+    @Published public var introEndTime: Double? = nil
+    @Published public var outroStartTime: Double? = nil
 
     // MARK: - Auto-Skip Intro & Transition Leaps (PROPOSAL-012)
     public var undoSkipIntroTarget: Double? = nil
     public var undoSkipIntroTime: Date = .distantPast
 
     public var detectedIntroEndTime: Double? {
-        guard !chapters.isEmpty else { return nil }
-        for (idx, ch) in chapters.prefix(4).enumerated() {
-            let lower = ch.title.lowercased()
-            let isIntro = lower.contains("intro") || lower.contains("opening") || lower.contains(" op") || lower.hasPrefix("op") || lower.contains("片头") || lower.contains("前情") || lower.contains("recap") || lower.contains("previously") || lower.contains("序幕")
-            if isIntro {
-                if idx + 1 < chapters.count {
-                    let nextTime = chapters[idx + 1].time
-                    if nextTime > ch.time && nextTime <= 300.0 {
-                        return nextTime
-                    }
-                }
-                if ch.time > 10.0 && ch.time <= 300.0 {
-                    return ch.time
-                }
-            }
+        introEndTime
+    }
+
+    public func refreshEpisodeSkipRanges() {
+        let dur = duration > 0 ? duration : (cachedDuration > 0 ? cachedDuration : 0)
+        let range = EpisodeSkipManager.shared.resolveSkipRange(
+            duration: dur,
+            chapters: chapters,
+            filePath: currentFilePath
+        )
+        self.introEndTime = range.introEndTime
+        self.outroStartTime = range.outroStartTime
+        if let path = currentFilePath, (range.introEndTime != nil || range.outroStartTime != nil) {
+            EpisodeSkipManager.shared.saveMemory(for: path, intro: range.introEndTime, outro: range.outroStartTime, duration: dur)
         }
-        return nil
     }
 
     public func detectAndAutoSkipIntroIfNeeded() {
         guard AppSettings.shared.autoSkipIntro, !isAudioOnly else { return }
-        guard let introEnd = detectedIntroEndTime, currentTime < max(5.0, introEnd - 5.0) else { return }
+        refreshEpisodeSkipRanges()
+        guard let introEnd = introEndTime, currentTime < max(5.0, introEnd - 5.0) else { return }
         let prev = currentTime
         undoSkipIntroTarget = prev
         undoSkipIntroTime = Date()
@@ -1050,6 +1051,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         self.chapters = player.chapters.enumerated().map { idx, ch in
             ChapterItem(id: idx, title: ch.title, time: ch.start)
         }
+        refreshEpisodeSkipRanges()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.detectAndAutoSkipIntroIfNeeded()
         }
@@ -1834,6 +1836,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         }
         if totalTime.isFinite && abs(self.cachedDuration - totalTime) > 0.001 {
             self.cachedDuration = totalTime
+        }
+        if becameValidDuration || (self.introEndTime == nil && self.outroStartTime == nil && totalTime > 60.0 && !self.chapters.isEmpty) {
+            refreshEpisodeSkipRanges()
         }
         if becameValidDuration, self.isAudioOnly, let path = self.currentFilePath {
             AudioTrackMetadataService.shared.mergeLiveStreamInfo(
