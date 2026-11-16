@@ -5,7 +5,29 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 1.8.0-pro (`feature/v1.8.0-pro`)
+## [Unreleased] - 2.0.0-pro (`feature/v2.0.0-pro`)
+
+### Added
+- **Playlist Trailing Equalizer Indicator**:
+  - Positioned a subtle 3-bar playing equalizer on the trailing edge of the active item card; smoothly yields to hover quick action buttons upon cursor focus.
+- **Asynchronous Duration Probing (`MediaDurationProbe`)**:
+  - Implemented background duration resolution for playlist items with missing or zero duration via `AVURLAsset` and native FFmpeg header probing.
+
+### Changed
+- **Playlist Grid & Typography Alignment**:
+  - Re-anchored episode badges and numeric indices with strict fixed-width left alignment (46pt / 22pt) across all themes, eliminating horizontal layout jitter.
+  - Normalized media title sanitization to strip leading punctuation artifacts.
+- **Full Theme & Warm White Visual Adaptation**:
+  - Drawer background, borders, and typography now adapt across all themes; warm white adopts deep charcoal text (`#2B231C`) for glare-free readability.
+- **Media Library Category State Persistence**:
+  - Persisted `videoFilter`, `domain`, and source selection via `@AppStorage`, ensuring exiting playback returns to the exact active category view.
+
+### Removed
+- **Acoustic Intro Detection & Outro Markers**:
+  - Stripped intensive acoustic intro detection loops and cached fingerprint models to stabilize memory at ~42MB with 0.0% idle CPU.
+  - Cleared speculative intro/outro notches from the scrubber track to restore a clean progress timeline.
+
+## [2.0.0-pro-preview] - 1.8.0-pro (`feature/v1.8.0-pro`)
 
 ### Added
 - **Multi-Channel LPCM Lossless Output**:
