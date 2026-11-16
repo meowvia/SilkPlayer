@@ -2,112 +2,73 @@
 
 ## 版本概括 / Overview
 
-SilkPlayer 2.0.0 是自项目发布以来规模最大的一次里程碑更新。本次版本引入了独立的折叠式双形态音乐播放视窗、由内而外深度重构的高质感「冰蓝」与四色主题矩阵、原生局域网 SMB / NFS 影视媒体库与多声道 LPCM 无损音频输出；同时为免费版带来了 ⌘F 即时拼音搜歌、多级子目录外挂字幕递归索引、影院级纯透明悬浮播控栏以及全套高保真音频解复用加固。更新全面遵循双轨制架构，在为开源用户提供永久免费、稳定纯净播放底座的同时，为专业用户交付强劲的家庭影音与音乐生产力体验。
+SilkPlayer 2.0.0 是自项目发布以来规模最大的里程碑更新，标志着播放器正式迈入全新的 2.x 时代。
 
-SilkPlayer 2.0.0 marks the largest milestone update since the project's inception. This release introduces a collapsible two-stage music player window, an optically refined "Ice Blue" theme alongside a 4-theme system matrix, native LAN SMB/NFS media library indexing, and multichannel LPCM lossless audio output. For the free edition, it brings ⌘F instant Pinyin search in playlists, recursive companion subtitle indexing across nested folders, an unoccluded floating cinema HUD, and full-format HD audio demuxing. Designed around a strict dual-track architecture, SilkPlayer maintains a permanent, zero-clutter free core while delivering an expansive media center experience for Pro users.
+本次版本核心聚焦专业版（Pro Edition）的全面功能跃升，重磅引入了面向局域网与本地存储的影视媒体库系统，支持局域网服务快速自动发现、影视媒体智能识别与快速配置整理；同时深度打造了专属独立音频播放器，提供两段式自由折叠播放模式与全格式高清无损音频回放优化。
+
+关于免费版（Standard Edition）：随着大版本更新，免费版的基础播放功能不会被阉割、仍将持续保持免费开放，免费版本的现有功能仍将在未来一段时间内继续维护。如果喜欢 SilkPlayer，可以选择升级解锁 Pro，这对开发者将是极大的激励与支持。
+
+SilkPlayer 2.0.0 marks the largest milestone update since the project's inception, advancing the player into the new 2.x era.
+
+This release focuses on delivering a comprehensive feature leap for the Pro Edition, introducing a LAN and local media library system with rapid auto-discovery of network shares, intelligent media identification, and effortless library configuration. Simultaneously, it debuts a dedicated independent audio player featuring a collapsible two-stage interface and playback optimizations for all lossless HD audio formats.
+
+Regarding the Standard (Free) Edition: Across this major release, core playback features remain uncompromised and permanently free, with existing capabilities continuously maintained. If you enjoy SilkPlayer, upgrading to unlock Pro provides tremendous encouragement and support for ongoing development.
 
 ---
 
-## 专业版特性 / Pro Edition Features
+## 专业版核心特性 / Pro Edition Features
 
-### 1. 独立折叠式音乐播放器视窗 / Collapsible Two-Stage Music Window
-- **双形态自由折叠 (Dual Morphing Geometries)**:
-  支持在 188pt 极简聚焦态与 420pt 展开列表态之间一键平滑折叠，窗口宽度智能自适应，完美融入桌面侧边或配合多任务视窗分屏使用。
-  Smoothly toggles between a 188pt minimal playback card and a 420pt expanded queue view with fixed-width ergonomics, tailored for compact multitasking or side-by-side desk placement.
-- **物理惯性仿真黑胶与自适应声学共振光环 (Acoustic Vinyl & Visualizer)**:
-  内置基于物理角速度模拟的匀速旋转黑胶唱片视图，联动音轨低频、中频与高频能量动态驱动外层五重呼吸共鸣光环。
+### 1. 原生局域网与本地影视媒体库 / Native LAN & Local Media Library
+- **极速配置与免挂载网络服务自动发现 (Rapid Setup & Zero-Config Auto Discovery)**:
+  内置原生局域网协议栈，无需在系统访达中手动挂载磁盘，即可自动扫描发现局域网内的存储设备（全面支持 SMB 2/3 与 NFS 协议），实现局域网与本地媒体资源整合、极速播放。
+  Built-in native network protocol stack automatically discovers storage devices across local shares (fully supporting SMB 2/3 and NFS) without manual Finder mounting, unifying LAN and local media for instantaneous streaming.
+- **影视剧集智能识别与结构化整理 (Intelligent Media Indexing & Organization)**:
+  自动解析媒体文件名与目录层级，智能提取剧集季数、集数等元数据，将多季剧集自动归拢为结构化统一卡片，告别零散杂乱的文件列表。
+  Automatically parses filenames and directory hierarchies to extract seasons and episode metadata, grouping multi-season series into structured unified cards and replacing cluttered file listings.
+- **在架切集抽屉与全集进度管理 (Episode Drawer & Playback Progress)**:
+  点击剧集卡片即可在右侧展开切集抽屉，清晰浏览全季分集列表；自动记忆每一集的独立播放进度与断点位置，支持本地与 iCloud 云端进度无缝同步。
+  Clicking any media card opens a side drawer displaying the complete episode catalog; automatically remembers playback checkpoints per episode with seamless local and iCloud cloud progress sync.
+- **外挂字幕与多音轨自动关联 (Companion Subtitle & Audio Track Matching)**:
+  针对影视文件自动建立同名字幕与多语言音轨关联，配合高速流式缓冲引擎，让局域网 4K HDR 大码率影视播放即点即播。
+  Automatically associates companion subtitles and multilingual audio tracks, backed by a high-throughput streaming buffer for buffer-free local 4K HDR playback.
+
+### 2. 独立音频播放器与全格式播放优化 / Dedicated Audio Player & Lossless Optimization
+- **双形态自由折叠视窗 (Two-Stage Morphing Window)**:
+  提供专属独立音乐播放界面，支持在极简小卡片与展开播放列表之间平滑折叠切换，贴合桌面随手摆放与多任务分屏需求。
+  Offers a dedicated music window that smoothly toggles between a minimal compact card and an expanded playlist queue, tailored for desk placement and split-screen multitasking.
+- **全格式无损高清音频回放 (Full-Format Lossless Playback & Multichannel LPCM)**:
+  原生支持 FLAC、APE、WAV、DSD、DTS-CD、TrueHD 等各类高清无损音频格式解析；CoreAudio 渲染管线直接适配多声道 LPCM（5.1 / 7.1）离散直通输出，杜绝立体声强制压缩带来的空间声场损失。
+  Native decoding for FLAC, APE, WAV, DSD, DTS-CD, and TrueHD; CoreAudio pipeline natively outputs discrete multichannel LPCM (5.1 / 7.1) without forced stereo downmixing, preserving spatial depth.
+- **拟物黑胶与动态音频呼吸光环 (Acoustic Vinyl & Dynamic Visualizer)**:
+  内置基于物理角速度模拟的匀速旋转黑胶视窗，联动音轨低频、中频与高频动态能量，实时驱动外层自适应声学光环。
   Features an inertia-simulated rotating vinyl disc coupled with a multi-band dynamic acoustic halo driven in real time by bass, mid, and treble audio levels.
-- **菜单栏常驻微型播控与 Dock 零驻留 (Status Bar Background Playback)**:
-  支持将音乐播放器一键收起至 macOS 顶部菜单栏，Dock 栏图标无感隐匿，点击菜单栏图标即可原地呼出悬浮控制卡片与歌词信息。
-  Enables seamless minimization to the macOS status bar with zero Dock footprint; clicking the menu bar icon instantly reveals a lightweight floating playback capsule.
+- **菜单栏常驻微型播控与 Dock 零驻留 (Menu Bar Micro-Controller & Zero Dock Footprint)**:
+  支持将音乐播放器一键隐匿至 macOS 顶部菜单栏，此时 SilkPlayer 就是一款沉浸式的本地音频播放器，彻底释放 Dock 栏空间；点击菜单栏图标即可原地呼出悬浮控制面板与歌词信息。
+  Enables seamless minimization to the macOS menu bar, turning SilkPlayer into an immersive local audio player with zero Dock footprint; clicking the menu bar icon instantly reveals a lightweight floating playback capsule and lyrics.
 
-### 2. 高质感「冰蓝」与四色主题矩阵 / Curated 4-Theme Matrix
-- **全新「冰蓝」（Ice Blue）通透材质**:
-  摒弃传统纯黑实板，全线接入 macOS 原生 `behindWindow` 毛玻璃透光底板，搭配冷色天青微渐变与极光棱镜切边高光，点缀色采用液态电光冰青（`#00DCFA`）。
-  Engineered with native macOS `behindWindow` vibrancy, deep arctic gradients, and subtle prismatic specular edges, paired with a vibrant hyper-electric aqua accent.
-- **符合 WCAG AAA 顶级可识别度对比度**:
-  主标题与核心文字升级为超高纯冷白（`#FFFFFF`，对比度高达 19.5:1），次级说明文字采用通透天青灰（`#A8B8C8`，对比度 9.4:1），彻底解决深色模式下文字发灰看不清的问题。
-  Upgraded primary text to pure cold white (19.5:1 contrast) and secondary labels to celestial cyan-gray (9.4:1 contrast), vastly exceeding WCAG AAA accessibility standards.
-- **深灰、冰蓝、暖白、青瓷 4 套主题全局联动**:
-  全局覆盖主界面、播放视窗、偏好设置与影视媒体库，一键切换全局视觉色彩。
-  Full aesthetic alignment across the main window, HUD, Settings, and Pro Media Library.
-
-### 3. 原生局域网 SMB / NFS 影视媒体库 / Pro LAN Media Library
-- **免挂载局域网服务自动发现**:
-  内置 Bonjour / NetBIOS 局域网协议栈，无需在访达手动挂载磁盘即可直接扫描并串流回放 NAS、家庭服务器与软路由上的 4K HDR 电影与剧集。
-  Zero-configuration discovery and streaming for SMB 2/3 and NFS network shares without requiring manual Finder mounting.
-- **影视折叠分类与在架切集抽屉 (Season Switcher)**:
-  智能聚合多季剧集为单一卡片，右侧抽屉直接展示分季列表与全集进度，支持电影/剧集折叠卡片切换与播放历史云端同步。
-  Aggregates multi-season TV series into single smart cards with in-drawer season/episode switching, collapsible category dividers, and cloud progress sync.
-
-### 4. 多声道 LPCM 无损音频输出 / Multichannel LPCM Lossless Output
-- **离散 5.1 / 7.1 声道无损直通**:
-  CoreAudio 管线直接匹配外接家庭影院功放或多声道声卡，原生输出杜比 TrueHD、Dolby Atmos 与 DTS-HD Master Audio 多声道离散音频流。
-  Directly outputs discrete 5.1 and 7.1 channel LPCM streams to AV receivers and external DACs without forced stereo fold-down.
+### 3. 四色主题矩阵 / 4-Theme Color Matrix
+- **全新 Pro 视觉主题 (New Pro Visual Theme)**:
+  采用通透的 macOS 原生毛玻璃质感底板，呈现通透纯净的视觉观感。
+  Engineered with native macOS vibrancy material, delivering an unoccluded, crystalline aesthetic.
+- **全局色彩联动 (Global Aesthetic Alignment)**:
+  提供深灰、冰蓝、暖白、青瓷 4 套高对比度主题，全局联动主界面、播放视窗、媒体库与偏好设置，无论深色还是浅色环境均能保持舒适清晰的阅读体验。
+  Offers 4 high-contrast themes (Dark Gray, Ice Blue, Warm White, Celadon) synchronized across the main window, player HUD, media library, and Settings, ensuring legible viewing in both light and dark environments.
 
 ---
 
-## 免费版特性 / Free Edition Features
+## 免费版说明 / Free Edition Notes
 
-### 1. 播放列表 ⌘F 即时搜索与拼音简拼 / Playlist ⌘F Instant Search
-- **全拼与首字母模糊匹配**:
-  在右侧边栏播放列表中按 `⌘F` 即可原地呼出搜索栏，支持中文全拼、拼音首字母简拼（如 `zwy` 直搜《钟无艳》）与不区分大小写的英文字符过滤。
-  Press `⌘F` in the playlist drawer to instantly filter media via full Pinyin, Pinyin initials, or fuzzy English search.
-- **列表即时定位与安全复位**:
-  支持键盘上下键直跳播放与单曲移除，按 `Esc` 键平滑退出搜索并恢复完整队列。
-  Allows rapid keyboard navigation, inline track removal, and smooth restoration of the full queue upon pressing `Esc`.
-
-### 2. 外挂字幕多级子目录递归扫描 / Recursive Companion Subtitle Search
-- **深度索引 Subs 子文件夹**:
-  自动扫描媒体目录下的 `Subs/`、`subtitles/`、`Sub/` 等专用子文件夹，自动匹配同名或模糊关联的 ASS、SSA、SRT、VTT、SUB 字幕文件并即时挂载。
-  Recursively indexes nested `Subs/` and `subtitles/` subdirectories to automatically associate companion subtitle files.
-
-### 3. 影院级纯透明悬浮播控栏 / Floating Cinema HUD
-- **消灭深灰矩形框遮挡**:
-  彻底移除了原时间轴与底部控制区外围的深灰半透明长条渐变矩形框，界面转为 100% 透明纯悬浮形态。
-  Eliminated the clunky dark gradient box beneath the timeline, unlocking an unoccluded cinema-grade floating control layout.
-- **高对比度微投影保障**:
-  进度条时间文字与轨道增加原生柔和投影（`shadow 0.60`），确保在明亮高光画面或透明毛玻璃下均清晰锐利。
-  Enhanced typography and scrubber track drop-shadows for sharp contrast against vivid HDR scenes and frosted glass.
-
-### 4. 全格式高清音频解复用支持 / HD Audio Demuxing Support
-- **编入 Universal DTS / TrueHD 编解码库**:
-  编入包含 `dts`、`dtshd`、`truehd`、`mlp` 解复用器与对应解码器的 Universal FFmpeg 库，全面支持 DTS-CD、DTS-ES 等格式解析。
-  Embedded complete DTS, DTS-HD MA, and Dolby TrueHD demuxers for smooth native playback of specialized lossless audio files.
-
----
-
-## 通用体验与细节优化 / General Enhancements
-
-- **起手快甩拖拽平滑跟手 (ISSUE-017)**:
-  优化画面拖拽启动阈值至 4.0pt 并向系统传递原始事件，消除快速甩动视窗时的初始粘滞感。
-  Tuned window grab threshold to 4.0pt with native event forwarding, eliminating grab hesitation during rapid dragging.
-- **多声道立体声下混防削顶软限幅 (Soft Limiter)**:
-  引入平滑 `tanh` 软限幅算法，下混多声道音频至立体声耳机或双声道喇叭时将电平收敛在 0 dBFS 以内，消除 DAC 削顶爆音。
-  Integrated an in-place `tanh` soft-knee limiter to prevent DAC square-wave clipping when downmixing multichannel audio to stereo.
-- **清空列表二次确认防误触**:
-  抽屉清空按钮引入 3 秒高亮确认倒计时状态机，彻底防止误清空播放列表。
-  Added a 3-second two-step confirmation state machine to prevent accidental playlist clearing.
-- **音频容器 10MB 深度探测**:
-  解复用器前置配置 10MB 探测缓冲区与 2.0s 分析时长，大幅增强特殊容器的流识别稳定性。
-  Expanded demuxer probe buffer to 10MB, ensuring instant stream layout resolution.
-
----
-
-## 问题修复 / Bug Fixes
-
-- **修复多显示器扩展屏全屏播放副屏光标误唤醒 (ISSUE-021 / GitHub Issue #7)**:
-  加入物理屏幕坐标命中过滤，在副屏或外部桌面移动鼠标不再误触发主屏全屏播控唤醒。
-  Fixed secondary display cursor movement inadvertently waking the fullscreen HUD on multi-monitor setups.
-- **修复竖屏短视频关闭后视窗比例异常 (ISSUE-022 / GitHub Issue #9)**:
-  退出播放时增加纵横比保护门控，自动将纵向窗口平滑居中复位为标准 16:9 横向视窗（960 × 540）。
-  Fixed window remaining stuck in a narrow phone ratio after closing portrait videos by restoring a centered 16:9 desktop frame.
-- **彻底根除标准 PCM 音频播放偶发刺耳啸叫**:
-  删除了音频管线中粗暴的 2 字节嗅探逻辑，消除了正常波形随机撞车 AC-3 同步字引发的假阳性重置缺陷。
-  Eliminated false-positive AC-3 stream sniffing that previously reset the decoder on normal PCM tracks.
-- **修复冷启动受系统平铺恢复影响铺满屏幕 (ISSUE-018)**:
-  启动时主动清理 macOS 窗口平铺持久化属性，强制按标准横向窗口居中呈现。
-  Purged macOS window tiling persistence on cold launch to prevent unexpected full-screen expansion.
+- **1.7.0 已就绪核心能力回顾 / 1.7.0 Key Capabilities Summary**:
+  - 播放列表 ⌘F 即时搜索与中文拼音首字母过滤；
+    Playlist ⌘F instant search with full Pinyin and initialism filtering;
+  - 外挂字幕 Subs/ 多级子目录深度递归扫描挂载；
+    Deep recursive scanning and mounting of companion subtitles in Subs/ subdirectories;
+  - 影院级纯透明悬浮播控栏（彻底移除底栏深灰背景框）；
+    Cinema-grade floating transparent HUD (eliminating dark background boxes);
+  - DTS、DTS-HD、Dolby TrueHD 完整解复用与软限幅防削顶下混；
+    Complete DTS, DTS-HD, and Dolby TrueHD demuxing with soft-knee limiter stereo downmixing;
+  - 多屏扩展防光标误唤醒 (ISSUE-021)、竖屏比例自适应居中复位 (ISSUE-022) 与窗口平铺隔离 (ISSUE-018)。
+    Multi-display cursor wake-up prevention (ISSUE-021), portrait aspect ratio auto-recentering (ISSUE-022), and window tiling isolation (ISSUE-018).
 
 ---
 
@@ -119,11 +80,11 @@ SilkPlayer 2.0.0 marks the largest milestone update since the project's inceptio
 
 ---
 
-## 安装方式 / Installation
+## 安装与授权 / Installation & Licensing
 
 1. 打开 `SilkPlayer-2.0.0-universal.dmg` 镜像；
    Open the `SilkPlayer-2.0.0-universal.dmg` disk image.
-2. 将 `SilkPlayer.app` 拖入 `Applications`（应用程序）文件夹即可完成安装或覆盖；
+2. 将 `SilkPlayer.app` 拖入 `Applications`（应用程序）文件夹即可完成安装或覆盖升级；
    Drag `SilkPlayer.app` into the Applications folder to install or upgrade.
-3. 已激活 Pro 用户在更新后自动保持授权状态与专享特性。
-   Existing Pro users automatically retain their active license entitlements.
+3. 已激活 Pro 用户在升级后自动保持激活状态与全部专业功能。
+   Existing Pro users automatically retain their active license entitlements and all professional capabilities.
