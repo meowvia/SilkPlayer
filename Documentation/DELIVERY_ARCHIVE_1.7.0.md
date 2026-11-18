@@ -95,4 +95,4 @@
 - **发布安装镜像**:
   - 物理路径: `/Volumes/2T/Projects/SilkPlayer/SilkPlayer/build/SilkPlayer-1.7.0-universal.dmg`
   - 镜像大小: 约 80 MB
-  - **SHA-256 校验和**: `dfc17814966067194da72a14be3406787baff12b747252d01a9a69bd2e009e60`
+  - **SHA-256 校验和**: `f0a3c81c42c0b9a3696ac9eaa57a19e148b742edbdb3ce8c311354d8f5e29f76`

@@ -6,7 +6,7 @@ public struct PlayerContainerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var player: PlayerCore
     var playlist: PlaylistManager
-    @State private var navigationModel = AppNavigationModel.shared
+    var navigationModel: AppNavigationModel
     @State private var isHoveringRightEdge: Bool = false
     @State private var isHoveringHandle: Bool = false
     @State private var drawerDismissTask: Task<Void, Never>? = nil
@@ -18,6 +18,7 @@ public struct PlayerContainerView: View {
     public init(
         player: PlayerCore,
         playlist: PlaylistManager = PlaylistManager.shared,
+        navigationModel: AppNavigationModel = .shared,
         onPlayNext: @escaping () -> Void = {},
         onPlayPrevious: @escaping () -> Void = {},
         onSelectPlaylistItem: @escaping (PlaylistItem) -> Void = { _ in },
@@ -25,6 +26,7 @@ public struct PlayerContainerView: View {
     ) {
         self.player = player
         self.playlist = playlist
+        self.navigationModel = navigationModel
         self.onPlayNext = onPlayNext
         self.onPlayPrevious = onPlayPrevious
         self.onSelectPlaylistItem = onSelectPlaylistItem

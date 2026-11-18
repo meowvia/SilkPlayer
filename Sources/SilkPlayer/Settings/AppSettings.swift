@@ -100,13 +100,13 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
     public var title: String {
         switch self {
         case .singleWindow: return L10n.tr("Single Window", "单窗口")
-        case .multipleWindows: return L10n.tr("Multiple Windows", "多窗口")
+        case .multipleWindows: return L10n.tr("Dual Windows", "双窗口")
         }
     }
     public var description: String {
         switch self {
         case .singleWindow: return L10n.tr("Always play in a single unified window", "始终使用单一播放窗口")
-        case .multipleWindows: return L10n.tr("Allow opening multiple independent windows", "允许打开多个独立播放窗口")
+        case .multipleWindows: return L10n.tr("Open a second window when main player is already playing", "主窗口正在播放时，允许打开第二个独立播放窗口")
         }
     }
 }
@@ -161,10 +161,14 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
-    // Window management strategy (Single-window vs Multi-window)
+    // Window management strategy (Single-window vs Dual-window capped at 2)
     public var windowMode: WindowMode {
         get { singleWindowMode ? .singleWindow : .multipleWindows }
         set { singleWindowMode = (newValue == .singleWindow) }
+    }
+    public var dualWindowPlaybackEnabled: Bool {
+        get { !singleWindowMode }
+        set { singleWindowMode = !newValue }
     }
     public var singleWindowMode: Bool {
         didSet {

@@ -5,20 +5,26 @@ import AppKit
 public struct AppShellView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var player: PlayerCore
-    @State private var navigationModel = AppNavigationModel.shared
+    var navigationModel: AppNavigationModel
     var playlistManager: PlaylistManager
     private var settings = AppSettings.shared
     public let sessionId: UUID
+    public let isSecondaryWindow: Bool
+    @State private var isDiscardedDuplicateWindow: Bool = false
     @State private var lastPreviousClickTime: Date = .distantPast
 
     public init(
         player: PlayerCore,
         playlistManager: PlaylistManager = PlaylistManager.shared,
-        sessionId: UUID = UUID()
+        navigationModel: AppNavigationModel = .shared,
+        sessionId: UUID = UUID(),
+        isSecondaryWindow: Bool = false
     ) {
         self.player = player
         self.playlistManager = playlistManager
+        self.navigationModel = navigationModel
         self.sessionId = sessionId
+        self.isSecondaryWindow = isSecondaryWindow
     }
 
     @MainActor private static var didCenterInitialColdLaunchWindow = false
@@ -69,6 +75,7 @@ public struct AppShellView: View {
                     PlayerContainerView(
                         player: player,
                         playlist: playlistManager,
+                        navigationModel: navigationModel,
                         onPlayNext: {
                             playNext()
                         },
@@ -233,15 +240,25 @@ public struct AppShellView: View {
             checkPendingFiles()
         }
         .onDisappear {
+            if isDiscardedDuplicateWindow {
+                PlayerWindowManager.shared.unregisterSession(id: sessionId)
+                player.destroy()
+                return
+            }
             if let currentPath = player.currentFilePath, player.currentTime > 0 {
                 AppSettings.shared.savePosition(for: currentPath, position: player.currentTime, duration: player.duration)
             }
-            playlistManager.saveToStorage()
-            PlayerWindowManager.shared.closeSettings()
+            if !isSecondaryWindow {
+                playlistManager.saveToStorage()
+            }
+            if PlayerWindowManager.shared.sessions.count <= 1 {
+                PlayerWindowManager.shared.closeSettings()
+            }
             unregisterSession()
         }
         .onOpenURL { url in
-            openExternalURL(url)
+            guard url.isFileURL else { return }
+            PlayerWindowManager.shared.handleSystemOpenFiles([url.path])
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             guard !providers.isEmpty else { return false }
@@ -270,9 +287,18 @@ public struct AppShellView: View {
         if let currentPath = player.currentFilePath, player.currentTime > 0 {
             AppSettings.shared.savePosition(for: currentPath, position: player.currentTime, duration: player.duration)
         }
-        PlayerWindowManager.shared.closeSettings()
         player.isPlaylistDrawerVisible = false
         player.isInspectorVisible = false
+
+        if isSecondaryWindow {
+            player.stop()
+            playlistManager.clear()
+            navigationModel.state = .idle
+            player.hostWindow?.close()
+            return
+        }
+
+        PlayerWindowManager.shared.closeSettings()
         player.stop()
         withAnimation(.easeInOut(duration: 0.22)) {
             navigationModel.state = .idle
@@ -417,7 +443,25 @@ public struct AppShellView: View {
     }
 
     public func appendPlaylistPaths(_ paths: [String]) {
-        openExternalPaths(paths)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
+            guard !expanded.isEmpty else { return }
+
+            var newItems: [PlaylistItem] = []
+            for p in expanded {
+                let url = URL(fileURLWithPath: p)
+                let title = url.deletingPathExtension().lastPathComponent
+                let size = (try? FileManager.default.attributesOfItem(atPath: p)[.size] as? Int64) ?? 0
+                let item = MediaItem(path: p, title: title, fileSize: size)
+                newItems.append(PlaylistItem(from: item))
+            }
+
+            guard !newItems.isEmpty else { return }
+
+            Task { @MainActor in
+                self.playlistManager.appendItems(newItems)
+            }
+        }
     }
 
     private func registerSession() {
@@ -430,6 +474,7 @@ public struct AppShellView: View {
                 return player.isLoaded || player.playbackState == .loading
             }
         )
+        session.isSecondaryWindow = isSecondaryWindow
         session.closePlaybackHandler = { [self] in
             self.stopPlayback()
         }
@@ -464,11 +509,45 @@ public struct AppShellView: View {
         if AppSettings.shared.windowMode == .singleWindow {
             // Check if another window session already exists with an attached window
             if let existing = PlayerWindowManager.shared.sessions.first(where: { $0.id != sessionId && $0.window != nil }) {
-                // Duplicate window detected in single window mode: close immediately!
+                isDiscardedDuplicateWindow = true
+                var orphanedFiles = PlayerWindowManager.shared.dequeuePendingFiles()
+                if !AppDelegate.pendingFiles.isEmpty {
+                    orphanedFiles.append(contentsOf: AppDelegate.pendingFiles)
+                    AppDelegate.pendingFiles.removeAll()
+                }
+                PlayerWindowManager.shared.unregisterSession(id: sessionId)
                 DispatchQueue.main.async {
                     window.close()
+                    if !orphanedFiles.isEmpty {
+                        existing.openPath(orphanedFiles[0])
+                        if orphanedFiles.count > 1 {
+                            existing.appendPlaylistPaths(Array(orphanedFiles.dropFirst()))
+                        }
+                    }
                     if !PlayerWindowManager.isRunningTests {
                         existing.window?.makeKeyAndOrderFront(nil)
+                        NSApp?.activate(ignoringOtherApps: true)
+                    }
+                }
+                return
+            }
+        } else {
+            let attachedOthers = PlayerWindowManager.shared.sessions.filter { $0.id != sessionId && $0.window != nil }
+            if attachedOthers.count >= PlayerWindowManager.maxConcurrentWindows,
+               let reuseTarget = attachedOthers.last {
+                isDiscardedDuplicateWindow = true
+                let orphanedFiles = PlayerWindowManager.shared.dequeuePendingFiles()
+                PlayerWindowManager.shared.unregisterSession(id: sessionId)
+                DispatchQueue.main.async {
+                    window.close()
+                    if !orphanedFiles.isEmpty {
+                        reuseTarget.openPath(orphanedFiles[0])
+                        if orphanedFiles.count > 1 {
+                            reuseTarget.appendPlaylistPaths(Array(orphanedFiles.dropFirst()))
+                        }
+                    }
+                    if !PlayerWindowManager.isRunningTests {
+                        reuseTarget.window?.makeKeyAndOrderFront(nil)
                         NSApp?.activate(ignoringOtherApps: true)
                     }
                 }
@@ -570,6 +649,10 @@ public struct AppShellView: View {
             let files = AppDelegate.pendingFiles
             AppDelegate.pendingFiles.removeAll()
             openExternalPaths(files)
+            return
+        }
+
+        if isSecondaryWindow {
             return
         }
 

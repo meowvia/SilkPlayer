@@ -32,16 +32,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    public func application(_ application: NSApplication, open urls: [URL]) {
+        let paths = urls.filter(\.isFileURL).map(\.path)
+        guard !paths.isEmpty else { return }
+        PlayerWindowManager.shared.handleSystemOpenFiles(paths)
+    }
+
     public func application(_ sender: NSApplication, openFiles filenames: [String]) {
-        for file in filenames {
-            AppDelegate.pendingFiles.append(file)
-        }
-        PlayerWindowManager.shared.openExternalFiles(filenames)
+        guard !filenames.isEmpty else { return }
+        PlayerWindowManager.shared.handleSystemOpenFiles(filenames)
+        sender.reply(toOpenOrPrint: .success)
     }
 
     public func application(_ sender: NSApplication, openFile filename: String) -> Bool {
-        AppDelegate.pendingFiles.append(filename)
-        PlayerWindowManager.shared.openExternalFiles([filename])
+        PlayerWindowManager.shared.handleSystemOpenFiles([filename])
         return true
     }
 

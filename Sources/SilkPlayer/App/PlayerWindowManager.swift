@@ -15,6 +15,7 @@ extension Notification.Name {
     public weak var player: (any PlayerControllable)?
     private let isLoadedProvider: (@MainActor () -> Bool)?
     public var testIsKey: Bool?
+    public var isSecondaryWindow: Bool = false
 
     public var openPathHandler: (@MainActor (String) -> Void)?
     public var appendPlaylistHandler: (@MainActor ([String]) -> Void)?
@@ -80,6 +81,7 @@ extension Notification.Name {
 @MainActor
 @Observable public final class PlayerWindowManager {
     public static let shared = PlayerWindowManager()
+    public static let maxConcurrentWindows = 2
 
     nonisolated public static var isRunningTests: Bool {
         NSClassFromString("XCTestCase") != nil ||
@@ -92,6 +94,8 @@ extension Notification.Name {
 
     /// Queue for pending files to be consumed by newly spawned windows
     private var pendingQueue: [String] = []
+    private var lastSystemOpenPaths: [String] = []
+    private var lastSystemOpenTime: TimeInterval = 0.0
 
     /// Registered action from SwiftUI environment to trigger opening a new WindowGroup
     public var openWindowAction: (@MainActor () -> Void)?
@@ -535,32 +539,66 @@ extension Notification.Name {
     }
 
     // MARK: - Open External Files Scheduling
+    public func handleSystemOpenFiles(_ files: [String]) {
+        guard !files.isEmpty else { return }
+        if !Self.isRunningTests {
+            let now = ProcessInfo.processInfo.systemUptime
+            if files == lastSystemOpenPaths && (now - lastSystemOpenTime) < 0.45 {
+                return
+            }
+            lastSystemOpenPaths = files
+            lastSystemOpenTime = now
+        }
+
+        if sessions.isEmpty && openWindowAction == nil {
+            for f in files where !AppDelegate.pendingFiles.contains(f) {
+                AppDelegate.pendingFiles.append(f)
+            }
+            return
+        }
+        openExternalFiles(files)
+    }
+
     public func openExternalFiles(_ files: [String]) {
         let expanded = Self.expandFilesAndDirectories(files)
         guard !expanded.isEmpty else { return }
 
-        let singleWindow = AppSettings.shared.singleWindowMode
-        if singleWindow, let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
+        func deliver(to session: PlayerWindowSession) {
             session.openPath(expanded[0])
             if expanded.count > 1 {
                 session.appendPlaylistPaths(Array(expanded.dropFirst()))
             }
             if !Self.isRunningTests {
+                if session.window?.isMiniaturized == true {
+                    session.window?.deminiaturize(nil)
+                }
                 session.window?.makeKeyAndOrderFront(nil)
                 NSApp?.activate(ignoringOtherApps: true)
             }
-        } else if !singleWindow && !sessions.isEmpty {
+        }
+
+        guard let primarySession = sessions.first else {
             enqueuePendingFiles(expanded)
             openWindowAction?()
-        } else if let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
-            session.openPath(expanded[0])
-            if expanded.count > 1 {
-                session.appendPlaylistPaths(Array(expanded.dropFirst()))
-            }
-            if !Self.isRunningTests {
-                session.window?.makeKeyAndOrderFront(nil)
-                NSApp?.activate(ignoringOtherApps: true)
-            }
+            return
+        }
+
+        // 1. If primary window is idle (!isLoaded), always reuse primary window directly.
+        if !primarySession.isLoaded {
+            deliver(to: primarySession)
+            return
+        }
+
+        // 2. Single-window mode: reuse active/primary window.
+        if AppSettings.shared.singleWindowMode {
+            let target = activeSession(preferKey: true) ?? primarySession
+            deliver(to: target)
+            return
+        }
+
+        // 3. Dual-window mode while primary window IS playing (capped at maxConcurrentWindows = 2):
+        if sessions.count >= Self.maxConcurrentWindows, let secondarySession = sessions.dropFirst().first {
+            deliver(to: secondarySession)
         } else {
             enqueuePendingFiles(expanded)
             openWindowAction?()
@@ -664,6 +702,18 @@ extension Notification.Name {
     }
 
     public func openNewWindow() {
+        if !AppSettings.shared.singleWindowMode,
+           sessions.count >= Self.maxConcurrentWindows,
+           let secondary = sessions.dropFirst().first {
+            if !Self.isRunningTests {
+                if secondary.window?.isMiniaturized == true {
+                    secondary.window?.deminiaturize(nil)
+                }
+                secondary.window?.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            }
+            return
+        }
         if let action = openWindowAction {
             action()
         }
@@ -673,6 +723,8 @@ extension Notification.Name {
     public func resetForTesting() {
         sessions.removeAll()
         pendingQueue.removeAll()
+        lastSystemOpenPaths.removeAll()
+        lastSystemOpenTime = 0.0
         openWindowAction = nil
         openShortcutsCheatsheetAction = nil
     }

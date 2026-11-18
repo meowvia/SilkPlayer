@@ -203,19 +203,26 @@ public struct SilkSettingsView: View {
             VStack(spacing: 6) {
                 sectionTitle(L10n.tr("Window & Storage", "视窗与存储管理"))
                 settingsFormCard {
-                    // Window Mode
+                    // Dual Playback Window Mode
                     HStack {
-                        Text(L10n.tr("Startup Window", "启动视窗行为"))
-                            .font(.system(size: 13))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Picker("", selection: $settings.windowMode) {
-                            Text(L10n.tr("Remember Last Position", "记忆上次位置")).tag(WindowMode.singleWindow)
-                            Text(L10n.tr("Center on Screen", "屏幕居中打开")).tag(WindowMode.multipleWindows)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tr("Dual Playback Windows", "双播放窗口模式"))
+                                .font(.system(size: 13))
+                                .foregroundColor(.primary)
+                            Text(L10n.tr(
+                                "Open a second window when main window is already playing",
+                                "主窗口正在播放时，外部视频在第二个独立窗口打开"
+                            ))
+                            .font(.system(size: 10.5))
+                            .foregroundColor(.secondary)
                         }
-                        .frame(width: 170)
+                        Spacer()
+                        Toggle("", isOn: $settings.dualWindowPlaybackEnabled)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
                     }
-                    .frame(height: 32)
+                    .frame(minHeight: 34)
 
                     Divider().opacity(0.12).padding(.vertical, 3)
 
