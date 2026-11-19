@@ -258,17 +258,8 @@ public struct PlayerHUDView: View {
                             .allowsHitTesting(false)
                     }
 
-                    // Trailing Quick Action Buttons: Minimize to Status Bar, Pin, Inspector, Close
+                    // Trailing Quick Action Buttons: Pin, Inspector, Close
                     HStack(spacing: 8) {
-                        // Minimize to Status Bar (Background Playback)
-                        HUDCircleButton(
-                            icon: "menubar.arrow.up.rectangle",
-                            isActive: false,
-                            helpText: L10n.tr("Minimize to Status Bar", "收起至状态栏后台播放")
-                        ) {
-                            SilkStatusBarManager.shared.enterBackgroundMode(window: player.hostWindow ?? NSApp.keyWindow)
-                        }
-
                         // Window Pin / Always on Top Button
                         HUDCircleButton(
                             icon: settings.keepWindowOnTop ? "pin.fill" : "pin",
@@ -291,11 +282,9 @@ public struct PlayerHUDView: View {
                             }
                         }
 
-                        // Close Current Media / Return to Empty Canvas
-                        HUDCircleButton(
-                            icon: "xmark",
-                            isActive: false,
-                            helpText: L10n.tr("Close Playback / Return Home (Esc / Cmd+W)", "退出播放 / 返回主页 (Esc / Cmd+W)")
+                        // Return / Exit Playback Capsule Button
+                        HUDReturnCapsuleButton(
+                            helpText: L10n.tr("Return (Esc / Cmd+W)", "返回 (Esc / Cmd+W)")
                         ) {
                             player.isPlaylistDrawerVisible = false
                             player.isInspectorVisible = false

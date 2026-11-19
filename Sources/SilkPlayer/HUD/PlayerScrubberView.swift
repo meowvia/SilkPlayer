@@ -47,8 +47,11 @@ public struct PlayerProgressSection: View {
     @State private var showRemainingTime: Bool = false
     @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
 
-    private var isWarmWhiteMusic: Bool {
-        player.isAudioOnly && selectedThemeRaw == SilkLibraryTheme.nuanbai.rawValue
+    private var activeTheme: SilkLibraryTheme {
+        SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
+    }
+    private var isLightMusicMode: Bool {
+        player.isAudioOnly && activeTheme.isLight
     }
 
     public init(
@@ -73,8 +76,8 @@ public struct PlayerProgressSection: View {
             Text(formatPlaybackTime(player.isScrubbing ? player.scrubTime : clock.currentTime))
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .monospacedDigit()
-                .foregroundColor(isWarmWhiteMusic ? SilkLibraryTheme.nuanbai.secondaryText : .white.opacity(0.88))
-                .shadow(color: isWarmWhiteMusic ? .clear : .black.opacity(0.60), radius: 2, x: 0, y: 1)
+                .foregroundColor(isLightMusicMode ? activeTheme.secondaryText : .white.opacity(0.88))
+                .shadow(color: isLightMusicMode ? .clear : .black.opacity(0.60), radius: 2, x: 0, y: 1)
                 .frame(minWidth: tier == .minimal ? 38 : 46, alignment: .trailing)
 
             // Progress Bar Scrubber
@@ -92,10 +95,10 @@ public struct PlayerProgressSection: View {
                     .monospacedDigit()
                     .foregroundColor(
                         showRemainingTime
-                            ? (isWarmWhiteMusic ? SilkLibraryTheme.nuanbai.accentColor : .cyan.opacity(0.95))
-                            : (isWarmWhiteMusic ? SilkLibraryTheme.nuanbai.secondaryText : .white.opacity(0.85))
+                            ? (isLightMusicMode ? activeTheme.accentColor : .cyan.opacity(0.95))
+                            : (isLightMusicMode ? activeTheme.secondaryText : .white.opacity(0.85))
                     )
-                    .shadow(color: isWarmWhiteMusic ? .clear : .black.opacity(0.60), radius: 2, x: 0, y: 1)
+                    .shadow(color: isLightMusicMode ? .clear : .black.opacity(0.60), radius: 2, x: 0, y: 1)
                     .frame(minWidth: tier == .minimal ? 38 : 46, alignment: .leading)
             }
             .buttonStyle(.plain)
@@ -124,8 +127,11 @@ public struct PlayerScrubberView: View {
     @ObservedObject private var thumbnailEngine = SilkThumbnailEngine.shared
     @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
 
-    private var isWarmWhiteMusic: Bool {
-        player.isAudioOnly && selectedThemeRaw == SilkLibraryTheme.nuanbai.rawValue
+    private var activeTheme: SilkLibraryTheme {
+        SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
+    }
+    private var isLightMusicMode: Bool {
+        player.isAudioOnly && activeTheme.isLight
     }
 
     @State private var isHovered: Bool = false
@@ -199,8 +205,9 @@ public struct PlayerScrubberView: View {
                     let trackY = (size.height - trackHeight) * 0.5
                     let baseRect = CGRect(x: 0, y: trackY, width: size.width, height: trackHeight)
                     let basePath = Path(roundedRect: baseRect, cornerRadius: trackHeight * 0.5)
-                    if isWarmWhiteMusic {
-                        graphics.fill(basePath, with: .color(Color(red: 0.894, green: 0.827, blue: 0.749)))
+                    if isLightMusicMode {
+                        let lightTrackColor = activeTheme == .qingci ? Color(red: 0.863, green: 0.906, blue: 0.894) : Color(red: 0.894, green: 0.827, blue: 0.749)
+                        graphics.fill(basePath, with: .color(lightTrackColor))
                     } else {
                         graphics.fill(basePath, with: .color(Color.black.opacity(0.35)))
                         graphics.fill(basePath, with: .color(Color.white.opacity(0.12)))
@@ -251,10 +258,14 @@ public struct PlayerScrubberView: View {
 
                     if playedWidth > 0 {
                         let rect = CGRect(x: 0, y: trackY, width: playedWidth, height: trackHeight)
+                        let lightPlayedGradient = Gradient(colors: [
+                            activeTheme.accentColor.opacity(0.82),
+                            activeTheme.accentColor
+                        ])
                         graphics.fill(
                             Path(roundedRect: rect, cornerRadius: min(trackHeight, playedWidth) * 0.5),
                             with: .linearGradient(
-                                isWarmWhiteMusic ? Self.warmPlayedGradient : Self.playedGradient,
+                                isLightMusicMode ? lightPlayedGradient : Self.playedGradient,
                                 startPoint: CGPoint(x: rect.minX, y: rect.midY),
                                 endPoint: CGPoint(x: rect.maxX, y: rect.midY)
                             )
@@ -284,7 +295,7 @@ public struct PlayerScrubberView: View {
                     .fill(Color.white)
                     .overlay(
                         Circle()
-                            .strokeBorder(isWarmWhiteMusic ? SilkLibraryTheme.nuanbai.accentColor.opacity(0.85) : Color.cyan.opacity(0.85), lineWidth: isExpanded ? 1.0 : 0.5)
+                            .strokeBorder(isLightMusicMode ? activeTheme.accentColor.opacity(0.85) : Color.cyan.opacity(0.85), lineWidth: isExpanded ? 1.0 : 0.5)
                     )
                     .shadow(color: Color.black.opacity(0.35), radius: isExpanded ? 4 : 2, x: 0, y: 1)
                     .frame(width: currentKnobSize, height: currentKnobSize)

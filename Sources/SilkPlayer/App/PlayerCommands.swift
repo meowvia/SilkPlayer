@@ -368,7 +368,7 @@ public struct PlayerCommands: Commands {
                 activePlayer?.togglePlaylistDrawer()
             }
             .keyboardShortcut("p", modifiers: .command)
-            .disabled(activePlayer == nil || activePlayer?.isAudioOnly == true)
+            .disabled(activePlayer == nil)
 
             Button(
                 settings.isMusicQueueCollapsed
@@ -378,7 +378,7 @@ public struct PlayerCommands: Commands {
                 activePlayer?.toggleMusicQueueCollapsed()
             }
             .keyboardShortcut("l", modifiers: .command)
-            .disabled(activePlayer?.isAudioOnly != true)
+            .disabled(activePlayer?.isProMusicModeActive != true)
 
             Divider()
 

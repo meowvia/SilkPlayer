@@ -771,6 +771,13 @@ public struct SilkMediaLibraryRecord: Identifiable, Codable, Sendable, Equatable
     public var posterPath: String?
     public var isHDR: Bool
     public var isDolbyVision: Bool
+    public var genres: [String]
+    public var userTags: [String]
+    public var overview: String?
+    public var releaseYear: Int?
+    public var rating: Double?
+    public var tmdbId: Int?
+    public var posterUrl: String?
 
     public init(
         sourceId: String,
@@ -797,7 +804,14 @@ public struct SilkMediaLibraryRecord: Identifiable, Codable, Sendable, Equatable
         lastPlayedAt: Double? = nil,
         posterPath: String? = nil,
         isHDR: Bool = false,
-        isDolbyVision: Bool = false
+        isDolbyVision: Bool = false,
+        genres: [String] = [],
+        userTags: [String] = [],
+        overview: String? = nil,
+        releaseYear: Int? = nil,
+        rating: Double? = nil,
+        tmdbId: Int? = nil,
+        posterUrl: String? = nil
     ) {
         self.sourceId = sourceId
         self.path = path
@@ -824,11 +838,30 @@ public struct SilkMediaLibraryRecord: Identifiable, Codable, Sendable, Equatable
         self.posterPath = posterPath
         self.isHDR = isHDR
         self.isDolbyVision = isDolbyVision
+        self.genres = genres
+        self.userTags = userTags
+        self.overview = overview
+        self.releaseYear = releaseYear
+        self.rating = rating
+        self.tmdbId = tmdbId
+        self.posterUrl = posterUrl
     }
 
     public var progressFraction: Double {
         guard durationSeconds > 1 else { return 0 }
         return min(1.0, max(0.0, positionSeconds / durationSeconds))
+    }
+
+    public var hasValidLocalPoster: Bool {
+        guard let local = posterPath, !local.isEmpty else { return false }
+        return FileManager.default.fileExists(atPath: local)
+    }
+
+    public var effectivePosterSource: String? {
+        if let local = posterPath, !local.isEmpty, FileManager.default.fileExists(atPath: local) {
+            return local
+        }
+        return posterUrl
     }
 }
 
@@ -928,6 +961,8 @@ public final class SilkMediaLibraryEngine: ObservableObject {
     @Published public private(set) var scanningSourceName: String? = nil
     @Published public private(set) var scanningDiscoveredCount: Int = 0
     @Published public private(set) var lastScanError: String? = nil
+    @Published public var activeDetailPath: String? = nil
+    public var minimumVideoFileSizeMBOverride: Int? = nil
 
     public init(databaseURL: URL? = nil, usePersistentBookmarkStorage: Bool = true) {}
     public func loadFromDatabase() async {}
@@ -947,6 +982,8 @@ public final class SilkMediaLibraryEngine: ObservableObject {
     public func recordPlaybackProgress(path: String, position: Double, duration: Double) async {}
     public func setWatchState(path: String, state: SilkWatchState) async {}
     public func clearAllWatchMemory() async {}
+    public func clearPosterCache() async {}
+    public func reclaimMemory() async {}
     public func renameMediaItem(path: String, newTitle: String) async {}
     public func renameSeriesGroup(sourceId: String?, oldSeriesName: String, newSeriesName: String) async {}
     public func removeMediaItemFromLibrary(path: String) async {}
@@ -954,9 +991,41 @@ public final class SilkMediaLibraryEngine: ObservableObject {
     public func deleteMediaItemFile(path: String) async -> Result<Void, Error> { .success(()) }
     public func deleteSeriesFiles(paths: [String]) async -> Result<Int, Error> { .success(0) }
     public func resolvePlayableURL(for path: String) async -> URL? { URL(fileURLWithPath: path) }
+    public func updateRecordMetadata(
+        path rawPath: String,
+        genres: [String],
+        overview: String?,
+        releaseYear: Int?,
+        rating: Double?,
+        tmdbId: Int?,
+        posterUrl: String?,
+        localPosterPath: String? = nil
+    ) async {}
 }
 
 extension SilkMediaLibraryEngine: @unchecked Sendable {}
+
+@MainActor
+public final class SilkMetadataScraperService: ObservableObject {
+    public static let shared = SilkMetadataScraperService()
+    @Published public private(set) var isScraping: Bool = false
+    @Published public private(set) var currentTitle: String? = nil
+    @Published public private(set) var scrapedCount: Int = 0
+    @Published public private(set) var totalCount: Int = 0
+    @Published public private(set) var successCount: Int = 0
+    @Published public private(set) var failureCount: Int = 0
+    @Published public private(set) var lastSummary: String? = nil
+    @Published public private(set) var lastError: String? = nil
+
+    private init() {}
+
+    public func cancel() {}
+    public func clearSummary() { lastSummary = nil }
+    public func scrape(record: SilkMediaLibraryRecord) async -> Bool { false }
+    public func scrapeBatch(records: [SilkMediaLibraryRecord], forceAll: Bool = false) async {}
+}
+
+extension SilkMetadataScraperService: @unchecked Sendable {}
 
 // MARK: - Closed-Source Pro Library & Music Mode UI Stubs (CI Only)
 
@@ -1040,6 +1109,15 @@ public enum SilkLibraryTheme: String, CaseIterable, Identifiable, Sendable, Coda
         switch self {
         case .shenghui: return Color(red: 0.118, green: 0.122, blue: 0.133)
         case .iceBlue: return Color(red: 0.04, green: 0.08, blue: 0.14).opacity(0.68)
+        case .nuanbai: return Color(red: 0.980, green: 0.965, blue: 0.941)
+        case .qingci: return Color(red: 0.945, green: 0.961, blue: 0.953)
+        }
+    }
+
+    public var solidBackgroundBase: Color {
+        switch self {
+        case .shenghui: return Color(red: 0.118, green: 0.122, blue: 0.133)
+        case .iceBlue: return Color(red: 0.04, green: 0.08, blue: 0.14)
         case .nuanbai: return Color(red: 0.980, green: 0.965, blue: 0.941)
         case .qingci: return Color(red: 0.945, green: 0.961, blue: 0.953)
         }
@@ -1140,7 +1218,8 @@ public struct SilkProLibraryView: View {
         onPlayItem: @escaping (SilkMediaLibraryRecord, [SilkMediaLibraryRecord], Bool) -> Void,
         onOpenFile: @escaping () -> Void,
         onFilesDropped: @escaping ([URL]) -> Void,
-        onOpenSettings: @escaping (Int) -> Void = { _ in }
+        onOpenSettings: @escaping (Int) -> Void = { _ in },
+        onDetailVisibilityChanged: ((Bool) -> Void)? = nil
     ) {}
 
     public var body: some View { EmptyView() }
@@ -1508,8 +1587,61 @@ public final class SilkCloudSyncService: ObservableObject {
     }
     public func publish(record: SilkCloudSyncRecord) {}
     public func pullRemoteChanges() {}
+    @discardableResult
+    public func clearCloudSyncStorage() -> Bool { true }
 }
 
 public extension SilkMusicModeHost {
     func minimizeToStatusBar() {}
+}
+
+public extension View {
+    func silkSuppressSheetFocusRing() -> some View {
+        self
+    }
+}
+
+public struct SilkNFOMetadata: Sendable, Equatable {
+    public var title: String?
+    public var originalTitle: String?
+    public var seriesName: String?
+    public var seasonNumber: Int?
+    public var episodeNumber: Int?
+    public var overview: String?
+    public var releaseYear: Int?
+    public var rating: Double?
+    public var genres: [String] = []
+    public var tmdbId: Int?
+    public var posterUrl: String?
+
+    public init(
+        title: String? = nil,
+        originalTitle: String? = nil,
+        seriesName: String? = nil,
+        seasonNumber: Int? = nil,
+        episodeNumber: Int? = nil,
+        overview: String? = nil,
+        releaseYear: Int? = nil,
+        rating: Double? = nil,
+        genres: [String] = [],
+        tmdbId: Int? = nil,
+        posterUrl: String? = nil
+    ) {
+        self.title = title
+        self.originalTitle = originalTitle
+        self.seriesName = seriesName
+        self.seasonNumber = seasonNumber
+        self.episodeNumber = episodeNumber
+        self.overview = overview
+        self.releaseYear = releaseYear
+        self.rating = rating
+        self.genres = genres
+        self.tmdbId = tmdbId
+        self.posterUrl = posterUrl
+    }
+}
+
+public enum SilkNFOParser {
+    public static func parse(fileURL: URL) -> SilkNFOMetadata? { nil }
+    public static func parse(content: String) -> SilkNFOMetadata { SilkNFOMetadata() }
 }

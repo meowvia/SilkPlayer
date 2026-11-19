@@ -18,6 +18,7 @@ struct SilkPlayerApp: App {
         WindowGroup("SilkPlayer", id: "playerWindow") {
             PlayerWindowRootView()
                 .preferredColorScheme(settings.effectiveColorScheme)
+                .handlesExternalEvents(preferring: Set(arrayLiteral: "*"), allowing: Set(arrayLiteral: "*"))
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 960, height: 540)

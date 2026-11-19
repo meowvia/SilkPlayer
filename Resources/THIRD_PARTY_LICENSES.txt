@@ -28,6 +28,13 @@ SilkPlayer employs a modular, decoupled architecture:
 3. Core Playback & Metal Rendering Engine (SilkCoreKit):
    - License: SilkCoreKit Proprietary Binary License Agreement (meowvia).
    - Scope: Closed-source core engine decoupled via SPM binaryTarget.
+   - Commercial Licensing & OEM Inquiries:
+     The closed-source playback engine, demuxing optimizations, and Metal direct
+     rendering components within SilkCoreKit are available for commercial OEM
+     licensing, third-party software integration, and enterprise licensing.
+     For commercial inquiries and licensing, please contact:
+     * Official Licensing Email: support@1999909.xyz
+     * Product Official Website: https://silkplayer.1999909.xyz
    - Notice: Full terms are provided in SILKCOREKIT_LICENSE.md in this directory.
 
 --------------------------------------------------------------------------------

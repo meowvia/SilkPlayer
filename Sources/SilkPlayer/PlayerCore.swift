@@ -79,6 +79,18 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             }
         }
     }
+    public var presentationMode: PlaybackPresentationMode {
+        guard isAudioOnly || isLoaded || playbackState == .loading || isPlaying else { return .idle }
+        if !isAudioOnly { return .video }
+        if SilkProLicenseEngine.shared.isProActive || PlayerWindowManager.isRunningTests {
+            return .proMusic
+        } else {
+            return .standardAudio
+        }
+    }
+    public var isProMusicModeActive: Bool {
+        presentationMode == .proMusic
+    }
     @Published public var artworkImage: NSImage? = nil
 
     // MARK: - Video & Codec Metadata
@@ -1379,7 +1391,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func togglePlaylistDrawer() {
-        guard !isAudioOnly else { return }
+        guard !isProMusicModeActive else { return }
         isPlaylistDrawerVisible.toggle()
         if isPlaylistDrawerVisible {
             isInspectorVisible = false

@@ -5,6 +5,8 @@ import SwiftUI
 public final class AppNavigationModel {
     public static let shared = AppNavigationModel()
 
+    public init() {}
+
     public enum PlaybackState: Equatable {
         case idle
         case playing(url: URL)

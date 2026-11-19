@@ -9,12 +9,11 @@ public struct PlayerContainerView: View {
     @ObservedObject private var licenseEngine = SilkProLicenseEngine.shared
     private var settings = AppSettings.shared
     var playlist: PlaylistManager
-    @State private var navigationModel = AppNavigationModel.shared
+    var navigationModel: AppNavigationModel
 
     private var shouldHidePlaylistDrawer: Bool {
         false
     }
-    @State private var isHoveringRightEdge: Bool = false
     @State private var isHoveringHandle: Bool = false
     @State private var drawerDismissTask: Task<Void, Never>? = nil
     var onPlayNext: () -> Void
@@ -25,6 +24,7 @@ public struct PlayerContainerView: View {
     public init(
         player: PlayerCore,
         playlist: PlaylistManager = PlaylistManager.shared,
+        navigationModel: AppNavigationModel = .shared,
         onPlayNext: @escaping () -> Void = {},
         onPlayPrevious: @escaping () -> Void = {},
         onSelectPlaylistItem: @escaping (PlaylistItem) -> Void = { _ in },
@@ -32,6 +32,7 @@ public struct PlayerContainerView: View {
     ) {
         self.player = player
         self.playlist = playlist
+        self.navigationModel = navigationModel
         self.onPlayNext = onPlayNext
         self.onPlayPrevious = onPlayPrevious
         self.onSelectPlaylistItem = onSelectPlaylistItem
@@ -43,16 +44,39 @@ public struct PlayerContainerView: View {
             let drawerWidth = PlaylistDrawerDimensions.drawerWidth(for: geometry.size.width, isFullscreen: player.isFullscreen)
 
             ZStack(alignment: .topLeading) {
+                let isMusicModeActive = player.isProMusicModeActive
+
                 if player.isAudioOnly {
-                    MusicModeView(
-                        player: player,
-                        playlist: playlist,
-                        onPlayNext: onPlayNext,
-                        onPlayPrevious: onPlayPrevious,
-                        onSelectPlaylistItem: onSelectPlaylistItem,
-                        onClosePlayback: onClosePlayback
-                    )
-                    .edgesIgnoringSafeArea(.all)
+                    if isMusicModeActive {
+                        MusicModeView(
+                            player: player,
+                            playlist: playlist,
+                            onPlayNext: onPlayNext,
+                            onPlayPrevious: onPlayPrevious,
+                            onSelectPlaylistItem: onSelectPlaylistItem,
+                            onClosePlayback: onClosePlayback
+                        )
+                        .edgesIgnoringSafeArea(.all)
+                    } else {
+                        // 1.6.0~1.7.0 Free audio architecture: Base VideoView handles window dragging, click-to-pause, and bounds
+                        VideoView(playerCore: player)
+                            .edgesIgnoringSafeArea(.all)
+
+                        AudioArtworkView(player: player, playlist: playlist)
+                            .edgesIgnoringSafeArea(.all)
+                            .allowsHitTesting(false)
+
+                        PlayerHUDView(
+                            player: player,
+                            playlist: playlist,
+                            onPlayNext: onPlayNext,
+                            onPlayPrevious: onPlayPrevious,
+                            onSelectPlaylistItem: onSelectPlaylistItem,
+                            onClosePlayback: onClosePlayback
+                        )
+                        .environment(\.colorScheme, .dark)
+                        .zIndex(20)
+                    }
                 } else {
                     // Video Canvas Surface (Right-click context menu is handled natively in MetalPlayerContainerView)
                     VideoView(playerCore: player)
@@ -94,17 +118,39 @@ public struct PlayerContainerView: View {
                             .frame(maxWidth: 360)
                         HStack(spacing: 10) {
                             if let failedPath = player.currentFilePath {
-                                Button(L10n.tr("Retry", "重试")) {
+                                Button {
                                     player.loadMediaWithCrossfade(path: failedPath, startTime: player.currentTime, autoPlay: true)
+                                } label: {
+                                    Text(L10n.tr("Retry", "重试"))
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 5)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                                .fill(Color.white.opacity(0.22))
+                                        )
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.regular)
+                                .buttonStyle(.plain)
                             }
-                            Button(L10n.tr("Close", "返回")) {
+                            Button {
                                 onClosePlayback()
+                            } label: {
+                                Text(L10n.tr("Close", "返回"))
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 5)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .fill(Color.white.opacity(0.10))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .stroke(Color.white.opacity(0.18), lineWidth: 0.75)
+                                    )
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.regular)
+                            .buttonStyle(.plain)
                         }
                         .padding(.top, 2)
                     }
@@ -160,35 +206,10 @@ public struct PlayerContainerView: View {
                     .zIndex(40)
                 }
 
-                if !player.isAudioOnly && !shouldHidePlaylistDrawer {
-                    // Right-Edge Invisible Hover Trigger Zone (within 28pt of right edge)
-                    // Strictly active in FULLSCREEN mode only; in windowed mode, user must click the side triangle tab.
-                    if player.isFullscreen {
-                        HStack {
-                            Spacer()
-                            Color.clear
-                                .frame(width: 28)
-                                .frame(maxHeight: .infinity)
-                                .contentShape(Rectangle())
-                                .onHover { isHovering in
-                                    isHoveringRightEdge = isHovering
-                                    if isHovering {
-                                        drawerDismissTask?.cancel()
-                                        drawerDismissTask = nil
-                                        if !player.isPlaylistDrawerVisible && !player.isInspectorVisible {
-                                            withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                                                player.isPlaylistDrawerVisible = true
-                                            }
-                                        }
-                                    }
-                                }
-                        }
-                        .allowsHitTesting(!player.isPlaylistDrawerVisible)
-                        .zIndex(27)
-                    }
-
+                if !isMusicModeActive && !shouldHidePlaylistDrawer {
                     // Right-Edge Floating Side Triangle Pull Tab (always accessible on right border)
-                    let isHandleVisible = (player.isHUDVisible || isHoveringRightEdge || isHoveringHandle) && !player.isPlaylistDrawerVisible
+                    // Consistent across windowed and fullscreen: purely manual click to toggle, preventing accidental expansion when reaching for top-right return button.
+                    let isHandleVisible = (player.isHUDVisible || isHoveringHandle) && !player.isPlaylistDrawerVisible
                     PlaylistDrawerHandleTab(
                         isDrawerVisible: player.isPlaylistDrawerVisible,
                         drawerWidth: drawerWidth,
@@ -196,15 +217,6 @@ public struct PlayerContainerView: View {
                             isHoveringHandle = isHovering
                             if isHovering {
                                 player.reportUserActivity()
-                            }
-                            if player.isFullscreen && isHovering {
-                                drawerDismissTask?.cancel()
-                                drawerDismissTask = nil
-                                if !player.isPlaylistDrawerVisible && !player.isInspectorVisible {
-                                    withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
-                                        player.isPlaylistDrawerVisible = true
-                                    }
-                                }
                             }
                         }
                     ) {
@@ -223,7 +235,7 @@ public struct PlayerContainerView: View {
                 // Interactive Backdrop for Drawer Dismissal:
                 // Tapping anywhere outside the drawer closes the drawer without pausing playback.
                 // Avoids top 60pt region so top bar quick action buttons (Close, Pin, Inspector) are never obstructed.
-                if (!player.isAudioOnly && !shouldHidePlaylistDrawer && player.isPlaylistDrawerVisible) || player.isInspectorVisible {
+                if (!isMusicModeActive && !shouldHidePlaylistDrawer && player.isPlaylistDrawerVisible) || player.isInspectorVisible {
                     Color.black.opacity(0.001)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
@@ -241,7 +253,7 @@ public struct PlayerContainerView: View {
                 // Right-Side Slide-In Pure Playlist Drawer
                 // Strictly framed within playback area with vertical avoidance (+64pt top, -96pt bottom)
                 // to never obstruct top-right Pin / Inspector buttons or bottom scrubber timeline.
-                if !player.isAudioOnly && !shouldHidePlaylistDrawer && player.isPlaylistDrawerVisible {
+                if !isMusicModeActive && !shouldHidePlaylistDrawer && player.isPlaylistDrawerVisible {
                     HStack(spacing: 0) {
                         Spacer()
                         HStack(spacing: 0) {

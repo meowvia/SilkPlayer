@@ -109,6 +109,31 @@ extension PlayerCore {
 
         pendingAudioGeometryAfterExitFullScreen = false
         applyContentAspectRatioLock()
+
+        guard isProMusicModeActive else {
+            restoreStandardWindowChrome(on: window)
+            let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+            let minAudioSize = NSSize(width: 380, height: 380)
+
+            window.minSize = minAudioSize
+            window.contentMinSize = minAudioSize
+            window.maxSize = screenFrame.size
+            window.contentMaxSize = screenFrame.size
+
+            let currentFrame = window.frame
+            let isAlreadySquareAudio = abs(currentFrame.width - currentFrame.height) <= 4.0 && currentFrame.width >= 360
+            if !isAlreadySquareAudio {
+                let targetW: CGFloat = 520
+                let targetH: CGFloat = 520
+                let currentCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
+                let newX = max(screenFrame.minX, min(screenFrame.maxX - targetW, currentCenter.x - targetW / 2))
+                let newY = max(screenFrame.minY, min(screenFrame.maxY - targetH, currentCenter.y - targetH / 2))
+                let newFrame = NSRect(x: newX, y: newY, width: targetW, height: targetH)
+                window.setFrame(newFrame, display: true, animate: animated)
+            }
+            return
+        }
+
         configureMusicModeChrome(on: window)
 
         let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)

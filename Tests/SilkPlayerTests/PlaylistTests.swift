@@ -549,7 +549,7 @@ final class PlaylistRegressionTests: XCTestCase {
     windowMgr.openSettings()
     XCTAssert(windowMgr.settingsWindow != nil, "Settings window is instantiated")
     XCTAssert(windowMgr.settingsWindow?.frame.width == 520, "Settings window width is 520")
-    XCTAssert(windowMgr.settingsWindow?.frame.height == 490, "Settings window height is 490")
+    XCTAssert(windowMgr.settingsWindow?.frame.height == 460, "Settings window height matches compact zero-scroll standard")
     XCTAssert(windowMgr.settingsWindow?.collectionBehavior.contains(.fullScreenAuxiliary) == true, "Settings window has .fullScreenAuxiliary behavior")
     XCTAssert(windowMgr.settingsWindow?.collectionBehavior.contains(.canJoinAllSpaces) == true, "Settings window has .canJoinAllSpaces behavior")
     windowMgr.closeSettings()
@@ -595,7 +595,7 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(windowMgr.settingsWindow != nil, "Settings window opened successfully")
     XCTAssert(windowMgr.settingsWindow?.level == .floating, "Settings window is permanently floating above player canvas")
     XCTAssert(windowMgr.settingsWindow?.frame.width == 520, "Settings window width is 520")
-    XCTAssert(windowMgr.settingsWindow?.frame.height == 490, "Settings window height is 490 for macOS HIG zero-scroll standard")
+    XCTAssert(windowMgr.settingsWindow?.frame.height == 460, "Settings window height matches compact zero-scroll standard")
     windowMgr.closeSettings()
     XCTAssert(windowMgr.settingsWindow == nil, "Settings window closed cleanly")
 
@@ -1917,5 +1917,110 @@ final class PlaylistRegressionTests: XCTestCase {
     let expandedHorizontalAvailable = 950.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.expanded.outerBottomHorizontalPadding + HUDLayoutTier.expanded.wingHorizontalPadding) - 145.0
     let expandedRightWingInline = 114.0 + 28.0 * 4.0 + HUDLayoutTier.expanded.wingItemSpacing * 4.0
     XCTAssertGreaterThanOrEqual(expandedHorizontalAvailable, expandedRightWingInline, "Wide expanded >= 950pt clears centered Next even when inline horizontal slider is expanded")
+
+    // 64. Strict Playback Category Isolation & Cross-Playlist Boundary Defense
+    print("\n--- Test 64: Strict Playback Category Isolation & Cross-Playlist Boundary Defense ---")
+    let isoManager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+    let videoItem1 = PlaylistItem(path: "/media/movie_ep01.mp4", title: "Ep 01", duration: 1200.0)
+    let videoItem2 = PlaylistItem(path: "/media/movie_ep02.mp4", title: "Ep 02", duration: 1300.0)
+    let audioItem1 = PlaylistItem(path: "/music/song_01.flac", title: "Song 01", duration: 200.0)
+    let audioItem2 = PlaylistItem(path: "/music/song_02.mp3", title: "Song 02", duration: 210.0)
+
+    isoManager.appendItems([videoItem1, videoItem2, audioItem1, audioItem2])
+    XCTAssertEqual(isoManager.videoCount, 2)
+    XCTAssertEqual(isoManager.audioCount, 2)
+
+    // Subtest A: Playing Music with Drawer switched to Videos
+    isoManager.selectItem(audioItem1)
+    XCTAssertEqual(isoManager.playbackCategory, .audio)
+    XCTAssertEqual(isoManager.currentItem?.path, audioItem1.path)
+
+    // User opens drawer and clicks Video tab
+    isoManager.switchCategory(.video)
+    XCTAssertEqual(isoManager.activeCategory, .video, "UI tab is viewing video")
+    XCTAssertEqual(isoManager.playbackCategory, .audio, "Playback stream remains strictly locked to audio")
+    XCTAssertEqual(isoManager.currentItem?.path, audioItem1.path, "Current playing track is still song 01")
+    XCTAssertTrue(isoManager.hasNext, "Audio track 01 has next audio track")
+    XCTAssertEqual(isoManager.nextItem?.path, audioItem2.path, "Next item is strictly audio 02, not video")
+
+    // Move to next audio track
+    let nextAudio = isoManager.moveToNext()
+    XCTAssertEqual(nextAudio?.path, audioItem2.path, "Advanced to song 02")
+    XCTAssertEqual(isoManager.playbackCategory, .audio)
+
+    // Boundary at end of audio queue in sequential mode: Must NOT cross into video list
+    isoManager.setPlaybackMode(.sequential)
+    XCTAssertFalse(isoManager.hasNext, "At end of audio list, hasNext must be false even if videoItems exist")
+    XCTAssertNil(isoManager.nextItem, "nextItem must be nil at end of audio playlist")
+    XCTAssertNil(isoManager.moveToNext(), "moveToNext must return nil and refuse to cross to video list")
+    XCTAssertNil(isoManager.handleNaturalEOF(), "Natural EOF must stop cleanly at end of audio list without cross-list rollover")
+
+    // List Loop mode in Audio: Must loop strictly within audioItems
+    isoManager.setPlaybackMode(.listLoop)
+    XCTAssertTrue(isoManager.hasNext)
+    XCTAssertEqual(isoManager.nextItem?.path, audioItem1.path, "List loop next item loops to first audio track")
+    let loopedAudio = isoManager.handleNaturalEOF()
+    XCTAssertEqual(loopedAudio?.path, audioItem1.path, "Natural EOF loops strictly back to song 01")
+    XCTAssertEqual(isoManager.playbackCategory, .audio)
+
+    // Shuffle mode in Audio: All candidates and next items must only be audio tracks
+    isoManager.setPlaybackMode(.shuffle)
+    for _ in 0..<10 {
+        if let up = isoManager.upcomingItem {
+            XCTAssertEqual(PlaylistManager.category(for: up.url), .audio, "Upcoming shuffle item must always be audio")
+        }
+        let shuffled = isoManager.moveToNext()
+        if let shuffled {
+            XCTAssertEqual(PlaylistManager.category(for: shuffled.url), .audio, "Played shuffle item must strictly remain audio")
+        }
+    }
+
+    // Subtest B: Playing Video with Drawer switched to Music
+    isoManager.selectItem(videoItem1)
+    XCTAssertEqual(isoManager.playbackCategory, .video)
+    XCTAssertEqual(isoManager.currentItem?.path, videoItem1.path)
+
+    // User opens drawer and clicks Music tab
+    isoManager.switchCategory(.audio)
+    XCTAssertEqual(isoManager.activeCategory, .audio, "UI tab is viewing audio")
+    XCTAssertEqual(isoManager.playbackCategory, .video, "Playback stream remains strictly locked to video")
+    XCTAssertEqual(isoManager.currentItem?.path, videoItem1.path, "Current playing track is still video 01")
+    XCTAssertTrue(isoManager.hasNext)
+    XCTAssertEqual(isoManager.nextItem?.path, videoItem2.path, "Next item is strictly video 02, not music")
+
+    let nextVideo = isoManager.moveToNext()
+    XCTAssertEqual(nextVideo?.path, videoItem2.path)
+    XCTAssertEqual(isoManager.playbackCategory, .video)
+
+    // Boundary at end of video queue in sequential mode: Must NOT cross into audio list
+    isoManager.setPlaybackMode(.sequential)
+    XCTAssertFalse(isoManager.hasNext, "At end of video list, hasNext must be false even if audioItems exist")
+    XCTAssertNil(isoManager.nextItem)
+    XCTAssertNil(isoManager.moveToNext(), "moveToNext must return nil and refuse to cross to audio list")
+    XCTAssertNil(isoManager.handleNaturalEOF(), "Natural EOF stops at end of video list without cross-list rollover")
+
+    // List Loop mode in Video: Must loop strictly within videoItems
+    isoManager.setPlaybackMode(.listLoop)
+    XCTAssertTrue(isoManager.hasNext)
+    XCTAssertEqual(isoManager.nextItem?.path, videoItem1.path, "List loop next item loops to first video")
+    let loopedVideo = isoManager.handleNaturalEOF()
+    XCTAssertEqual(loopedVideo?.path, videoItem1.path, "Natural EOF loops strictly back to video 01")
+    XCTAssertEqual(isoManager.playbackCategory, .video)
+
+    // Subtest C: Unified List Mode (isDualPlaylistMode == false) Strict Category Isolation
+    isoManager.applyDualPlaylistMode(false)
+    XCTAssertFalse(isoManager.isDualPlaylistMode)
+
+    // While playing video in unified mode, sequential progression must not cross to audio
+    isoManager.selectItem(videoItem2)
+    isoManager.setPlaybackMode(.sequential)
+    XCTAssertFalse(isoManager.hasNext, "In unified mode, playing video at last video must not cross over to audio")
+    XCTAssertNil(isoManager.moveToNext(), "moveToNext must not cross video boundary into audio in unified mode")
+
+    // While playing audio in unified mode, sequential progression must not cross to video
+    isoManager.selectItem(audioItem2)
+    isoManager.setPlaybackMode(.sequential)
+    XCTAssertFalse(isoManager.hasNext, "In unified mode, playing audio at last audio must not cross over to video")
+    XCTAssertNil(isoManager.moveToNext(), "moveToNext must not cross audio boundary into video in unified mode")
     }
 }

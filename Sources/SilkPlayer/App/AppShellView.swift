@@ -8,10 +8,12 @@ public struct AppShellView: View {
     @ObservedObject var player: PlayerCore
     @ObservedObject private var licenseEngine = SilkProLicenseEngine.shared
     @ObservedObject private var libraryEngine = SilkMediaLibraryEngine.shared
-    @State private var navigationModel = AppNavigationModel.shared
+    var navigationModel: AppNavigationModel
     var playlistManager: PlaylistManager
     private var settings = AppSettings.shared
     public let sessionId: UUID
+    public let isSecondaryWindow: Bool
+    @State private var isDiscardedDuplicateWindow: Bool = false
     @State private var lastPreviousClickTime: Date = .distantPast
     @State private var prePlaybackLibraryFrame: NSRect? = nil
     @State private var isLeftSourceDrawerVisible: Bool = false
@@ -19,16 +21,24 @@ public struct AppShellView: View {
     @State private var inFlightResolveTask: Task<Void, Never>? = nil
     @State private var resolvingTargetPath: String? = nil
     @State private var libraryPlaybackErrorMessage: String? = nil
+    @State private var isLibraryDetailActive: Bool = false
+    @State private var activeLibraryRecordPath: String? = nil
+    @State private var interruptedLibraryDetailPath: String? = nil
+    @State private var isPlayingEphemeralExternalMedia: Bool = false
     @AppStorage(SilkLibraryTheme.userDefaultsKey) private var proLibraryThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
 
     public init(
         player: PlayerCore,
         playlistManager: PlaylistManager = PlaylistManager.shared,
-        sessionId: UUID = UUID()
+        navigationModel: AppNavigationModel = .shared,
+        sessionId: UUID = UUID(),
+        isSecondaryWindow: Bool = false
     ) {
         self.player = player
         self.playlistManager = playlistManager
+        self.navigationModel = navigationModel
         self.sessionId = sessionId
+        self.isSecondaryWindow = isSecondaryWindow
     }
 
     @MainActor private static var didCenterInitialColdLaunchWindow = false
@@ -45,38 +55,49 @@ public struct AppShellView: View {
     }
 
     private var canUseLANFeatures: Bool {
-        licenseEngine.isProActive && settings.proLibraryHomeEnabled
+        !isSecondaryWindow && licenseEngine.isProActive && settings.proLibraryHomeEnabled
     }
 
     private var isProLibraryActive: Bool {
-        canUseLANFeatures && !libraryEngine.sources.isEmpty
+        !isSecondaryWindow && canUseLANFeatures && !libraryEngine.sources.isEmpty
     }
 
     private var shouldHidePlaylistDrawerForPro: Bool {
-        (!isPlaying && licenseEngine.isProActive) || isProLibraryActive
+        !isSecondaryWindow && ((!isPlaying && licenseEngine.isProActive) || isProLibraryActive)
     }
 
     private var useWarmLightEdgeHandle: Bool {
         !isPlaying && isProLibraryActive && (SilkLibraryTheme(rawValue: proLibraryThemeRaw)?.isLight == true)
     }
 
+    private var isLibraryPlaybackErrorPresented: Binding<Bool> {
+        Binding(
+            get: { self.libraryPlaybackErrorMessage != nil },
+            set: { if !$0 { self.libraryPlaybackErrorMessage = nil } }
+        )
+    }
+
     private var rootMinWidth: CGFloat {
-        if player.isAudioOnly {
+        if player.isProMusicModeActive {
             let screenW = (player.hostWindow?.screen ?? NSScreen.main)?.visibleFrame.width ?? 1920
             return MusicModeGeometry.lockedWidth(forScreenWidth: screenW)
         } else if isPlaying || player.isLoaded {
             return 200
+        } else if isProLibraryActive {
+            return 720
         } else {
             return 200
         }
     }
 
     private var rootMinHeight: CGFloat {
-        if player.isAudioOnly {
+        if player.isProMusicModeActive {
             // Keep well below collapsed height minus titlebar safe-area inset (~28-32pt) so AppKit window.minSize governs cleanly
             return 140.0
         } else if isPlaying || player.isLoaded {
             return 200
+        } else if isProLibraryActive {
+            return 460
         } else {
             return 200
         }
@@ -88,7 +109,7 @@ public struct AppShellView: View {
 
             ZStack {
                 if isPlaying {
-                    if !player.isAudioOnly {
+                    if !player.isAudioOnly || !SilkProLicenseEngine.shared.isProActive {
                         Color.black
                             .edgesIgnoringSafeArea(.all)
                             .allowsHitTesting(false)
@@ -97,6 +118,7 @@ public struct AppShellView: View {
                     PlayerContainerView(
                         player: player,
                         playlist: playlistManager,
+                        navigationModel: navigationModel,
                         onPlayNext: {
                             playNext()
                         },
@@ -112,6 +134,7 @@ public struct AppShellView: View {
                     )
                     .edgesIgnoringSafeArea(.all)
                     .transition(.opacity)
+                    .zIndex(10)
                 } else {
                     if isProLibraryActive {
                         SilkProLibraryView(
@@ -127,6 +150,9 @@ public struct AppShellView: View {
                             },
                             onOpenSettings: { tab in
                                 PlayerWindowManager.shared.openSettings(initialTab: tab)
+                            },
+                            onDetailVisibilityChanged: { isActive in
+                                isLibraryDetailActive = isActive
                             }
                         )
                         .edgesIgnoringSafeArea(.all)
@@ -151,7 +177,7 @@ public struct AppShellView: View {
                     }
 
                     // Right-Edge Floating Side Triangle Pull Tab (omitted in Music Mode or Pro Library Drawer-Hidden Mode)
-                    if !(isPlaying && player.isAudioOnly) && !shouldHidePlaylistDrawerForPro {
+                    if !shouldHidePlaylistDrawerForPro {
                         if !player.isPlaylistDrawerVisible {
                             PlaylistDrawerHandleTab(
                                 isDrawerVisible: player.isPlaylistDrawerVisible,
@@ -205,8 +231,8 @@ public struct AppShellView: View {
                         }
                     }
 
-                    // Left-Edge Floating LAN Sources Handle & Manual Frosted Sidebar
-                    if canUseLANFeatures {
+                    // Left-Edge Floating LAN Sources Handle & Manual Frosted Sidebar (hidden when movie detail canvas is active)
+                    if canUseLANFeatures && !isLibraryDetailActive {
                         if !isLeftSourceDrawerVisible {
                             LeftLANSourceHandleTab(
                                 isDrawerVisible: isLeftSourceDrawerVisible,
@@ -281,96 +307,8 @@ public struct AppShellView: View {
                 handleWindowAcquired(window)
             }
         )
-        .onChange(of: isPlaying) { _, playing in
-            updateAppTrafficLights()
-            if playing {
-                isLeftSourceDrawerVisible = false
-                player.hostWindow?.isMovableByWindowBackground = false
-                player.hostWindow?.isOpaque = false
-                player.hostWindow?.backgroundColor = .clear
-                if !player.isFullscreen {
-                    player.applyContentAspectRatioLock()
-                }
-            } else {
-                player.hostWindow?.isMovableByWindowBackground = false
-                player.hostWindow?.isOpaque = false
-                player.hostWindow?.backgroundColor = .clear
-                player.hostWindow?.contentAspectRatio = .zero
-                player.hostWindow?.aspectRatio = .zero
-                player.hostWindow?.resizeIncrements = NSSize(width: 1, height: 1)
-                player.hostWindow?.contentResizeIncrements = NSSize(width: 1, height: 1)
-                let emptyMin = NSSize(width: 640, height: 360)
-                if let w = player.hostWindow, !w.styleMask.contains(.fullScreen), !player.isFullscreen {
-                    (w.delegate as? PlayerWindowDelegate)?.resetInteractiveModeToNormal()
-                    player.restoreStandardWindowChrome(on: w)
-                    let screen = w.screen ?? NSScreen.main
-                    let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-
-                    let defaultIdleSize = NSSize(width: 960, height: 540)
-                    let targetFrame: NSRect
-                    if let savedLibraryFrame = prePlaybackLibraryFrame, (isProLibraryActive || savedLibraryFrame.width >= savedLibraryFrame.height) {
-                        prePlaybackLibraryFrame = nil
-                        let targetW = max(emptyMin.width, min(screenFrame.width, savedLibraryFrame.width))
-                        let targetH = max(emptyMin.height, min(screenFrame.height, savedLibraryFrame.height))
-                        let targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, savedLibraryFrame.origin.x))
-                        let targetY = max(screenFrame.minY, min(screenFrame.maxY - targetH, savedLibraryFrame.origin.y))
-                        targetFrame = NSRect(x: targetX, y: targetY, width: targetW, height: targetH)
-                    } else {
-                        prePlaybackLibraryFrame = nil
-                        let currentFrame = w.frame
-                        let targetW: CGFloat
-                        let targetH: CGFloat
-                        let targetX: CGFloat
-                        let targetY: CGFloat
-
-                        // ISSUE-022: If closing after playing a portrait/vertical video (width < height)
-                        // or unusually narrow window, reset back to standard 960x540 landscape frame.
-                        if currentFrame.width < currentFrame.height || currentFrame.width < 720 {
-                            targetW = min(defaultIdleSize.width, screenFrame.width)
-                            targetH = min(defaultIdleSize.height, screenFrame.height)
-                            let centerX = currentFrame.midX
-                            let centerY = currentFrame.midY
-                            let candidateX = centerX - (targetW / 2)
-                            let candidateY = centerY - (targetH / 2)
-                            targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, candidateX))
-                            targetY = max(screenFrame.minY, min(screenFrame.maxY - targetH, candidateY))
-                        } else {
-                            targetW = max(currentFrame.width, emptyMin.width)
-                            targetH = max(currentFrame.height, emptyMin.height)
-                            let rawY = currentFrame.origin.y - (targetH - currentFrame.height)
-                            let rawX = currentFrame.origin.x
-                            targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, rawX))
-                            targetY = max(screenFrame.minY, min(screenFrame.maxY - targetH, rawY))
-                        }
-                        targetFrame = NSRect(x: targetX, y: targetY, width: targetW, height: targetH)
-                    }
-
-                    w.minSize = NSSize(width: 100, height: 100)
-                    w.contentMinSize = w.minSize
-                    w.setFrame(targetFrame, display: true, animate: false)
-                    w.minSize = emptyMin
-                    w.contentMinSize = emptyMin
-                    w.maxSize = screenFrame.size
-                    w.contentMaxSize = screenFrame.size
-                    if let cv = w.contentView {
-                        cv.autoresizingMask = [.width, .height]
-                        if let superview = cv.superview {
-                            cv.frame = superview.bounds
-                        }
-                        cv.needsLayout = true
-                    }
-                    w.layoutIfNeeded()
-                    DispatchQueue.main.async { [weak w] in
-                        guard let w = w, let cv = w.contentView else { return }
-                        cv.autoresizingMask = [.width, .height]
-                        if let superview = cv.superview {
-                            cv.frame = superview.bounds
-                        }
-                        cv.needsLayout = true
-                        w.layoutIfNeeded()
-                    }
-                }
-            }
+        .onChange(of: isPlaying) { wasPlaying, isNowPlaying in
+            handlePlaybackStateChange(wasPlaying: wasPlaying, isNowPlaying: isNowPlaying)
         }
         .onChange(of: settings.keepWindowOnTop) { _, newValue in
             PlayerWindowManager.shared.applyAlwaysOnTop(newValue)
@@ -382,10 +320,7 @@ public struct AppShellView: View {
         }
         .alert(
             L10n.tr("Unable to Open Media", "无法打开媒体文件"),
-            isPresented: Binding(
-                get: { libraryPlaybackErrorMessage != nil },
-                set: { if !$0 { libraryPlaybackErrorMessage = nil } }
-            )
+            isPresented: isLibraryPlaybackErrorPresented
         ) {
             Button(L10n.tr("OK", "确定"), role: .cancel) {
                 libraryPlaybackErrorMessage = nil
@@ -395,7 +330,7 @@ public struct AppShellView: View {
         }
         .onChange(of: licenseEngine.isProActive) { _, isActive in
             SilkProIconManager.syncApplicationIcon(isProActive: isActive)
-            guard isActive else { return }
+            guard isActive, !isSecondaryWindow else { return }
             Task { @MainActor in
                 if settings.proAutoScanOnLaunch {
                     await SilkMediaLibraryEngine.shared.rescanAutoSourcesOnLaunch()
@@ -409,7 +344,7 @@ public struct AppShellView: View {
             registerSession()
             setupHooks()
             checkPendingFiles()
-            if licenseEngine.isProActive {
+            if !isSecondaryWindow && licenseEngine.isProActive {
                 Task { @MainActor in
                     if settings.proAutoScanOnLaunch {
                         await SilkMediaLibraryEngine.shared.rescanAutoSourcesOnLaunch()
@@ -420,15 +355,25 @@ public struct AppShellView: View {
             }
         }
         .onDisappear {
+            if isDiscardedDuplicateWindow {
+                PlayerWindowManager.shared.unregisterSession(id: sessionId)
+                player.destroy()
+                return
+            }
             if let currentPath = player.currentFilePath, player.currentTime > 0 {
                 AppSettings.shared.savePosition(for: currentPath, position: player.currentTime, duration: player.duration)
             }
-            playlistManager.saveToStorage()
-            PlayerWindowManager.shared.closeSettings()
+            if !isSecondaryWindow && !isPlayingEphemeralExternalMedia {
+                playlistManager.saveToStorage()
+            }
+            if PlayerWindowManager.shared.sessions.count <= 1 {
+                PlayerWindowManager.shared.closeSettings()
+            }
             unregisterSession()
         }
         .onOpenURL { url in
-            openExternalURL(url)
+            guard url.isFileURL else { return }
+            PlayerWindowManager.shared.handleSystemOpenFiles([url.path])
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             guard !providers.isEmpty else { return false }
@@ -470,10 +415,43 @@ public struct AppShellView: View {
                 force: true
             )
         }
-        PlayerWindowManager.shared.closeSettings()
         player.isPlaylistDrawerVisible = false
         player.isInspectorVisible = false
+
+        // Secondary window acts as a dedicated temporary player: closing playback closes the secondary window cleanly.
+        if isSecondaryWindow {
+            player.stop()
+            playlistManager.clear()
+            navigationModel.state = .idle
+            player.hostWindow?.close()
+            return
+        }
+
+        PlayerWindowManager.shared.closeSettings()
         player.stop()
+        let wasEphemeralExternal = isPlayingEphemeralExternalMedia
+        let restoreDetailPath = wasEphemeralExternal ? interruptedLibraryDetailPath : nil
+        isPlayingEphemeralExternalMedia = false
+        interruptedLibraryDetailPath = nil
+        activeLibraryRecordPath = nil
+
+        if isProLibraryActive {
+            playlistManager.clear()
+            playlistManager.isPersistenceEnabled = true
+            if wasEphemeralExternal {
+                playlistManager.saveToStorage()
+                if let restoreDetailPath {
+                    libraryEngine.activeDetailPath = restoreDetailPath
+                }
+            }
+        } else {
+            playlistManager.isPersistenceEnabled = true
+            playlistManager.saveToStorage()
+        }
+
+        Task { @MainActor in
+            await SilkMediaLibraryEngine.shared.reclaimMemory()
+        }
         withAnimation(.easeInOut(duration: 0.22)) {
             navigationModel.state = .idle
         }
@@ -487,10 +465,104 @@ public struct AppShellView: View {
             prePlaybackLibraryFrame = w.frame
         }
         let url = URL(fileURLWithPath: path)
+        let cat = PlaylistManager.category(for: url)
+        playlistManager.applyPlaybackCategory(cat)
         withAnimation(appSpringAnimation) {
             navigationModel.state = .playing(url: url)
         }
         player.loadMediaWithCrossfade(path: path, startTime: startTime, autoPlay: autoPlay)
+    }
+
+    private func handlePlaybackStateChange(wasPlaying: Bool, isNowPlaying: Bool) {
+        updateAppTrafficLights()
+        if isNowPlaying {
+            isLeftSourceDrawerVisible = false
+            player.hostWindow?.isMovableByWindowBackground = false
+            player.hostWindow?.isOpaque = false
+            player.hostWindow?.backgroundColor = .clear
+            if !player.isFullscreen {
+                player.applyContentAspectRatioLock()
+            }
+        } else {
+            player.hostWindow?.isMovableByWindowBackground = false
+            player.hostWindow?.isOpaque = false
+            player.hostWindow?.backgroundColor = .clear
+            player.hostWindow?.contentAspectRatio = .zero
+            player.hostWindow?.aspectRatio = .zero
+            player.hostWindow?.resizeIncrements = NSSize(width: 1, height: 1)
+            player.hostWindow?.contentResizeIncrements = NSSize(width: 1, height: 1)
+            let emptyMin = isProLibraryActive ? NSSize(width: 720, height: 460) : NSSize(width: 640, height: 360)
+            if let w = player.hostWindow, !w.styleMask.contains(.fullScreen), !player.isFullscreen {
+                (w.delegate as? PlayerWindowDelegate)?.resetInteractiveModeToNormal()
+                player.restoreStandardWindowChrome(on: w)
+                let screen = w.screen ?? NSScreen.main
+                let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+
+                let defaultIdleSize = NSSize(width: 960, height: 540)
+                let targetFrame: NSRect
+                if let savedLibraryFrame = prePlaybackLibraryFrame, (isProLibraryActive || savedLibraryFrame.width >= savedLibraryFrame.height) {
+                    prePlaybackLibraryFrame = nil
+                    let targetW = max(emptyMin.width, min(screenFrame.width, savedLibraryFrame.width))
+                    let targetH = max(emptyMin.height, min(screenFrame.height, savedLibraryFrame.height))
+                    let targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, savedLibraryFrame.origin.x))
+                    let targetY = max(screenFrame.minY, min(screenFrame.maxY - targetH, savedLibraryFrame.origin.y))
+                    targetFrame = NSRect(x: targetX, y: targetY, width: targetW, height: targetH)
+                } else {
+                    prePlaybackLibraryFrame = nil
+                    let currentFrame = w.frame
+                    let targetW: CGFloat
+                    let targetH: CGFloat
+                    let targetX: CGFloat
+                    let targetY: CGFloat
+
+                    // ISSUE-022: If closing after playing a portrait/vertical video (width < height)
+                    // or unusually narrow window, reset back to standard 960x540 landscape frame.
+                    if currentFrame.width < currentFrame.height || currentFrame.width < 720 {
+                        targetW = min(defaultIdleSize.width, screenFrame.width)
+                        targetH = min(defaultIdleSize.height, screenFrame.height)
+                        let centerX = currentFrame.midX
+                        let centerY = currentFrame.midY
+                        let candidateX = centerX - (targetW / 2)
+                        let candidateY = centerY - (targetH / 2)
+                        targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, candidateX))
+                        targetY = max(screenFrame.minY, min(screenFrame.maxY - targetH, candidateY))
+                    } else {
+                        targetW = max(currentFrame.width, emptyMin.width)
+                        targetH = max(currentFrame.height, emptyMin.height)
+                        let rawY = currentFrame.origin.y - (targetH - currentFrame.height)
+                        let rawX = currentFrame.origin.x
+                        targetX = max(screenFrame.minX, min(screenFrame.maxX - targetW, rawX))
+                        targetY = max(screenFrame.minY, min(screenFrame.maxY - targetH, rawY))
+                    }
+                    targetFrame = NSRect(x: targetX, y: targetY, width: targetW, height: targetH)
+                }
+
+                w.minSize = NSSize(width: 100, height: 100)
+                w.contentMinSize = w.minSize
+                w.setFrame(targetFrame, display: true, animate: false)
+                w.minSize = emptyMin
+                w.contentMinSize = emptyMin
+                w.maxSize = screenFrame.size
+                w.contentMaxSize = screenFrame.size
+                if let cv = w.contentView {
+                    cv.autoresizingMask = [.width, .height]
+                    if let superview = cv.superview {
+                        cv.frame = superview.bounds
+                    }
+                    cv.needsLayout = true
+                }
+                w.layoutIfNeeded()
+                DispatchQueue.main.async { [weak w] in
+                    guard let w = w, let cv = w.contentView else { return }
+                    cv.autoresizingMask = [.width, .height]
+                    if let superview = cv.superview {
+                        cv.frame = superview.bounds
+                    }
+                    cv.needsLayout = true
+                    w.layoutIfNeeded()
+                }
+            }
+        }
     }
 
     private func playLibraryRecord(_ target: SilkMediaLibraryRecord, queue: [SilkMediaLibraryRecord], forceFromBeginning: Bool) {
@@ -503,6 +575,12 @@ public struct AppShellView: View {
         playRequestGeneration &+= 1
         let requestGen = playRequestGeneration
         resolvingTargetPath = target.path
+        isPlayingEphemeralExternalMedia = false
+        interruptedLibraryDetailPath = nil
+        activeLibraryRecordPath = target.path
+        if !isSecondaryWindow {
+            playlistManager.isPersistenceEnabled = true
+        }
 
         if !isPlaying,
            prePlaybackLibraryFrame == nil,
@@ -550,6 +628,9 @@ public struct AppShellView: View {
             let resumeTime: Double
             if forceFromBeginning || target.kind == .audio {
                 resumeTime = 0.0
+                if forceFromBeginning {
+                    AppSettings.shared.savePosition(for: effectivePath, position: 0.0, duration: 0)
+                }
             } else if target.watchState == .inProgress && target.positionSeconds >= 1.0 {
                 resumeTime = target.positionSeconds
             } else {
@@ -610,10 +691,7 @@ public struct AppShellView: View {
     }
 
     private func playPlaylistItem(_ item: PlaylistItem, forceStartFromBeginning: Bool = false) {
-        if let idx = playlistManager.items.firstIndex(where: { $0.id == item.id })
-            ?? playlistManager.items.firstIndex(where: { $0.path == item.path }) {
-            playlistManager.selectIndex(idx)
-        }
+        playlistManager.selectItem(item)
         let resumeTime = forceStartFromBeginning ? 0.0 : AppSettings.shared.getSavedPosition(for: item.path)
         startPlayback(path: item.path, startTime: resumeTime, autoPlay: true)
     }
@@ -720,20 +798,72 @@ public struct AppShellView: View {
             guard !newItems.isEmpty else { return }
 
             Task { @MainActor in
-                let wasEmpty = self.playlistManager.isEmpty
-                self.playlistManager.appendItems(newItems)
-                let itemToPlay = (wasEmpty && self.playlistManager.playbackMode == .shuffle)
-                    ? (self.playlistManager.currentItem ?? newItems.first)
-                    : newItems.first
-                if let target = itemToPlay {
-                    self.playPlaylistItem(target)
+                self.inFlightResolveTask?.cancel()
+                self.inFlightResolveTask = nil
+                self.resolvingTargetPath = nil
+                self.playRequestGeneration &+= 1
+
+                let isExternalNonLibrary = !self.isSecondaryWindow
+                    && self.isProLibraryActive
+                    && !expanded.allSatisfy { p in self.libraryEngine.items.contains(where: { $0.path == p }) }
+
+                if isExternalNonLibrary {
+                    if self.isPlaying, let currentPath = self.player.currentFilePath, self.player.currentTime > 0 {
+                        AppSettings.shared.recordPlaybackProgress(
+                            path: currentPath,
+                            current: self.player.currentTime,
+                            duration: self.player.duration,
+                            isPlaying: false,
+                            force: true
+                        )
+                    }
+                    if !self.isPlayingEphemeralExternalMedia {
+                        self.interruptedLibraryDetailPath = self.libraryEngine.activeDetailPath ?? self.activeLibraryRecordPath
+                    }
+                    self.isPlayingEphemeralExternalMedia = true
+                    self.libraryEngine.activeDetailPath = nil
+                    self.playlistManager.isPersistenceEnabled = false
+                    self.playlistManager.setPlaylist(playlistItems: newItems, startingIndex: 0)
+                    if let target = newItems.first {
+                        self.playPlaylistItem(target)
+                    }
+                } else {
+                    if !self.isSecondaryWindow {
+                        self.playlistManager.isPersistenceEnabled = true
+                    }
+                    let wasEmpty = self.playlistManager.isEmpty
+                    self.playlistManager.appendItems(newItems)
+                    let itemToPlay = (wasEmpty && self.playlistManager.playbackMode == .shuffle)
+                        ? (self.playlistManager.currentItem ?? newItems.first)
+                        : newItems.first
+                    if let target = itemToPlay {
+                        self.playPlaylistItem(target)
+                    }
                 }
             }
         }
     }
 
     public func appendPlaylistPaths(_ paths: [String]) {
-        openExternalPaths(paths)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
+            guard !expanded.isEmpty else { return }
+
+            var newItems: [PlaylistItem] = []
+            for p in expanded {
+                let url = URL(fileURLWithPath: p)
+                let title = url.deletingPathExtension().lastPathComponent
+                let size = (try? FileManager.default.attributesOfItem(atPath: p)[.size] as? Int64) ?? 0
+                let item = MediaItem(path: p, title: title, fileSize: size)
+                newItems.append(PlaylistItem(from: item))
+            }
+
+            guard !newItems.isEmpty else { return }
+
+            Task { @MainActor in
+                self.playlistManager.appendItems(newItems)
+            }
+        }
     }
 
     private func registerSession() {
@@ -773,6 +903,7 @@ public struct AppShellView: View {
         session.appendPlaylistHandler = { [self] paths in
             self.appendPlaylistPaths(paths)
         }
+        session.isSecondaryWindow = isSecondaryWindow
         session.playlist = playlistManager
         PlayerWindowManager.shared.registerSession(session)
     }
@@ -787,11 +918,46 @@ public struct AppShellView: View {
         if AppSettings.shared.windowMode == .singleWindow {
             // Check if another window session already exists with an attached window
             if let existing = PlayerWindowManager.shared.sessions.first(where: { $0.id != sessionId && $0.window != nil }) {
-                // Duplicate window detected in single window mode: close immediately!
+                isDiscardedDuplicateWindow = true
+                var orphanedFiles = PlayerWindowManager.shared.dequeuePendingFiles()
+                if !AppDelegate.pendingFiles.isEmpty {
+                    orphanedFiles.append(contentsOf: AppDelegate.pendingFiles)
+                    AppDelegate.pendingFiles.removeAll()
+                }
+                PlayerWindowManager.shared.unregisterSession(id: sessionId)
                 DispatchQueue.main.async {
                     window.close()
+                    if !orphanedFiles.isEmpty {
+                        existing.openPath(orphanedFiles[0])
+                        if orphanedFiles.count > 1 {
+                            existing.appendPlaylistPaths(Array(orphanedFiles.dropFirst()))
+                        }
+                    }
                     if !PlayerWindowManager.isRunningTests {
                         existing.window?.makeKeyAndOrderFront(nil)
+                        NSApp?.activate(ignoringOtherApps: true)
+                    }
+                }
+                return
+            }
+        } else {
+            // Enforce strict maxConcurrentWindows (2) cap in Dual-Window mode
+            let attachedOthers = PlayerWindowManager.shared.sessions.filter { $0.id != sessionId && $0.window != nil }
+            if attachedOthers.count >= PlayerWindowManager.maxConcurrentWindows,
+               let reuseTarget = attachedOthers.last {
+                isDiscardedDuplicateWindow = true
+                let orphanedFiles = PlayerWindowManager.shared.dequeuePendingFiles()
+                PlayerWindowManager.shared.unregisterSession(id: sessionId)
+                DispatchQueue.main.async {
+                    window.close()
+                    if !orphanedFiles.isEmpty {
+                        reuseTarget.openPath(orphanedFiles[0])
+                        if orphanedFiles.count > 1 {
+                            reuseTarget.appendPlaylistPaths(Array(orphanedFiles.dropFirst()))
+                        }
+                    }
+                    if !PlayerWindowManager.isRunningTests {
+                        reuseTarget.window?.makeKeyAndOrderFront(nil)
                         NSApp?.activate(ignoringOtherApps: true)
                     }
                 }
@@ -853,7 +1019,7 @@ public struct AppShellView: View {
                 }
             }
         } else {
-            let emptyMin = NSSize(width: 640, height: 360)
+            let emptyMin = isProLibraryActive ? NSSize(width: 720, height: 460) : NSSize(width: 640, height: 360)
             let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
             window.minSize = emptyMin
             window.contentMinSize = emptyMin
@@ -915,6 +1081,10 @@ public struct AppShellView: View {
             let files = AppDelegate.pendingFiles
             AppDelegate.pendingFiles.removeAll()
             openExternalPaths(files)
+            return
+        }
+
+        if isSecondaryWindow {
             return
         }
 

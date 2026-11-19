@@ -354,3 +354,48 @@ struct HUDCircleButton: View {
         .help(helpText)
     }
 }
+
+@MainActor
+struct HUDReturnCapsuleButton: View {
+    var helpText: String = ""
+    var action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 11, weight: .bold))
+                Text(L10n.tr("Back", "返回"))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+            }
+            .foregroundColor(.white.opacity(isHovered ? 1.0 : 0.90))
+            .padding(.horizontal, 11)
+            .frame(height: 30)
+            .background(
+                ZStack {
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                    Capsule()
+                        .fill(Color.black.opacity(isHovered ? 0.35 : 0.22))
+                }
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        Color.white.opacity(isHovered ? 0.38 : 0.18),
+                        lineWidth: 0.75
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 2)
+            .scaleEffect(isHovered ? 1.04 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isHovered)
+        }
+        .buttonStyle(SilkFluidSpringButtonStyle(pressedScale: 0.94, pressedOpacity: 0.88))
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .help(helpText.isEmpty ? L10n.tr("Return (Esc / Cmd+W)", "返回 (Esc / Cmd+W)") : helpText)
+    }
+}

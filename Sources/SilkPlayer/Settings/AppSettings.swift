@@ -109,13 +109,13 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
     public var title: String {
         switch self {
         case .singleWindow: return L10n.tr("Single Window", "单窗口")
-        case .multipleWindows: return L10n.tr("Multiple Windows", "多窗口")
+        case .multipleWindows: return L10n.tr("Dual Windows", "双窗口")
         }
     }
     public var description: String {
         switch self {
         case .singleWindow: return L10n.tr("Always play in a single unified window", "始终使用单一播放窗口")
-        case .multipleWindows: return L10n.tr("Allow opening multiple independent windows", "允许打开多个独立播放窗口")
+        case .multipleWindows: return L10n.tr("Open a second window when main player is already playing", "主窗口正在播放时，允许打开第二个独立播放窗口")
         }
     }
 }
@@ -209,14 +209,19 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
-    // Window management strategy (Single-window vs Multi-window)
+    // Window management strategy (Single-window vs Dual-window capped at 2)
     public var windowMode: WindowMode {
         get { singleWindowMode ? .singleWindow : .multipleWindows }
         set { singleWindowMode = (newValue == .singleWindow) }
     }
+    public var dualWindowPlaybackEnabled: Bool {
+        get { !singleWindowMode }
+        set { singleWindowMode = !newValue }
+    }
     public var singleWindowMode: Bool {
         didSet {
             UserDefaults.standard.set(singleWindowMode, forKey: "singleWindowMode")
+            PlayerWindowManager.shared.syncCommandState()
         }
     }
 
@@ -391,6 +396,31 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             UserDefaults.standard.set(proAutoScanOnLaunch, forKey: "proAutoScanOnLaunch")
         }
     }
+    /// Automatically fetches missing posters and metadata online after directory scans complete.
+    public var proAutoScrapeAfterScan: Bool {
+        didSet {
+            UserDefaults.standard.set(proAutoScrapeAfterScan, forKey: "proAutoScrapeAfterScan")
+        }
+    }
+    /// Skips video files smaller than this threshold (in MB) during directory scans; 0 means no size filtering.
+    public var proMinVideoFileSizeMB: Int {
+        didSet {
+            UserDefaults.standard.set(proMinVideoFileSizeMB, forKey: "proMinVideoFileSizeMB")
+            if proMinVideoFileSizeMB != oldValue,
+               SilkProLicenseEngine.shared.isProActive,
+               !SilkMediaLibraryEngine.shared.sources.isEmpty {
+                SilkMediaLibraryEngine.shared.enqueueBackgroundRescan(
+                    sourceIds: SilkMediaLibraryEngine.shared.sources.map(\.id)
+                )
+            }
+        }
+    }
+    /// Synchronizes playback progress and watch state across Macs via personal iCloud Drive container.
+    public var enableCloudPlaybackSync: Bool {
+        didSet {
+            UserDefaults.standard.set(enableCloudPlaybackSync, forKey: "enableCloudPlaybackSync")
+        }
+    }
     /// Transient navigation signal allowing Pro UI actions to open a specific Settings tab.
     @ObservationIgnored public var requestedSettingsTab: Int? = nil
 
@@ -456,6 +486,9 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         self.proHideLegacyPlaylistDrawer = UserDefaults.standard.object(forKey: "proHideLegacyPlaylistDrawer") as? Bool ?? false
         self.proDedicatedAudioLibrary = UserDefaults.standard.object(forKey: "proDedicatedAudioLibrary") as? Bool ?? true
         self.proAutoScanOnLaunch = UserDefaults.standard.object(forKey: "proAutoScanOnLaunch") as? Bool ?? true
+        self.proAutoScrapeAfterScan = UserDefaults.standard.object(forKey: "proAutoScrapeAfterScan") as? Bool ?? true
+        self.proMinVideoFileSizeMB = UserDefaults.standard.object(forKey: "proMinVideoFileSizeMB") as? Int ?? 0
+        self.enableCloudPlaybackSync = UserDefaults.standard.object(forKey: "enableCloudPlaybackSync") as? Bool ?? true
         let rawTheme = UserDefaults.standard.string(forKey: SilkLibraryTheme.userDefaultsKey) ?? SilkLibraryTheme.shenghui.rawValue
         self.proLibraryTheme = SilkLibraryTheme(rawValue: rawTheme) ?? .shenghui
 

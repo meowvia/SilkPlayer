@@ -2,6 +2,7 @@ import Observation
 import SwiftUI
 import AppKit
 import Combine
+import QuartzCore
 import SilkCoreKit
 
 extension Notification.Name {
@@ -17,6 +18,7 @@ extension Notification.Name {
     public weak var playlist: PlaylistManager?
     private let isLoadedProvider: (@MainActor () -> Bool)?
     public var testIsKey: Bool?
+    public var isSecondaryWindow: Bool = false
 
     public var openPathHandler: (@MainActor (String) -> Void)?
     public var appendPlaylistHandler: (@MainActor ([String]) -> Void)?
@@ -84,6 +86,7 @@ extension Notification.Name {
 @MainActor
 @Observable public final class PlayerWindowManager {
     public static let shared = PlayerWindowManager()
+    public static let maxConcurrentWindows = 2
 
     nonisolated public static var isRunningTests: Bool {
         NSClassFromString("XCTestCase") != nil ||
@@ -101,6 +104,8 @@ extension Notification.Name {
 
     /// Queue for pending files to be consumed by newly spawned windows
     private var pendingQueue: [String] = []
+    private var lastSystemOpenPaths: [String] = []
+    private var lastSystemOpenTime: TimeInterval = 0.0
 
     /// Registered action from SwiftUI environment to trigger opening a new WindowGroup
     public var openWindowAction: (@MainActor () -> Void)?
@@ -172,7 +177,7 @@ extension Notification.Name {
                 // Only insert .fullScreenPrimary into non-audio player session windows, never settingsWindow
                 if notifWindow !== self.settingsWindow,
                    let session = self.sessions.first(where: { $0.window === notifWindow }) {
-                    if session.player?.isAudioOnly == true {
+                    if session.player?.isProMusicModeActive == true {
                         (session.player as? PlayerCore)?.configureMusicModeChrome(on: notifWindow)
                     } else {
                         notifWindow.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
@@ -189,7 +194,7 @@ extension Notification.Name {
             MainActor.assumeIsolated {
                 guard let self = self, let notifWindow = notifWindow else { return }
                 if let session = self.sessions.first(where: { $0.window === notifWindow }),
-                   session.player?.isAudioOnly == true,
+                   session.player?.isProMusicModeActive == true,
                    !MusicWindowDragCoordinator.shared.isDragging {
                     (session.player as? PlayerCore)?.applyAudioWindowGeometry(animated: true)
                 }
@@ -202,7 +207,7 @@ extension Notification.Name {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self = self else { return }
-                for session in self.sessions where session.player?.isAudioOnly == true {
+                for session in self.sessions where session.player?.isProMusicModeActive == true {
                     (session.player as? PlayerCore)?.applyAudioWindowGeometry(animated: true)
                 }
             }
@@ -242,6 +247,20 @@ extension Notification.Name {
                 // MUST proceed normally through the responder chain of settingsWindow
                 // and MUST NEVER be leaked or routed to background playback!
                 return event
+            }
+
+            // 2. Media Detail View Active Passthrough:
+            // When user is inspecting media details in the library (while idle, not actively playing),
+            // pass Space (49) and Escape (53) directly through to SwiftUI SilkMediaDetailView.
+            let detailTargetWindow = event.window ?? NSApp?.keyWindow
+            let detailTargetSession = (detailTargetWindow != nil ? self.sessions.first(where: { $0.window === detailTargetWindow }) : nil) ?? self.activeSession(preferKey: true)
+            if flags.isEmpty &&
+               SilkMediaLibraryEngine.shared.activeDetailPath != nil &&
+               detailTargetSession?.isLoaded != true &&
+               detailTargetSession?.isSecondaryWindow != true {
+                if event.keyCode == 49 || event.keyCode == 53 {
+                    return event
+                }
             }
 
             if let responder = event.window?.firstResponder, responder is NSTextView {
@@ -439,12 +458,26 @@ extension Notification.Name {
     }
 
     public func closePlaybackOrReturnToEmpty() {
+        // 1. If an attached modal sheet is currently open on the active window, dismiss the sheet first
+        let targetWindow = activeSession(preferKey: true)?.window ?? NSApp?.keyWindow
+        if let targetWindow = targetWindow, targetWindow.attachedSheet != nil {
+            NSApp?.sendAction(#selector(NSResponder.cancelOperation(_:)), to: nil, from: nil)
+            return
+        }
+
         guard let session = activeSession(preferKey: true) ?? sessions.first else {
+            if SilkMediaLibraryEngine.shared.activeDetailPath != nil {
+                SilkMediaLibraryEngine.shared.activeDetailPath = nil
+                return
+            }
             NSApp?.keyWindow?.performClose(nil)
             return
         }
         if session.isLoaded {
             session.closePlaybackOrReturnToEmpty()
+        } else if !session.isSecondaryWindow && SilkMediaLibraryEngine.shared.activeDetailPath != nil {
+            // 2. If viewing Media Detail View in Library while idle, exit detail view back to poster wall
+            SilkMediaLibraryEngine.shared.activeDetailPath = nil
         } else {
             closeActiveWindow()
         }
@@ -513,7 +546,7 @@ extension Notification.Name {
             return
         }
 
-        let contentRect = NSRect(x: 0, y: 0, width: 520, height: 490)
+        let contentRect = NSRect(x: 0, y: 0, width: 520, height: 460)
         let window = NSWindow(
             contentRect: contentRect,
             styleMask: [.titled, .closable, .fullSizeContentView],
@@ -531,8 +564,8 @@ extension Notification.Name {
         // Fullscreen auxiliary space support strictly prevents macOS Space jump
         window.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
         window.level = .floating
-        window.minSize = NSSize(width: 520, height: 490)
-        window.maxSize = NSSize(width: 520, height: 490)
+        window.minSize = NSSize(width: 520, height: 340)
+        window.maxSize = NSSize(width: 520, height: 760)
 
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
@@ -554,6 +587,30 @@ extension Notification.Name {
         if !Self.isRunningTests {
             window.makeKeyAndOrderFront(nil)
             NSApp?.activate(ignoringOtherApps: true)
+        }
+    }
+
+    /// Resizes the Settings window vertically to fit active tab content while pinning the top edge stationary.
+    public func updateSettingsWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
+        guard let window = settingsWindow, contentHeight > 100 else { return }
+        let titlebarInset = max(0, window.frame.height - window.contentLayoutRect.height)
+        let targetHeight = ceil(max(340, min(760, contentHeight + titlebarInset)))
+        let currentFrame = window.frame
+        guard abs(currentFrame.height - targetHeight) > 0.5 else { return }
+
+        var newFrame = currentFrame
+        newFrame.origin.y = currentFrame.maxY - targetHeight
+        newFrame.size.width = 520
+        newFrame.size.height = targetHeight
+
+        if animated && !Self.isRunningTests && window.isVisible {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.14
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                window.animator().setFrame(newFrame, display: true)
+            }
+        } else {
+            window.setFrame(newFrame, display: true, animate: false)
         }
     }
 
@@ -594,32 +651,71 @@ extension Notification.Name {
     }
 
     // MARK: - Open External Files Scheduling
+    public func handleSystemOpenFiles(_ files: [String]) {
+        guard !files.isEmpty else { return }
+        if !Self.isRunningTests {
+            let now = ProcessInfo.processInfo.systemUptime
+            if files == lastSystemOpenPaths && (now - lastSystemOpenTime) < 0.45 {
+                return
+            }
+            lastSystemOpenPaths = files
+            lastSystemOpenTime = now
+        }
+
+        if sessions.isEmpty && openWindowAction == nil {
+            for f in files where !AppDelegate.pendingFiles.contains(f) {
+                AppDelegate.pendingFiles.append(f)
+            }
+            return
+        }
+        openExternalFiles(files)
+    }
+
     public func openExternalFiles(_ files: [String]) {
+        if SilkStatusBarManager.shared.isBackgroundPlaybackActive {
+            SilkStatusBarManager.shared.exitBackgroundMode()
+        }
+
         let expanded = Self.expandFilesAndDirectories(files)
         guard !expanded.isEmpty else { return }
 
-        let singleWindow = AppSettings.shared.singleWindowMode
-        if singleWindow, let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
+        func deliver(to session: PlayerWindowSession) {
             session.openPath(expanded[0])
             if expanded.count > 1 {
                 session.appendPlaylistPaths(Array(expanded.dropFirst()))
             }
             if !Self.isRunningTests {
+                if session.window?.isMiniaturized == true {
+                    session.window?.deminiaturize(nil)
+                }
                 session.window?.makeKeyAndOrderFront(nil)
                 NSApp?.activate(ignoringOtherApps: true)
             }
-        } else if !singleWindow && !sessions.isEmpty {
+        }
+
+        guard let primarySession = sessions.first else {
             enqueuePendingFiles(expanded)
             openWindowAction?()
-        } else if let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
-            session.openPath(expanded[0])
-            if expanded.count > 1 {
-                session.appendPlaylistPaths(Array(expanded.dropFirst()))
-            }
-            if !Self.isRunningTests {
-                session.window?.makeKeyAndOrderFront(nil)
-                NSApp?.activate(ignoringOtherApps: true)
-            }
+            return
+        }
+
+        // 1. If primary window (e.g. Media Library / Detail / Empty Idle) is NOT playing,
+        // always reuse primary window directly even when Dual-Window mode is enabled.
+        if !primarySession.isLoaded {
+            deliver(to: primarySession)
+            return
+        }
+
+        // 2. Single-window mode: reuse active/primary window (interrupting playback cleanly).
+        if AppSettings.shared.singleWindowMode {
+            let target = activeSession(preferKey: true) ?? primarySession
+            deliver(to: target)
+            return
+        }
+
+        // 3. Dual-window mode while primary window IS playing (capped at maxConcurrentWindows = 2, never auto-pauses primary):
+        if sessions.count >= Self.maxConcurrentWindows, let secondarySession = sessions.dropFirst().first {
+            deliver(to: secondarySession)
         } else {
             enqueuePendingFiles(expanded)
             openWindowAction?()
@@ -628,6 +724,10 @@ extension Notification.Name {
 
     // MARK: - Window Spawning & Request
     public func requestNewWindow() {
+        if SilkStatusBarManager.shared.isBackgroundPlaybackActive {
+            SilkStatusBarManager.shared.exitBackgroundMode()
+        }
+
         if AppSettings.shared.singleWindowMode {
             if let session = activeSession(preferKey: true) ?? sessions.first(where: { $0.window != nil }) {
                 if !Self.isRunningTests {
@@ -729,6 +829,18 @@ extension Notification.Name {
     }
 
     public func openNewWindow() {
+        if !AppSettings.shared.singleWindowMode,
+           sessions.count >= Self.maxConcurrentWindows,
+           let secondary = sessions.dropFirst().first {
+            if !Self.isRunningTests {
+                if secondary.window?.isMiniaturized == true {
+                    secondary.window?.deminiaturize(nil)
+                }
+                secondary.window?.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            }
+            return
+        }
         if let action = openWindowAction {
             action()
         }
@@ -738,6 +850,8 @@ extension Notification.Name {
     public func resetForTesting() {
         sessions.removeAll()
         pendingQueue.removeAll()
+        lastSystemOpenPaths.removeAll()
+        lastSystemOpenTime = 0.0
         openWindowAction = nil
         openShortcutsCheatsheetAction = nil
     }
@@ -1011,7 +1125,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
         // Dedicated Music Mode branch runs before screen-size tiling/fill bypasses so
         // system edge-tiling or non-live resizes cannot widen the window or stretch collapsed mode.
-        if player?.isAudioOnly == true {
+        if player?.isProMusicModeActive == true {
             if !window.inLiveResize {
                 if AppSettings.shared.isMusicQueueCollapsed {
                     let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
@@ -1044,6 +1158,22 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             }
             updateResizeHUD(window: window, resolvedSize: proposal.size)
             return proposal.size
+        } else if player?.isAudioOnly == true {
+            // 1.7.0 Free audio baseline: decoupled live dragging without feedback oscillation or locked width
+            let minAudioSize: CGFloat = 380.0
+            let maxAudioDimension = min(maxSize.width, maxSize.height)
+
+            if window.inLiveResize {
+                let res = NSSize(
+                    width: max(minAudioSize, min(maxSize.width, frameSize.width)),
+                    height: max(minAudioSize, min(maxSize.height, frameSize.height))
+                )
+                updateResizeHUD(window: window, resolvedSize: res)
+                return res
+            } else {
+                let side = max(minAudioSize, min(maxAudioDimension, frameSize.width))
+                return NSSize(width: round(side), height: round(side))
+            }
         }
 
         // Allow native workspace fill/zoom for idle and video windows.
@@ -1086,9 +1216,14 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
                     height: min(maxSize.height, frameSize.height)
                 )
             }
+            let isMediaLib = SilkProLicenseEngine.shared.isProActive &&
+                AppSettings.shared.proLibraryHomeEnabled &&
+                !SilkMediaLibraryEngine.shared.sources.isEmpty
+            let targetMinW: CGFloat = isMediaLib ? 720 : idleMinW
+            let targetMinH: CGFloat = isMediaLib ? 460 : 360
             let res = NSSize(
-                width: max(idleMinW, min(maxSize.width, frameSize.width)),
-                height: max(360, min(maxSize.height, frameSize.height))
+                width: max(targetMinW, min(maxSize.width, frameSize.width)),
+                height: max(targetMinH, min(maxSize.height, frameSize.height))
             )
             if window.inLiveResize {
                 updateResizeHUD(window: window, resolvedSize: res)
@@ -1268,7 +1403,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         musicLiveResizeDidToggleCollapse = false
         _ = enforceAudioModeWindowBoundsIfNeeded(on: window, screenFrame: screenFrame)
         if let p = self.player {
-            if p.isAudioOnly {
+            if p.isProMusicModeActive {
                 let expandedMinH = MusicModeGeometry.effectiveMinHeight(forScreenHeight: screenFrame.height)
                 if !AppSettings.shared.isMusicQueueCollapsed && window.frame.height >= expandedMinH - 1.0 {
                     UserDefaults.standard.set(Double(window.frame.height), forKey: PlayerCore.musicModeHeightDefaultsKey)
@@ -1284,7 +1419,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     @discardableResult
     private func enforceAudioModeWindowBoundsIfNeeded(on window: NSWindow, screenFrame: NSRect) -> Bool {
         guard let p = self.player,
-              p.isAudioOnly,
+              p.isProMusicModeActive,
               !p.isFullscreen,
               !p.isFullscreenTransitioning,
               !isFullscreenTransitioning,
@@ -1418,7 +1553,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public func windowWillUseStandardFrame(_ window: NSWindow, defaultFrame: NSRect) -> NSRect {
         guard let player = self.player else { return defaultFrame }
 
-        if player.isAudioOnly {
+        if player.isProMusicModeActive {
             let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame ?? defaultFrame
             let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
             if AppSettings.shared.isMusicQueueCollapsed {
@@ -1440,7 +1575,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     @objc public func handleZoomButtonClick(_ sender: Any?) {
-        if player?.isAudioOnly == true {
+        if player?.isProMusicModeActive == true {
             return
         }
         if let session = self.session, let window = session.window {
@@ -1474,7 +1609,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         isAdjustingWindowFrame = true
 
         // A. Music Mode: toggle full vertical workspace height while keeping locked screen-proportional width
-        if player?.isAudioOnly == true {
+        if player?.isProMusicModeActive == true {
             let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
             let isFullVertical = abs(window.frame.height - screenFrame.height) <= 12.0 &&
                                  abs(window.frame.width - lockedW) <= 2.0
@@ -1562,7 +1697,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
-        if player?.isAudioOnly == true {
+        if player?.isProMusicModeActive == true {
             return false
         }
         toggleMaximize(window: window)
@@ -1599,7 +1734,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     public func windowDidEnterFullScreen(_ notification: Notification) {
-        if player?.isAudioOnly == true, let window = notification.object as? NSWindow {
+        if player?.isProMusicModeActive == true, let window = notification.object as? NSWindow {
             isFullscreenTransitioning = false
             player?.isFullscreenTransitioning = false
             DispatchQueue.main.async {
@@ -1627,7 +1762,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
 
             let targetFrame: NSRect
-            if player?.isAudioOnly == true {
+            if player?.isProMusicModeActive == true {
                 let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
                 if AppSettings.shared.isMusicQueueCollapsed {
                     let collapsedH = MusicModeGeometry.collapsedHeight(

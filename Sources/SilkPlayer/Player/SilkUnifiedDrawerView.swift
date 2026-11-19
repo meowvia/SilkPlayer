@@ -258,8 +258,8 @@ public struct SilkPlaylistDrawerView: View {
                             PlaylistItemRowView(
                                 index: index,
                                 item: item,
-                                isCurrent: index == playlist.currentIndex,
-                                isPlaying: player.isPlaying,
+                                isCurrent: (item.path == player.currentFilePath) || (player.currentFilePath == nil && index == playlist.currentIndex),
+                                isPlaying: player.isPlaying && (item.path == player.currentFilePath),
                                 isHovered: hoveredIndex == index,
                                 theme: theme,
                                 onSelect: {

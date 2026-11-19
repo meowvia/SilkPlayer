@@ -265,7 +265,10 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         XCTAssertEqual(settings.requestedSettingsTab, 2)
         if let win = PlayerWindowManager.shared.settingsWindow {
             XCTAssertEqual(win.minSize.width, 520, accuracy: 0.5)
-            XCTAssertEqual(win.minSize.height, 490, accuracy: 0.5)
+            XCTAssertEqual(win.maxSize.width, 520, accuracy: 0.5)
+            let initialTopEdge = win.frame.maxY
+            PlayerWindowManager.shared.updateSettingsWindowHeight(420, animated: false)
+            XCTAssertEqual(win.frame.maxY, initialTopEdge, accuracy: 0.5)
         }
     }
 
@@ -840,5 +843,280 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         XCTAssertEqual(engine.preferredAudioOutputChannels, 8)
         engine.preferredAudioOutputChannels = 6
         XCTAssertEqual(engine.preferredAudioOutputChannels, 6)
+    }
+
+    func testNFOParserModernKodiTMMNestedRatingsAndCDATA() throws {
+        try XCTSkipIf(isCIMockEnvironment, "Real SilkNFOParser requires SilkCoreKit binary framework.")
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <movie>
+            <title><![CDATA[星际穿越 & 探索]]></title>
+            <originaltitle>Interstellar &amp; Beyond</originaltitle>
+            <plot />
+            <plot lang="zh-CN"><![CDATA[地球农作物枯萎，宇航员穿越虫洞寻找"新家园"。]]></plot>
+            <premiered>2014-11-07</premiered>
+            <ratings>
+                <rating name="metacritic" max="100">
+                    <value>74</value>
+                </rating>
+                <rating name="themoviedb" max="10" default="true">
+                    <value>8.64</value>
+                    <votes>35210</votes>
+                </rating>
+            </ratings>
+            <genre>科幻 / 冒险</genre>
+            <genre>剧情、科幻</genre>
+            <uniqueid type="imdb">tt0816692</uniqueid>
+            <uniqueid type="tmdb" default="true">157336</uniqueid>
+            <thumb aspect="poster">https://image.tmdb.org/t/p/original/interstellar.jpg</thumb>
+        </movie>
+        """
+        let meta = SilkNFOParser.parse(content: xml)
+        XCTAssertEqual(meta.title, "星际穿越 & 探索")
+        XCTAssertEqual(meta.originalTitle, "Interstellar & Beyond")
+        XCTAssertEqual(meta.overview, "地球农作物枯萎，宇航员穿越虫洞寻找\"新家园\"。")
+        XCTAssertEqual(meta.releaseYear, 2014)
+        XCTAssertEqual(meta.rating, 8.6)
+        XCTAssertEqual(meta.genres, ["科幻", "冒险", "剧情"])
+        XCTAssertEqual(meta.tmdbId, 157336)
+        XCTAssertEqual(meta.posterUrl, "https://image.tmdb.org/t/p/original/interstellar.jpg")
+    }
+
+    func testNFOParserTVEpisodeUTF16AndHundredScaleRating() throws {
+        try XCTSkipIf(isCIMockEnvironment, "Real SilkNFOParser requires SilkCoreKit binary framework.")
+        let dir = try makeTempDir()
+        let nfoURL = dir.appendingPathComponent("S01E03.nfo")
+        let xml = """
+        <episodedetails>
+            <title>The Long Night</title>
+            <showtitle>Sample Chronicles</showtitle>
+            <season>1</season>
+            <episode>3</episode>
+            <aired>2023-05-19</aired>
+            <outline>Episode summary via outline fallback.</outline>
+            <ratings>
+                <rating name="rotten" max="100"><value>88</value></rating>
+            </ratings>
+        </episodedetails>
+        """
+        guard let utf16Data = xml.data(using: .utf16) else {
+            XCTFail("Failed to encode UTF-16 test fixture")
+            return
+        }
+        try utf16Data.write(to: nfoURL)
+
+        let parsed = SilkNFOParser.parse(fileURL: nfoURL)
+        XCTAssertNotNil(parsed)
+        XCTAssertEqual(parsed?.title, "The Long Night")
+        XCTAssertEqual(parsed?.seriesName, "Sample Chronicles")
+        XCTAssertEqual(parsed?.seasonNumber, 1)
+        XCTAssertEqual(parsed?.episodeNumber, 3)
+        XCTAssertEqual(parsed?.releaseYear, 2023)
+        XCTAssertEqual(parsed?.overview, "Episode summary via outline fallback.")
+        XCTAssertEqual(parsed?.rating, 8.8)
+    }
+
+    func testNFOParserMalformedInputAndMissingFileResilience() throws {
+        let dir = try makeTempDir()
+        let missing = dir.appendingPathComponent("nonexistent.nfo")
+        XCTAssertNil(SilkNFOParser.parse(fileURL: missing))
+
+        try XCTSkipIf(isCIMockEnvironment, "Real SilkNFOParser requires SilkCoreKit binary framework.")
+        let broken = "<movie><year>1820</year><rating>-5.0</rating><title>Unclosed"
+        let meta = SilkNFOParser.parse(content: broken)
+        XCTAssertNil(meta.releaseYear)
+        XCTAssertNil(meta.rating)
+        XCTAssertNil(meta.title)
+    }
+
+    // MARK: - 9. External File Routing: Idle Primary Reuse, Dual-Window Cap & Detail Close Hierarchy
+
+    func testDualWindowRoutingAndIdleLibraryReuse() {
+        let winMgr = PlayerWindowManager.shared
+        let settings = AppSettings.shared
+        let library = SilkMediaLibraryEngine.shared
+        let originalSingleWindow = settings.singleWindowMode
+        defer {
+            settings.singleWindowMode = originalSingleWindow
+            library.activeDetailPath = nil
+            winMgr.resetForTesting()
+        }
+
+        winMgr.resetForTesting()
+
+        @MainActor final class BoolBox { var value = false }
+        let primaryLoaded = BoolBox()
+        var primaryOpenedPath: String?
+        var primaryClosePlaybackCount = 0
+        let primarySession = PlayerWindowSession(id: UUID(), isLoadedProvider: { primaryLoaded.value })
+        primarySession.openPathHandler = { path in primaryOpenedPath = path }
+        primarySession.closePlaybackHandler = { primaryClosePlaybackCount += 1 }
+        winMgr.registerSession(primarySession)
+
+        var spawnedWindowCount = 0
+        winMgr.openWindowAction = { spawnedWindowCount += 1 }
+
+        // 1. Even with Dual-Window mode enabled, when primary (e.g. Media Library) is idle (!isLoaded),
+        // external file reuses primary window directly without spawning a second window.
+        settings.dualWindowPlaybackEnabled = true
+        XCTAssertFalse(settings.singleWindowMode)
+        winMgr.openExternalFiles(["/tmp/external_idle.mp4"])
+        XCTAssertEqual(primaryOpenedPath, "/tmp/external_idle.mp4")
+        XCTAssertEqual(spawnedWindowCount, 0)
+
+        // 2. When primary IS playing and Dual-Window mode is enabled, opening an external file spawns 2nd window.
+        primaryLoaded.value = true
+        primaryOpenedPath = nil
+        winMgr.openExternalFiles(["/tmp/external_second.mp4"])
+        XCTAssertNil(primaryOpenedPath)
+        XCTAssertEqual(spawnedWindowCount, 1)
+        XCTAssertEqual(winMgr.dequeuePendingFiles(), ["/tmp/external_second.mp4"])
+
+        // 3. Once 2nd window exists (maxConcurrentWindows = 2), 3rd external file reuses 2nd window without spawning 3rd.
+        var secondaryOpenedPath: String?
+        let secondarySession = PlayerWindowSession(id: UUID(), isLoadedProvider: { true })
+        secondarySession.isSecondaryWindow = true
+        secondarySession.openPathHandler = { path in secondaryOpenedPath = path }
+        winMgr.registerSession(secondarySession)
+
+        winMgr.openExternalFiles(["/tmp/external_third.mp4"])
+        XCTAssertEqual(secondaryOpenedPath, "/tmp/external_third.mp4")
+        XCTAssertEqual(spawnedWindowCount, 1)
+
+        // 4. Close hierarchy: while playing (isLoaded == true), closePlaybackOrReturnToEmpty stops playback FIRST
+        // even if activeDetailPath is populated; once idle, it clears activeDetailPath back to poster wall.
+        winMgr.unregisterSession(id: secondarySession.id)
+        library.activeDetailPath = "/nas/movies/Inception.mkv"
+        primaryLoaded.value = true
+        winMgr.closePlaybackOrReturnToEmpty()
+        XCTAssertEqual(primaryClosePlaybackCount, 1)
+        XCTAssertEqual(library.activeDetailPath, "/nas/movies/Inception.mkv")
+
+        primaryLoaded.value = false
+        winMgr.closePlaybackOrReturnToEmpty()
+        XCTAssertNil(library.activeDetailPath)
+    }
+
+    func testMinimumVideoFileSizeFilterSkipsSmallVideoSamplesButKeepsAudio() async throws {
+        guard !isCIMockEnvironment else { return }
+
+        let tempDir = try makeTempDir()
+        let dbURL = tempDir.appendingPathComponent("min_size.sqlite")
+        let rootDir = tempDir.appendingPathComponent("FilterRoot", isDirectory: true)
+        try FileManager.default.createDirectory(at: rootDir, withIntermediateDirectories: true)
+
+        let smallSample = rootDir.appendingPathComponent("Trailer.Sample.mkv")
+        let fullFeature = rootDir.appendingPathComponent("Feature.Film.2025.mkv")
+        let losslessAudio = rootDir.appendingPathComponent("Soundtrack.flac")
+
+        try Data("small sample".utf8).write(to: smallSample)
+        try Data("audio track".utf8).write(to: losslessAudio)
+
+        FileManager.default.createFile(atPath: fullFeature.path, contents: nil)
+        let fh = try FileHandle(forWritingTo: fullFeature)
+        try fh.truncate(atOffset: 60 * 1024 * 1024)
+        try fh.close()
+
+        let engine = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+
+        // Default (0 MB): indexes all 3 files
+        _ = await engine.addLocalSource(url: rootDir, displayName: "FilterRoot")
+        XCTAssertEqual(engine.items.count, 3)
+
+        // Threshold 50 MB: skips small video sample, keeps 60 MB feature video AND small FLAC audio
+        engine.minimumVideoFileSizeMBOverride = 50
+        await engine.rescanAll()
+        XCTAssertEqual(engine.items.count, 2)
+        let indexedNames = Set(engine.items.map(\.fileName))
+        XCTAssertEqual(indexedNames, ["Feature.Film.2025.mkv", "Soundtrack.flac"])
+    }
+
+    func testStalePosterCacheSelfHealingOnLaunchAndSeriesMetadataPropagation() async throws {
+        guard !isCIMockEnvironment else { return }
+
+        let tempDir = try makeTempDir()
+        let dbURL = tempDir.appendingPathComponent("poster_heal.sqlite")
+        let rootDir = tempDir.appendingPathComponent("MediaRoot", isDirectory: true)
+        let movieDir = rootDir.appendingPathComponent("Movies", isDirectory: true)
+        let sidecarDir = rootDir.appendingPathComponent("SidecarMovie", isDirectory: true)
+        let seriesDir = rootDir.appendingPathComponent("电视剧/三体 第一季", isDirectory: true)
+        for d in [movieDir, sidecarDir, seriesDir] {
+            try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        }
+
+        let movieFile = movieDir.appendingPathComponent("Inception.2010.mkv")
+        let sidecarMovie = sidecarDir.appendingPathComponent("Dune.2021.mkv")
+        let sidecarPoster = sidecarDir.appendingPathComponent("poster.jpg")
+        let ep1 = seriesDir.appendingPathComponent("ThreeBody.S01E01.mkv")
+        let ep2 = seriesDir.appendingPathComponent("ThreeBody.S01E02.mkv")
+        for f in [movieFile, sidecarMovie, sidecarPoster, ep1, ep2] {
+            try Data("fixture".utf8).write(to: f)
+        }
+
+        let engine = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        _ = await engine.addLocalSource(url: rootDir, displayName: "HealRoot")
+        XCTAssertEqual(engine.items.count, 4)
+
+        // Simulate a cached poster inside .../Caches/SilkPlayer/Posters/ that later gets wiped
+        let fakeCacheDir = tempDir.appendingPathComponent("Caches/SilkPlayer/Posters", isDirectory: true)
+        try FileManager.default.createDirectory(at: fakeCacheDir, withIntermediateDirectories: true)
+        let cachedMovieWebp = fakeCacheDir.appendingPathComponent("27205.webp")
+        let cachedSeriesWebp = fakeCacheDir.appendingPathComponent("135934.webp")
+        try Data("webpdata".utf8).write(to: cachedMovieWebp)
+        try Data("webpseries".utf8).write(to: cachedSeriesWebp)
+
+        let remoteMovieURL = "https://silkplayer.1999909.xyz/api/poster?path=/inception.jpg&size=w500"
+        let remoteSeriesURL = "https://silkplayer.1999909.xyz/api/poster?path=/threebody.jpg&size=w500"
+
+        await engine.updateRecordMetadata(
+            path: movieFile.path,
+            genres: ["科幻"],
+            overview: "Dream heist",
+            releaseYear: 2010,
+            rating: 8.4,
+            tmdbId: 27205,
+            posterUrl: remoteMovieURL,
+            localPosterPath: cachedMovieWebp.path
+        )
+
+        // Scraping Episode 1 must propagate series metadata & poster to Episode 2 automatically
+        await engine.updateRecordMetadata(
+            path: ep1.path,
+            genres: ["科幻", "悬疑"],
+            overview: "Three-Body Problem",
+            releaseYear: 2023,
+            rating: 8.7,
+            tmdbId: 135934,
+            posterUrl: remoteSeriesURL,
+            localPosterPath: cachedSeriesWebp.path
+        )
+
+        let ep2Record = try XCTUnwrap(engine.items.first(where: { $0.path == ep2.path }))
+        XCTAssertEqual(ep2Record.tmdbId, 135934)
+        XCTAssertEqual(ep2Record.posterUrl, remoteSeriesURL)
+        XCTAssertEqual(ep2Record.posterPath, cachedSeriesWebp.path)
+        XCTAssertTrue(ep2Record.hasValidLocalPoster)
+
+        // Simulate external cache wipe or version reinstall removing Caches/SilkPlayer/Posters/*
+        try FileManager.default.removeItem(at: cachedMovieWebp)
+        try FileManager.default.removeItem(at: cachedSeriesWebp)
+
+        let movieBeforeReload = try XCTUnwrap(engine.items.first(where: { $0.path == movieFile.path }))
+        XCTAssertFalse(movieBeforeReload.hasValidLocalPoster)
+        // Must immediately fall back to remote posterUrl instead of returning deleted local path
+        XCTAssertEqual(movieBeforeReload.effectivePosterSource, remoteMovieURL)
+
+        // Startup self-healing on new engine launch must null stale cache posterPath in SQLite while keeping NAS sidecar poster intact
+        let upgradedEngine = SilkMediaLibraryEngine(databaseURL: dbURL, usePersistentBookmarkStorage: false)
+        await upgradedEngine.loadFromDatabase()
+
+        let healedMovie = try XCTUnwrap(upgradedEngine.items.first(where: { $0.path == movieFile.path }))
+        XCTAssertNil(healedMovie.posterPath)
+        XCTAssertEqual(healedMovie.posterUrl, remoteMovieURL)
+        XCTAssertEqual(healedMovie.effectivePosterSource, remoteMovieURL)
+
+        let healedSidecar = try XCTUnwrap(upgradedEngine.items.first(where: { $0.path == sidecarMovie.path }))
+        XCTAssertEqual(healedSidecar.posterPath, sidecarPoster.path)
+        XCTAssertTrue(healedSidecar.hasValidLocalPoster)
     }
 }

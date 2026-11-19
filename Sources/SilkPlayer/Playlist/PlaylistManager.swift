@@ -49,6 +49,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         }
     }
     public private(set) var activeCategory: MediaCategory = .video
+    public private(set) var playbackCategory: MediaCategory = .video
     public private(set) var videoItems: [PlaylistItem] = []
     public private(set) var audioItems: [PlaylistItem] = []
     public private(set) var unifiedItems: [PlaylistItem] = []
@@ -58,6 +59,33 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
 
     public var videoCount: Int { videoItems.count }
     public var audioCount: Int { audioItems.count }
+
+    public var playbackItems: [PlaylistItem] {
+        playbackCategory == .video ? videoItems : audioItems
+    }
+
+    public var playbackIndex: Int {
+        get {
+            playbackCategory == .video ? videoCurrentIndex : audioCurrentIndex
+        }
+        set {
+            if playbackCategory == .video {
+                videoCurrentIndex = newValue
+            } else {
+                audioCurrentIndex = newValue
+            }
+            syncUnifiedCurrentIndex()
+        }
+    }
+
+    public func applyPlaybackCategory(_ category: MediaCategory) {
+        guard playbackCategory != category else { return }
+        playbackCategory = category
+        nextShuffleIndex = nil
+        if playbackMode == .shuffle {
+            ensureShuffleCandidate()
+        }
+    }
 
     public private(set) var items: [PlaylistItem] {
         get {
@@ -209,8 +237,10 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     }
 
     public var currentItem: PlaylistItem? {
-        guard currentIndex >= 0 && currentIndex < items.count else { return nil }
-        return items[currentIndex]
+        let pool = playbackItems
+        let idx = playbackIndex
+        guard idx >= 0 && idx < pool.count else { return nil }
+        return pool[idx]
     }
 
     public var count: Int {
@@ -222,40 +252,46 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     }
 
     public var hasPrevious: Bool {
-        guard !items.isEmpty, currentIndex >= 0 else { return false }
+        let pool = playbackItems
+        let idx = playbackIndex
+        guard !pool.isEmpty, idx >= 0 else { return false }
         switch playbackMode {
         case .shuffle:
-            return !currentPlayHistory.isEmpty
+            return !playbackPlayHistory.isEmpty
         case .listLoop:
-            return items.count > 1
+            return pool.count > 1
         case .sequential, .singleLoop:
-            return currentIndex > 0
+            return idx > 0
         }
     }
 
     public var hasNext: Bool {
-        guard !items.isEmpty, currentIndex >= 0 else { return false }
+        let pool = playbackItems
+        let idx = playbackIndex
+        guard !pool.isEmpty, idx >= 0 else { return false }
         switch playbackMode {
         case .shuffle, .listLoop:
-            return items.count > 1
+            return pool.count > 1
         case .sequential, .singleLoop:
-            return currentIndex < items.count - 1
+            return idx < pool.count - 1
         }
     }
 
     public var previousItem: PlaylistItem? {
         guard hasPrevious else { return nil }
+        let pool = playbackItems
+        let idx = playbackIndex
         switch playbackMode {
         case .shuffle:
-            guard let lastIndex = currentPlayHistory.last, lastIndex >= 0, lastIndex < items.count else {
+            guard let lastIndex = playbackPlayHistory.last, lastIndex >= 0, lastIndex < pool.count else {
                 return nil
             }
-            return items[lastIndex]
+            return pool[lastIndex]
         case .listLoop:
-            let idx = (currentIndex - 1 + items.count) % items.count
-            return items[idx]
+            let prevIdx = (idx - 1 + pool.count) % pool.count
+            return pool[prevIdx]
         case .sequential, .singleLoop:
-            return currentIndex > 0 ? items[currentIndex - 1] : nil
+            return idx > 0 ? pool[idx - 1] : nil
         }
     }
 
@@ -264,7 +300,21 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     }
 
     // MARK: - Upcoming Track Determination & Shuffle Deck State
-    public private(set) var nextShuffleIndex: Int? = nil
+    public private(set) var videoNextShuffleIndex: Int? = nil
+    public private(set) var audioNextShuffleIndex: Int? = nil
+
+    public var nextShuffleIndex: Int? {
+        get {
+            playbackCategory == .video ? videoNextShuffleIndex : audioNextShuffleIndex
+        }
+        set {
+            if playbackCategory == .video {
+                videoNextShuffleIndex = newValue
+            } else {
+                audioNextShuffleIndex = newValue
+            }
+        }
+    }
 
     private var videoShuffleQueue: [Int] = []
     private var audioShuffleQueue: [Int] = []
@@ -275,6 +325,45 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     private var videoRecentTrackKeys: [String] = []
     private var audioRecentTrackKeys: [String] = []
     private var unifiedRecentTrackKeys: [String] = []
+
+    private var playbackShuffleQueue: [Int] {
+        get {
+            playbackCategory == .video ? videoShuffleQueue : audioShuffleQueue
+        }
+        set {
+            if playbackCategory == .video {
+                videoShuffleQueue = newValue
+            } else {
+                audioShuffleQueue = newValue
+            }
+        }
+    }
+
+    private var playbackPlayHistory: [Int] {
+        get {
+            playbackCategory == .video ? videoPlayHistory : audioPlayHistory
+        }
+        set {
+            if playbackCategory == .video {
+                videoPlayHistory = newValue
+            } else {
+                audioPlayHistory = newValue
+            }
+        }
+    }
+
+    private var playbackRecentTrackKeys: [String] {
+        get {
+            playbackCategory == .video ? videoRecentTrackKeys : audioRecentTrackKeys
+        }
+        set {
+            if playbackCategory == .video {
+                videoRecentTrackKeys = newValue
+            } else {
+                audioRecentTrackKeys = newValue
+            }
+        }
+    }
 
     private var currentShuffleQueue: [Int] {
         get {
@@ -325,29 +414,31 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     }
 
     public var upcomingItem: PlaylistItem? {
-        guard !items.isEmpty, currentIndex >= 0, currentIndex < items.count else { return nil }
+        let pool = playbackItems
+        let idx = playbackIndex
+        guard !pool.isEmpty, idx >= 0, idx < pool.count else { return nil }
         switch playbackMode {
         case .singleLoop:
             return currentItem
         case .listLoop:
-            guard items.count > 1 else { return currentItem }
-            let nextIdx = (currentIndex + 1) % items.count
-            return items[nextIdx]
+            guard pool.count > 1 else { return currentItem }
+            let nextIdx = (idx + 1) % pool.count
+            return pool[nextIdx]
         case .sequential:
-            if currentIndex < items.count - 1 {
-                return items[currentIndex + 1]
+            if idx < pool.count - 1 {
+                return pool[idx + 1]
             }
             return nil
         case .shuffle:
-            if items.count == 1 { return currentItem }
-            if let candidate = nextShuffleIndex, candidate >= 0, candidate < items.count {
-                return items[candidate]
+            if pool.count == 1 { return currentItem }
+            if let candidate = nextShuffleIndex, candidate >= 0, candidate < pool.count {
+                return pool[candidate]
             }
-            if let first = currentShuffleQueue.first, first >= 0, first < items.count {
-                return items[first]
+            if let first = playbackShuffleQueue.first, first >= 0, first < pool.count {
+                return pool[first]
             }
-            let fallbackIdx = (currentIndex + 1) % items.count
-            return items[fallbackIdx]
+            let fallbackIdx = (idx + 1) % pool.count
+            return pool[fallbackIdx]
         }
     }
 
@@ -360,32 +451,53 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    private func recordRecentTrack(path: String) {
-        if !isDualPlaylistMode {
-            recordRecentTrack(path: path, in: &unifiedRecentTrackKeys)
-        } else if activeCategory == .video {
+    private func recordRecentTrack(path: String, inCategory category: MediaCategory) {
+        if category == .video {
             recordRecentTrack(path: path, in: &videoRecentTrackKeys)
         } else {
             recordRecentTrack(path: path, in: &audioRecentTrackKeys)
         }
     }
 
+    private func recordRecentTrack(at index: Int, inCategory category: MediaCategory) {
+        let pool = category == .video ? videoItems : audioItems
+        guard index >= 0 && index < pool.count else { return }
+        recordRecentTrack(path: pool[index].path, inCategory: category)
+    }
+
+    private func recordRecentTrack(path: String) {
+        if !isDualPlaylistMode {
+            recordRecentTrack(path: path, in: &unifiedRecentTrackKeys)
+        } else {
+            recordRecentTrack(path: path, inCategory: playbackCategory)
+        }
+    }
+
     private func recordRecentTrack(at index: Int) {
-        guard index >= 0 && index < items.count else { return }
-        recordRecentTrack(path: items[index].path)
+        let pool = playbackItems
+        guard index >= 0 && index < pool.count else { return }
+        recordRecentTrack(path: pool[index].path, inCategory: playbackCategory)
     }
 
     /// Generates a weighted random permutation (Efraimidis-Spirakis) that suppresses
     /// recently played and manually selected tracks during their cooldown window while
     /// preserving full-cycle coverage across all candidates.
-    private func weightedShuffledIndices(from candidateIndices: [Int]) -> [Int] {
-        let filtered = candidateIndices.filter { $0 >= 0 && $0 < items.count && $0 != currentIndex }
+    private func weightedShuffledIndices(
+        from candidateIndices: [Int],
+        in pool: [PlaylistItem]? = nil,
+        recentKeys: [String]? = nil,
+        currentIdx: Int? = nil
+    ) -> [Int] {
+        let targetPool = pool ?? playbackItems
+        let targetRecentKeys = recentKeys ?? playbackRecentTrackKeys
+        let targetCurrentIdx = currentIdx ?? playbackIndex
+        let filtered = candidateIndices.filter { $0 >= 0 && $0 < targetPool.count && $0 != targetCurrentIdx }
         guard filtered.count > 1 else { return filtered }
 
-        let totalCount = items.count
-        let currentPath = (currentIndex >= 0 && currentIndex < items.count) ? items[currentIndex].path : nil
+        let totalCount = targetPool.count
+        let currentPath = (targetCurrentIdx >= 0 && targetCurrentIdx < targetPool.count) ? targetPool[targetCurrentIdx].path : nil
 
-        var orderedHistoryPaths = currentRecentTrackKeys
+        var orderedHistoryPaths = targetRecentKeys
         if let currentPath, orderedHistoryPaths.last == currentPath {
             orderedHistoryPaths.removeLast()
         }
@@ -405,7 +517,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         scored.reserveCapacity(filtered.count)
 
         for idx in filtered {
-            let path = items[idx].path
+            let path = targetPool[idx].path
             let weight: Double
             if let currentPath, path == currentPath {
                 weight = 0.0002
@@ -427,12 +539,12 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         // Prevent immediate ping-pong repeats among the most recent tracks whenever alternatives exist.
         let hardGuardSteps = min(4, max(0, result.count - 1))
         if hardGuardSteps > 0, result.count > 1 {
-            let headPath = items[result[0]].path
+            let headPath = targetPool[result[0]].path
             let headIsTooRecent = (currentPath != nil && headPath == currentPath)
                 || (ageByPath[headPath].map { $0 <= hardGuardSteps } ?? false)
             if headIsTooRecent {
                 if let betterPos = result.indices.dropFirst().first(where: { pos in
-                    let p = items[result[pos]].path
+                    let p = targetPool[result[pos]].path
                     if let currentPath, p == currentPath { return false }
                     return ageByPath[p].map { $0 > hardGuardSteps } ?? true
                 }) {
@@ -446,35 +558,39 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     }
 
     public func ensureShuffleCandidate() {
-        guard playbackMode == .shuffle, items.count > 1 else {
+        let pool = playbackItems
+        let idx = playbackIndex
+        guard playbackMode == .shuffle, pool.count > 1 else {
             nextShuffleIndex = nil
-            currentShuffleQueue.removeAll()
+            playbackShuffleQueue.removeAll()
             return
         }
 
         // Clean out invalid indices
-        var q = currentShuffleQueue
-        q.removeAll { $0 < 0 || $0 >= items.count }
+        var q = playbackShuffleQueue
+        q.removeAll { $0 < 0 || $0 >= pool.count }
 
         // If queue is exhausted, generate a fresh cooldown-weighted cycle
         if q.isEmpty {
-            let candidatePool = Array(0..<items.count).filter { $0 != currentIndex }
-            q = weightedShuffledIndices(from: candidatePool)
+            let candidatePool = Array(0..<pool.count).filter { $0 != idx }
+            q = weightedShuffledIndices(from: candidatePool, in: pool, recentKeys: playbackRecentTrackKeys, currentIdx: idx)
         }
 
         // Boundary protection: If head of queue matches current track, swap or move to end
-        if let first = q.first, first == currentIndex, q.count > 1 {
+        if let first = q.first, first == idx, q.count > 1 {
             let dup = q.removeFirst()
             q.append(dup)
         }
 
-        currentShuffleQueue = q
+        playbackShuffleQueue = q
         nextShuffleIndex = q.first
     }
 
     public var displayIndexText: String {
-        guard count > 0 && currentIndex >= 0 else { return "" }
-        return "\(currentIndex + 1) / \(count)"
+        let pool = playbackItems
+        let idx = playbackIndex
+        guard !pool.isEmpty && idx >= 0 else { return "" }
+        return "\(idx + 1) / \(pool.count)"
     }
 
     // MARK: - Dual-Track Routing & Category Switching
@@ -493,10 +609,6 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     public func switchCategory(_ category: MediaCategory) {
         guard activeCategory != category else { return }
         activeCategory = category
-        nextShuffleIndex = nil
-        if playbackMode == .shuffle {
-            ensureShuffleCandidate()
-        }
         saveToStorage()
     }
 
@@ -504,6 +616,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     public func setPlaylist(items: [MediaItem], startingAt item: MediaItem) {
         let startingCategory = category(for: item.url)
         self.activeCategory = startingCategory
+        self.playbackCategory = startingCategory
 
         var vList: [PlaylistItem] = []
         var aList: [PlaylistItem] = []
@@ -527,7 +640,8 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         self.unifiedPlayHistory.removeAll()
         self.unifiedShuffleQueue.removeAll()
         self.unifiedRecentTrackKeys.removeAll()
-        self.nextShuffleIndex = nil
+        self.videoNextShuffleIndex = nil
+        self.audioNextShuffleIndex = nil
 
         if startingCategory == .video {
             if let idx = videoItems.firstIndex(where: { $0.id == item.id })
@@ -545,6 +659,12 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             }
         }
 
+        if playbackCategory == .video && videoItems.isEmpty && !audioItems.isEmpty {
+            playbackCategory = .audio
+        } else if playbackCategory == .audio && audioItems.isEmpty && !videoItems.isEmpty {
+            playbackCategory = .video
+        }
+
         syncUnifiedItems()
         syncUnifiedCurrentIndex()
         recordRecentTrack(at: currentIndex)
@@ -559,10 +679,19 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         if playlistItems.isEmpty {
             self.items = []
             self.currentIndex = -1
-            self.currentPlayHistory.removeAll()
-            self.currentShuffleQueue.removeAll()
-            self.currentRecentTrackKeys.removeAll()
-            self.nextShuffleIndex = nil
+            self.videoCurrentIndex = -1
+            self.audioCurrentIndex = -1
+            self.videoPlayHistory.removeAll()
+            self.videoShuffleQueue.removeAll()
+            self.videoRecentTrackKeys.removeAll()
+            self.audioPlayHistory.removeAll()
+            self.audioShuffleQueue.removeAll()
+            self.audioRecentTrackKeys.removeAll()
+            self.unifiedPlayHistory.removeAll()
+            self.unifiedShuffleQueue.removeAll()
+            self.unifiedRecentTrackKeys.removeAll()
+            self.videoNextShuffleIndex = nil
+            self.audioNextShuffleIndex = nil
             saveToStorage()
             return
         }
@@ -570,6 +699,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         let targetIndex = max(0, min(playlistItems.count - 1, startingIndex))
         let targetCategory = category(for: playlistItems[targetIndex].url)
         self.activeCategory = targetCategory
+        self.playbackCategory = targetCategory
 
         var vList: [PlaylistItem] = []
         var aList: [PlaylistItem] = []
@@ -592,7 +722,8 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         self.unifiedPlayHistory.removeAll()
         self.unifiedShuffleQueue.removeAll()
         self.unifiedRecentTrackKeys.removeAll()
-        self.nextShuffleIndex = nil
+        self.videoNextShuffleIndex = nil
+        self.audioNextShuffleIndex = nil
 
         let targetItem = playlistItems[targetIndex]
         if targetCategory == .video {
@@ -611,6 +742,12 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             }
         }
 
+        if playbackCategory == .video && videoItems.isEmpty && !audioItems.isEmpty {
+            playbackCategory = .audio
+        } else if playbackCategory == .audio && audioItems.isEmpty && !videoItems.isEmpty {
+            playbackCategory = .video
+        }
+
         syncUnifiedItems()
         syncUnifiedCurrentIndex()
         recordRecentTrack(at: currentIndex)
@@ -625,6 +762,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         let url = URL(fileURLWithPath: path)
         let cat = category(for: url)
         self.activeCategory = cat
+        self.playbackCategory = cat
         let name = title ?? url.deletingPathExtension().lastPathComponent
         let item = PlaylistItem(path: path, title: name, duration: duration)
         self.items = [item]
@@ -640,6 +778,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     public func setSingleItem(_ item: MediaItem) {
         let cat = category(for: item.url)
         self.activeCategory = cat
+        self.playbackCategory = cat
         self.items = [PlaylistItem(from: item)]
         self.currentIndex = 0
         self.currentPlayHistory.removeAll()
@@ -657,19 +796,19 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             audioItems.append(item)
             if audioCurrentIndex < 0 {
                 audioCurrentIndex = 0
-                recordRecentTrack(path: item.path, in: &audioRecentTrackKeys)
-            } else if isDualPlaylistMode && activeCategory == .audio && playbackMode == .shuffle && !audioShuffleQueue.isEmpty {
+                recordRecentTrack(path: item.path, inCategory: .audio)
+            } else if isDualPlaylistMode && playbackCategory == .audio && playbackMode == .shuffle && !audioShuffleQueue.isEmpty {
                 audioShuffleQueue.append(newIdx)
                 syncUnifiedItems()
                 syncUnifiedCurrentIndex()
-                audioShuffleQueue = weightedShuffledIndices(from: audioShuffleQueue)
-                nextShuffleIndex = audioShuffleQueue.first
+                audioShuffleQueue = weightedShuffledIndices(from: audioShuffleQueue, in: audioItems, recentKeys: audioRecentTrackKeys, currentIdx: audioCurrentIndex)
+                audioNextShuffleIndex = audioShuffleQueue.first
                 saveToStorage()
                 return
             }
             syncUnifiedItems()
             syncUnifiedCurrentIndex()
-            if activeCategory == .audio && playbackMode == .shuffle {
+            if playbackCategory == .audio && playbackMode == .shuffle {
                 ensureShuffleCandidate()
             }
         } else {
@@ -677,19 +816,19 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             videoItems.append(item)
             if videoCurrentIndex < 0 {
                 videoCurrentIndex = 0
-                recordRecentTrack(path: item.path, in: &videoRecentTrackKeys)
-            } else if isDualPlaylistMode && activeCategory == .video && playbackMode == .shuffle && !videoShuffleQueue.isEmpty {
+                recordRecentTrack(path: item.path, inCategory: .video)
+            } else if isDualPlaylistMode && playbackCategory == .video && playbackMode == .shuffle && !videoShuffleQueue.isEmpty {
                 videoShuffleQueue.append(newIdx)
                 syncUnifiedItems()
                 syncUnifiedCurrentIndex()
-                videoShuffleQueue = weightedShuffledIndices(from: videoShuffleQueue)
-                nextShuffleIndex = videoShuffleQueue.first
+                videoShuffleQueue = weightedShuffledIndices(from: videoShuffleQueue, in: videoItems, recentKeys: videoRecentTrackKeys, currentIdx: videoCurrentIndex)
+                videoNextShuffleIndex = videoShuffleQueue.first
                 saveToStorage()
                 return
             }
             syncUnifiedItems()
             syncUnifiedCurrentIndex()
-            if activeCategory == .video && playbackMode == .shuffle {
+            if playbackCategory == .video && playbackMode == .shuffle {
                 ensureShuffleCandidate()
             }
         }
@@ -714,8 +853,10 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
 
         if activeCategory == .video && videoItems.isEmpty && !audioToAdd.isEmpty && videoToAdd.isEmpty {
             activeCategory = .audio
+            playbackCategory = .audio
         } else if activeCategory == .audio && audioItems.isEmpty && !videoToAdd.isEmpty && audioToAdd.isEmpty {
             activeCategory = .video
+            playbackCategory = .video
         }
 
         var videoNewRange: Range<Int>? = nil
@@ -725,18 +866,18 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             let wasEmpty = videoItems.isEmpty
             let oldCount = videoItems.count
             videoItems.append(contentsOf: videoToAdd)
-            if wasEmpty && playbackMode == .shuffle && videoItems.count > 1 && activeCategory == .video {
+            if wasEmpty && playbackMode == .shuffle && videoItems.count > 1 && playbackCategory == .video {
                 var pool = Array(0..<videoItems.count)
                 pool.shuffle()
                 let chosenIndex = pool.removeFirst()
                 videoCurrentIndex = chosenIndex
                 recordRecentTrack(path: videoItems[chosenIndex].path, in: &videoRecentTrackKeys)
                 videoShuffleQueue = pool
-                nextShuffleIndex = pool.first
+                videoNextShuffleIndex = pool.first
             } else if videoCurrentIndex < 0 {
                 videoCurrentIndex = 0
                 recordRecentTrack(path: videoItems[0].path, in: &videoRecentTrackKeys)
-                if activeCategory == .video && playbackMode == .shuffle {
+                if playbackCategory == .video && playbackMode == .shuffle {
                     ensureShuffleCandidate()
                 }
             } else if !wasEmpty && oldCount < videoItems.count {
@@ -748,18 +889,18 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             let wasEmpty = audioItems.isEmpty
             let oldCount = audioItems.count
             audioItems.append(contentsOf: audioToAdd)
-            if wasEmpty && playbackMode == .shuffle && audioItems.count > 1 && activeCategory == .audio {
+            if wasEmpty && playbackMode == .shuffle && audioItems.count > 1 && playbackCategory == .audio {
                 var pool = Array(0..<audioItems.count)
                 pool.shuffle()
                 let chosenIndex = pool.removeFirst()
                 audioCurrentIndex = chosenIndex
                 recordRecentTrack(path: audioItems[chosenIndex].path, in: &audioRecentTrackKeys)
                 audioShuffleQueue = pool
-                nextShuffleIndex = pool.first
+                audioNextShuffleIndex = pool.first
             } else if audioCurrentIndex < 0 {
                 audioCurrentIndex = 0
                 recordRecentTrack(path: audioItems[0].path, in: &audioRecentTrackKeys)
-                if activeCategory == .audio && playbackMode == .shuffle {
+                if playbackCategory == .audio && playbackMode == .shuffle {
                     ensureShuffleCandidate()
                 }
             } else if !wasEmpty && oldCount < audioItems.count {
@@ -767,23 +908,28 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             }
         }
 
+        if playbackCategory == .video && videoItems.isEmpty && !audioItems.isEmpty {
+            playbackCategory = .audio
+        } else if playbackCategory == .audio && audioItems.isEmpty && !videoItems.isEmpty {
+            playbackCategory = .video
+        }
+
         syncUnifiedItems()
         syncUnifiedCurrentIndex()
 
         if isDualPlaylistMode && playbackMode == .shuffle {
-            if activeCategory == .video, let range = videoNewRange {
+            if playbackCategory == .video, let range = videoNewRange {
                 if !videoShuffleQueue.isEmpty {
-                    videoShuffleQueue = weightedShuffledIndices(from: videoShuffleQueue + Array(range))
+                    videoShuffleQueue = weightedShuffledIndices(from: videoShuffleQueue + Array(range), in: videoItems, recentKeys: videoRecentTrackKeys, currentIdx: videoCurrentIndex)
                 }
                 ensureShuffleCandidate()
-            } else if activeCategory == .audio, let range = audioNewRange {
+            } else if playbackCategory == .audio, let range = audioNewRange {
                 if !audioShuffleQueue.isEmpty {
-                    audioShuffleQueue = weightedShuffledIndices(from: audioShuffleQueue + Array(range))
+                    audioShuffleQueue = weightedShuffledIndices(from: audioShuffleQueue + Array(range), in: audioItems, recentKeys: audioRecentTrackKeys, currentIdx: audioCurrentIndex)
                 }
                 ensureShuffleCandidate()
             }
         } else if !isDualPlaylistMode && playbackMode == .shuffle {
-            unifiedShuffleQueue.removeAll()
             ensureShuffleCandidate()
         }
 
@@ -806,40 +952,46 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     // MARK: - Navigation
     @discardableResult
     public func moveToNext() -> PlaylistItem? {
-        guard !items.isEmpty else { return nil }
-        recordRecentTrack(at: currentIndex)
+        let pool = playbackItems
+        guard !pool.isEmpty else { return nil }
+        let idx = playbackIndex
+        recordRecentTrack(at: idx, inCategory: playbackCategory)
         switch playbackMode {
         case .shuffle:
-            if items.count == 1 { return currentItem }
+            if pool.count == 1 { return currentItem }
             ensureShuffleCandidate()
-            if currentIndex >= 0 && currentIndex < items.count {
-                currentPlayHistory.append(currentIndex)
-                if currentPlayHistory.count > 200 { currentPlayHistory.removeFirst() }
+            if idx >= 0 && idx < pool.count {
+                var hist = playbackPlayHistory
+                hist.append(idx)
+                if hist.count > 200 { hist.removeFirst() }
+                playbackPlayHistory = hist
             }
             let targetIdx: Int
-            if !currentShuffleQueue.isEmpty {
-                targetIdx = currentShuffleQueue.removeFirst()
+            var q = playbackShuffleQueue
+            if !q.isEmpty {
+                targetIdx = q.removeFirst()
+                playbackShuffleQueue = q
             } else {
-                targetIdx = nextShuffleIndex ?? ((currentIndex + 1) % items.count)
+                targetIdx = nextShuffleIndex ?? ((idx + 1) % pool.count)
             }
-            currentIndex = targetIdx
-            recordRecentTrack(at: targetIdx)
+            playbackIndex = targetIdx
+            recordRecentTrack(at: targetIdx, inCategory: playbackCategory)
             nextShuffleIndex = nil
             ensureShuffleCandidate()
         case .listLoop:
-            currentIndex = (currentIndex + 1) % items.count
-            recordRecentTrack(at: currentIndex)
+            playbackIndex = (idx + 1) % pool.count
+            recordRecentTrack(at: playbackIndex, inCategory: playbackCategory)
         case .sequential:
             guard hasNext else { return nil }
-            currentIndex += 1
-            recordRecentTrack(at: currentIndex)
+            playbackIndex = idx + 1
+            recordRecentTrack(at: playbackIndex, inCategory: playbackCategory)
         case .singleLoop:
-            if currentIndex < items.count - 1 {
-                currentIndex += 1
+            if idx < pool.count - 1 {
+                playbackIndex = idx + 1
             } else {
-                currentIndex = 0
+                playbackIndex = 0
             }
-            recordRecentTrack(at: currentIndex)
+            recordRecentTrack(at: playbackIndex, inCategory: playbackCategory)
         }
         saveToStorage()
         probeMissingDurations()
@@ -848,32 +1000,36 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
 
     @discardableResult
     public func moveToPrevious() -> PlaylistItem? {
-        guard !items.isEmpty else { return nil }
+        let pool = playbackItems
+        guard !pool.isEmpty else { return nil }
+        let idx = playbackIndex
         switch playbackMode {
         case .shuffle:
-            if items.count == 1 { return currentItem }
-            guard let prevIdx = currentPlayHistory.popLast(), prevIdx >= 0, prevIdx < items.count else {
+            if pool.count == 1 { return currentItem }
+            var hist = playbackPlayHistory
+            guard let prevIdx = hist.popLast(), prevIdx >= 0, prevIdx < pool.count else {
                 return nil
             }
-            if currentIndex >= 0 && currentIndex < items.count {
-                var q = currentShuffleQueue
-                q.removeAll { $0 == currentIndex }
-                q.insert(currentIndex, at: 0)
-                currentShuffleQueue = q
+            playbackPlayHistory = hist
+            if idx >= 0 && idx < pool.count {
+                var q = playbackShuffleQueue
+                q.removeAll { $0 == idx }
+                q.insert(idx, at: 0)
+                playbackShuffleQueue = q
             }
-            currentIndex = prevIdx
+            playbackIndex = prevIdx
             nextShuffleIndex = nil
             ensureShuffleCandidate()
         case .listLoop:
-            currentIndex = (currentIndex - 1 + items.count) % items.count
+            playbackIndex = (idx - 1 + pool.count) % pool.count
         case .sequential:
             guard hasPrevious else { return nil }
-            currentIndex -= 1
+            playbackIndex = idx - 1
         case .singleLoop:
-            if currentIndex > 0 {
-                currentIndex -= 1
+            if idx > 0 {
+                playbackIndex = idx - 1
             } else {
-                currentIndex = max(0, items.count - 1)
+                playbackIndex = max(0, pool.count - 1)
             }
         }
         saveToStorage()
@@ -884,11 +1040,11 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     public func togglePlaybackMode() {
         self.playbackMode = self.playbackMode.next
         if self.playbackMode == .shuffle {
-            currentShuffleQueue.removeAll()
+            playbackShuffleQueue.removeAll()
             ensureShuffleCandidate()
         } else {
             nextShuffleIndex = nil
-            currentShuffleQueue.removeAll()
+            playbackShuffleQueue.removeAll()
         }
         saveToStorage()
     }
@@ -896,50 +1052,56 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     public func setPlaybackMode(_ mode: PlaybackMode) {
         self.playbackMode = mode
         if self.playbackMode == .shuffle {
-            currentShuffleQueue.removeAll()
+            playbackShuffleQueue.removeAll()
             ensureShuffleCandidate()
         } else {
             nextShuffleIndex = nil
-            currentShuffleQueue.removeAll()
+            playbackShuffleQueue.removeAll()
         }
         saveToStorage()
     }
 
     // MARK: - Natural EOF Navigation
     public func handleNaturalEOF() -> PlaylistItem? {
-        guard !items.isEmpty else { return nil }
-        recordRecentTrack(at: currentIndex)
+        let pool = playbackItems
+        guard !pool.isEmpty else { return nil }
+        let idx = playbackIndex
+        recordRecentTrack(at: idx, inCategory: playbackCategory)
         switch playbackMode {
         case .singleLoop:
             return currentItem
         case .shuffle:
-            if items.count == 1 { return currentItem }
+            if pool.count == 1 { return currentItem }
             ensureShuffleCandidate()
-            if currentIndex >= 0 && currentIndex < items.count {
-                currentPlayHistory.append(currentIndex)
-                if currentPlayHistory.count > 200 { currentPlayHistory.removeFirst() }
+            if idx >= 0 && idx < pool.count {
+                var hist = playbackPlayHistory
+                hist.append(idx)
+                if hist.count > 200 { hist.removeFirst() }
+                playbackPlayHistory = hist
             }
             let targetIdx: Int
-            if !currentShuffleQueue.isEmpty {
-                targetIdx = currentShuffleQueue.removeFirst()
+            var q = playbackShuffleQueue
+            if !q.isEmpty {
+                targetIdx = q.removeFirst()
+                playbackShuffleQueue = q
             } else {
-                targetIdx = nextShuffleIndex ?? ((currentIndex + 1) % items.count)
+                targetIdx = nextShuffleIndex ?? ((idx + 1) % pool.count)
             }
-            currentIndex = targetIdx
-            recordRecentTrack(at: targetIdx)
+            playbackIndex = targetIdx
+            recordRecentTrack(at: targetIdx, inCategory: playbackCategory)
             saveToStorage()
             nextShuffleIndex = nil
             ensureShuffleCandidate()
             return currentItem
         case .listLoop:
-            currentIndex = (currentIndex + 1) % items.count
-            recordRecentTrack(at: currentIndex)
+            playbackIndex = (idx + 1) % pool.count
+            recordRecentTrack(at: playbackIndex, inCategory: playbackCategory)
             saveToStorage()
             return currentItem
         case .sequential:
             guard hasNext else { return nil }
-            currentIndex += 1
-            recordRecentTrack(at: currentIndex)
+            playbackIndex = idx + 1
+            recordRecentTrack(at: playbackIndex, inCategory: playbackCategory)
             saveToStorage()
             return currentItem
         }
@@ -948,28 +1110,96 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     @discardableResult
     public func selectIndex(_ index: Int) -> PlaylistItem? {
         guard index >= 0 && index < items.count else { return nil }
-        let isManualIntervention = (currentIndex != index)
-        if isManualIntervention && currentIndex >= 0 && currentIndex < items.count {
-            currentPlayHistory.append(currentIndex)
-            if currentPlayHistory.count > 200 { currentPlayHistory.removeFirst() }
-            recordRecentTrack(at: currentIndex)
+        if isDualPlaylistMode {
+            self.playbackCategory = activeCategory
+        } else if index < unifiedItems.count {
+            self.playbackCategory = Self.category(for: unifiedItems[index].url)
+        }
+        let pool = playbackItems
+        let prevIdx = playbackIndex
+        let isManualIntervention = (prevIdx != index)
+        if isManualIntervention && prevIdx >= 0 && prevIdx < pool.count {
+            var hist = playbackPlayHistory
+            hist.append(prevIdx)
+            if hist.count > 200 { hist.removeFirst() }
+            playbackPlayHistory = hist
+            recordRecentTrack(at: prevIdx, inCategory: playbackCategory)
         }
         currentIndex = index
-        recordRecentTrack(at: index)
+        recordRecentTrack(at: index, inCategory: playbackCategory)
         if playbackMode == .shuffle {
-            var q = currentShuffleQueue
+            var q = playbackShuffleQueue
             q.removeAll { $0 == index }
             if isManualIntervention && !q.isEmpty {
-                // Re-weight remaining shuffle queue so recently played/picked tracks stay cooled down.
-                q = weightedShuffledIndices(from: q)
+                q = weightedShuffledIndices(from: q, in: pool, recentKeys: playbackRecentTrackKeys, currentIdx: index)
             }
-            currentShuffleQueue = q
+            playbackShuffleQueue = q
             nextShuffleIndex = nil
             ensureShuffleCandidate()
         }
         saveToStorage()
         probeMissingDurations()
         return currentItem
+    }
+
+    @discardableResult
+    public func selectItem(_ item: PlaylistItem) -> PlaylistItem? {
+        let cat = Self.category(for: item.url)
+        self.playbackCategory = cat
+        if cat == .video {
+            if let idx = videoItems.firstIndex(where: { $0.id == item.id })
+                ?? videoItems.firstIndex(where: { $0.path == item.path }) {
+                let isManualIntervention = (videoCurrentIndex != idx)
+                if isManualIntervention && videoCurrentIndex >= 0 && videoCurrentIndex < videoItems.count {
+                    videoPlayHistory.append(videoCurrentIndex)
+                    if videoPlayHistory.count > 200 { videoPlayHistory.removeFirst() }
+                    recordRecentTrack(at: videoCurrentIndex, inCategory: .video)
+                }
+                videoCurrentIndex = idx
+                recordRecentTrack(at: idx, inCategory: .video)
+                if playbackMode == .shuffle {
+                    var q = videoShuffleQueue
+                    q.removeAll { $0 == idx }
+                    if isManualIntervention && !q.isEmpty {
+                        q = weightedShuffledIndices(from: q, in: videoItems, recentKeys: videoRecentTrackKeys, currentIdx: idx)
+                    }
+                    videoShuffleQueue = q
+                    videoNextShuffleIndex = nil
+                    ensureShuffleCandidate()
+                }
+                syncUnifiedCurrentIndex()
+                saveToStorage()
+                probeMissingDurations()
+                return videoItems[idx]
+            }
+        } else {
+            if let idx = audioItems.firstIndex(where: { $0.id == item.id })
+                ?? audioItems.firstIndex(where: { $0.path == item.path }) {
+                let isManualIntervention = (audioCurrentIndex != idx)
+                if isManualIntervention && audioCurrentIndex >= 0 && audioCurrentIndex < audioItems.count {
+                    audioPlayHistory.append(audioCurrentIndex)
+                    if audioPlayHistory.count > 200 { audioPlayHistory.removeFirst() }
+                    recordRecentTrack(at: audioCurrentIndex, inCategory: .audio)
+                }
+                audioCurrentIndex = idx
+                recordRecentTrack(at: idx, inCategory: .audio)
+                if playbackMode == .shuffle {
+                    var q = audioShuffleQueue
+                    q.removeAll { $0 == idx }
+                    if isManualIntervention && !q.isEmpty {
+                        q = weightedShuffledIndices(from: q, in: audioItems, recentKeys: audioRecentTrackKeys, currentIdx: idx)
+                    }
+                    audioShuffleQueue = q
+                    audioNextShuffleIndex = nil
+                    ensureShuffleCandidate()
+                }
+                syncUnifiedCurrentIndex()
+                saveToStorage()
+                probeMissingDurations()
+                return audioItems[idx]
+            }
+        }
+        return nil
     }
 
     public func removeItem(id: UUID) {
@@ -1007,6 +1237,12 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
                 audioCurrentIndex = audioItems.count - 1
             }
         }
+        if playbackCategory == .video && videoItems.isEmpty && !audioItems.isEmpty {
+            playbackCategory = .audio
+        } else if playbackCategory == .audio && audioItems.isEmpty && !videoItems.isEmpty {
+            playbackCategory = .video
+        }
+
         syncUnifiedItems()
         syncUnifiedCurrentIndex()
         saveToStorage()
@@ -1075,6 +1311,12 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
             audioShuffleQueue.removeAll()
             audioRecentTrackKeys.removeAll()
         }
+        if playbackCategory == .video && videoItems.isEmpty && !audioItems.isEmpty {
+            playbackCategory = .audio
+        } else if playbackCategory == .audio && audioItems.isEmpty && !videoItems.isEmpty {
+            playbackCategory = .video
+        }
+
         syncUnifiedItems()
         syncUnifiedCurrentIndex()
         if !isDualPlaylistMode && playbackMode == .shuffle {
@@ -1111,6 +1353,12 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
         audioPlayHistory = remapIndexSequence(audioPlayHistory, from: previousAudioItems, to: audioIDMap)
         audioShuffleQueue = remapIndexSequence(audioShuffleQueue, from: previousAudioItems, to: audioIDMap)
             .filter { $0 != audioCurrentIndex }
+
+        if playbackCategory == .video && videoItems.isEmpty && !audioItems.isEmpty {
+            playbackCategory = .audio
+        } else if playbackCategory == .audio && audioItems.isEmpty && !videoItems.isEmpty {
+            playbackCategory = .video
+        }
 
         syncUnifiedItems()
         syncUnifiedCurrentIndex()
@@ -1202,14 +1450,11 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
     /// Selects a track inside a target category without disturbing an active category until playback triggers.
     @discardableResult
     public func selectItemInCategory(_ item: PlaylistItem, category: MediaCategory) -> PlaylistItem? {
+        self.playbackCategory = category
         if activeCategory != category {
             switchCategory(category)
         }
-        if let idx = items.firstIndex(where: { $0.id == item.id })
-            ?? items.firstIndex(where: { $0.path == item.path }) {
-            return selectIndex(idx)
-        }
-        return nil
+        return selectItem(item)
     }
 
     private func compareItems(
@@ -1294,6 +1539,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
 
         let modeRaw = playbackMode.rawValue
         let activeCatRaw = activeCategory.rawValue
+        let playbackCatRaw = playbackCategory.rawValue
         let dualMode = isDualPlaylistMode
         let vItems = videoItems
         let vIndex = videoCurrentIndex
@@ -1324,6 +1570,7 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
                 let encoder = JSONEncoder()
                 defaults.set(modeRaw, forKey: modeKey)
                 defaults.set(activeCatRaw, forKey: Self.defaultCategoryStorageKey)
+                defaults.set(playbackCatRaw, forKey: "com.silkplayer.playlist.playbackCategory")
                 defaults.set(dualMode, forKey: "dualPlaylistMode")
 
                 let videoData = try encoder.encode(vItems)
@@ -1410,6 +1657,13 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
                     let savedIndex = userDefaults.integer(forKey: indexStorageKey)
                     self.currentIndex = max(0, min(decoded.count - 1, savedIndex))
                 }
+                if let cur = currentItem {
+                    self.playbackCategory = Self.category(for: cur.url)
+                    self.activeCategory = self.playbackCategory
+                } else if !decoded.isEmpty {
+                    self.playbackCategory = Self.category(for: decoded[0].url)
+                    self.activeCategory = self.playbackCategory
+                }
                 self.currentPlayHistory = decodedIndices(forKey: customPlayHistoryStorageKey, in: decoded) ?? []
                 self.currentRecentTrackKeys = decodedStrings(forKey: customRecentKeysStorageKey) ?? []
                 if currentRecentTrackKeys.isEmpty, currentIndex >= 0, currentIndex < decoded.count {
@@ -1429,6 +1683,14 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
 
         // Normal dual-track persistence
         var restoredAny = false
+
+        if let pCatRaw = userDefaults.string(forKey: "com.silkplayer.playlist.playbackCategory"),
+           let pCat = MediaCategory(rawValue: pCatRaw) {
+            self.playbackCategory = pCat
+        } else if let catRaw = userDefaults.string(forKey: Self.defaultCategoryStorageKey),
+                  let cat = MediaCategory(rawValue: catRaw) {
+            self.playbackCategory = cat
+        }
 
         if let catRaw = userDefaults.string(forKey: Self.defaultCategoryStorageKey),
            let cat = MediaCategory(rawValue: catRaw) {
@@ -1494,6 +1756,12 @@ public enum MediaCategory: String, CaseIterable, Codable, Sendable {
                 }
                 restoredAny = true
             }
+        }
+
+        if playbackCategory == .video && videoItems.isEmpty && !audioItems.isEmpty {
+            playbackCategory = .audio
+        } else if playbackCategory == .audio && audioItems.isEmpty && !videoItems.isEmpty {
+            playbackCategory = .video
         }
 
         syncUnifiedItems()
