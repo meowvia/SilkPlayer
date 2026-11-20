@@ -1,0 +1,61 @@
+================================================================================
+                      SilkPlayer 安装指南 / Installation Guide
+================================================================================
+
+【中文说明】
+
+一、标准安装步骤
+1. 请将左侧的「SilkPlayer」应用程序图标拖入右侧的「Applications」文件夹中。
+2. 拷贝完成后，请从系统「访达 -> 应用程序」或「启动台 (Launchpad)」中启动 SilkPlayer。
+   注意：请勿直接在当前打开的磁盘镜像 (DMG) 内部双击运行，否则退出后将无法保存偏好设置，且无法正常关联本地媒体文件。
+
+二、macOS 安全提示与门禁 (Gatekeeper) 处理
+若首次打开时系统弹出“无法打开，因为 Apple 无法检查其是否包含恶意软件”或“已损坏”提示，属于 macOS 对开源及未公证软件的标准安全保护机制，请按以下任一方式处理：
+- 方法 1（推荐 · 最简）：
+  在「访达」中打开「应用程序」目录，按住键盘「Control」键并用鼠标点击「SilkPlayer」，在弹出的右键菜单中点击「打开」，随后在确认对话框中再次点击「打开」即可永久授权信任。
+- 方法 2：
+  打开系统「系统设置」->「隐私与安全性」，向下滚动至「安全性」区域，找到关于 SilkPlayer 的拦截提示，点击旁边的「仍要打开」按钮。
+- 方法 3（终端命令）：
+  打开「终端 (Terminal)」应用，输入以下命令并按回车（提示输入密码时直接盲输 Mac 开机密码即可）：
+  sudo xattr -rd com.apple.quarantine /Applications/SilkPlayer.app
+
+三、Pro 专业版激活指引
+1. 打开 SilkPlayer，点击顶部菜单栏「SilkPlayer」->「设置」（快捷键 Cmd + ,），或点击主界面右上方齿轮图标。
+2. 切换至「关于」标签页，点击「激活 Pro」按钮。
+3. 输入您购买时收到的 29 位许可证密钥（格式：XXXXX-XXXXX-XXXXX-XXXXX-XXXXX），点击「验证并激活」。
+4. 验证通过后即刻解锁全部 Pro 专享功能（媒体海报墙、局域网 SMB 自动挂载挂盘等）。
+
+四、官网与技术支持
+- 官方网站：https://silkplayer.1999909.xyz
+- 问题反馈与更新：可在应用内「设置 -> 关于」中点击「检查更新」。
+
+--------------------------------------------------------------------------------
+
+[English Guide]
+
+1. Standard Installation
+1. Drag the "SilkPlayer" application icon on the left into the "Applications" folder on the right.
+2. Once copied, launch SilkPlayer from your "Applications" folder or "Launchpad".
+   Note: Do NOT run the application directly inside this disk image (DMG). Running directly from the image will prevent settings persistence and file association.
+
+2. macOS Gatekeeper Security Prompts
+If macOS displays a warning such as "cannot be opened because Apple cannot check it for malicious software" or "app is damaged", this is standard Gatekeeper security behavior for open-source / independent software. Use any of the following methods:
+- Method 1 (Recommended):
+  In Finder, open your "Applications" folder. Hold down the "Control" key and click "SilkPlayer", select "Open" from the context menu, then click "Open" in the confirmation dialog.
+- Method 2:
+  Go to "System Settings" -> "Privacy & Security", scroll down to the "Security" section, and click "Open Anyway" next to SilkPlayer.
+- Method 3 (Terminal):
+  Open Terminal and run the following command (enter your Mac login password when prompted):
+  sudo xattr -rd com.apple.quarantine /Applications/SilkPlayer.app
+
+3. Pro Edition Activation
+1. Launch SilkPlayer, open Settings from the menu bar "SilkPlayer -> Settings" (or press Cmd + ,).
+2. Go to the "About" tab and click "Activate Pro".
+3. Enter your 29-character license key (format: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX) and click "Verify & Activate".
+4. Once verified, Pro features (Poster Wall, SMB Auto-Mount Service, etc.) are immediately unlocked.
+
+4. Website & Support
+- Official Website: https://silkplayer.1999909.xyz
+- Updates & Inquiries: Access "Settings -> About -> Check for Updates" inside the app.
+
+================================================================================

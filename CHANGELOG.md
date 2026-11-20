@@ -44,33 +44,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 免费版 (Standard Edition)
 
-- **维护与支持说明 (Maintenance Notice)**:
-  - 随着大版本更新，免费版的基础播放功能不会被阉割、仍将持续保持免费开放，免费版本的现有功能仍将在未来一段时间内继续维护；
-  - 纯音频播放模式与 Pro 独立音乐模式彻底物理与逻辑解耦，免费版 100% 继承 1.7.0 经典交互与视窗几何基准（引入 `PlaybackPresentationMode` 显式呈现模式状态机）；
-  - 全面恢复 1.7.0 右侧边框悬浮抽屉拉手（`<`）、快捷键 `P` 与 `⌘P` 呼出播放列表抽屉能力；
-  - 全面恢复 1.7.0 双轴平滑拖拽视窗缩放（最小 380×380），彻底切断 520pt 强制锁宽与边框回弹抖动；
-  - 唱盘视图恢复纯净黑胶与标题排版，移除临时入侵性控件，画布空白单击直达播放/暂停；
-  - 原定于 1.7.0 之后版本的功能更新、优化和修复进度已随本次大版本更新提前至 1.7.0 版本发布；2.0.0 免费版完成 2.x 底层架构底座平滑对齐，全部核心特性详见 1.7.0 发布说明。
+#### Added
+- **播放列表 ⌘F 即时搜索与拼音首字母过滤 (Playlist ⌘F Instant Search & Pinyin Initial Matching - Proposal 022)**:
+  - 播放列表内置即时过滤，支持文件名原文字符匹配以及完整中文拼音首字母过滤，海量分集秒级定位。
+- **外挂字幕 Subs/ 目录深度递归检索 (Recursive Companion Subtitle Discovery - Proposal 008)**:
+  - 自动递归扫描影视同级及 `Subs/`、`Subtitles/` 等多级子目录，智能关联提取同名外挂字幕，免除手动拖拽加载繁琐步骤。
+- **全格式高清音频解复用 (Full-Format High-Definition Audio Demuxing)**:
+  - Universal FFmpeg 编入 `dts`、`dtshd`、`truehd`、`mlp` 完整解复用库，配合 10MB 前置探测缓冲区彻底消除标准 PCM 假阳性误判。
+- **播放列表两步清空防误触确认机制 (Two-Step Playlist Clear Confirmation)**。
 
-## [1.7.0] - 2026-11-16
+#### Changed
+- **影院级纯透明悬浮播控栏 (Floating Cinema HUD & Gradient Backing Removal - Proposal 021)**:
+  - 彻底移除原有底部深灰不透明方框底板，升级为直接融入视频画面的悬浮控制胶囊，观影视觉更加通透无遮挡。
+- **多声道立体声下混软限幅防削顶 (Multichannel Stereo Downmixing Soft-Knee Limiter)**:
+  - 双声道播放高规格多声道音轨时，自动应用平滑软限幅算法，杜绝音量过大引起的爆音与 DAC 硬件削顶失真。
+- **标准音频播放独立解耦 (Decoupled Standard Audio Playback)**:
+  - 免费版双击本地音频文件直接流畅播放，支持 1:1 视窗自由缩放吸附、播放列表抽屉快捷唤出与画布空白处点击播放/暂停，不绑定 Pro 音乐模式，保持轻巧纯粹。
+- **起手快甩拖拽平滑跟手度调优 (Window Drag Initiation Optimization - ISSUE-017)**。
 
-### Added
-- **Playlist ⌘F Instant Search & Pinyin Initial Matching (Proposal 022)**
-- **Recursive Companion Subtitle Discovery (Proposal 008)**
-- **Two-Step Playlist Clear Confirmation**
-- **Full-Format High-Definition Audio Demuxing (`dts`, `dtshd`, `truehd`, `mlp`)**
-
-### Changed
-- **Floating Cinema HUD & Gradient Backing Removal (Proposal 021)**
-- **Window Drag Initiation Optimization (ISSUE-017)**
-- **Multichannel Stereo Downmixing Soft-Knee Limiter**
-- **Audio Container Deep Probing (10MB Buffer)**
-
-### Fixed
-- **Multi-Screen Fullscreen Secondary Display Cursor Wakeup (ISSUE-021 / GitHub Issue #7)**
-- **Vertical Video Window Geometry Restoration (ISSUE-022 / GitHub Issue #9)**
-- **Standard PCM Audio Stream False-Positive Sniffing Distortion**
-- **Cold-Start Desktop Tiling Fill State Isolation (ISSUE-018)**
+#### Fixed
+- **多屏扩展全屏防光标误唤醒 (ISSUE-021 / GitHub Issue #7)**:
+  - 修复多显示器全屏播放时副屏光标移动导致主屏播放控件异常弹出的问题。
+- **竖屏短视频关闭后视窗横屏居中复位 (ISSUE-022 / GitHub Issue #9)**:
+  - 修复播放竖屏视频后关闭，主窗口未恢复标准横屏比例的问题。
+- **冷启动桌面平铺隔离 (Cold-Start Desktop Tiling Fill State Isolation - ISSUE-018)**:
+  - 修复冷启动时异常吸附系统分屏磁贴状态的问题。
 
 ## [1.6.0] - 2026-11-12
 

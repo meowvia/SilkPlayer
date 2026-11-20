@@ -261,10 +261,17 @@ mkdir -p "${STAGING_DIR}"
 cp -R "${APP_BUNDLE}" "${STAGING_DIR}/"
 ln -s /Applications "${STAGING_DIR}/Applications"
 
+if [[ -f "${PROJECT_DIR}/Resources/安装指南_Installation_Guide.txt" ]]; then
+    cp "${PROJECT_DIR}/Resources/安装指南_Installation_Guide.txt" "${STAGING_DIR}/"
+fi
+
+sync
+sleep 1
+
 hdiutil create -volname "${APP_NAME}" \
                -srcfolder "${STAGING_DIR}" \
                -ov \
-               -format UDZO \
+               -format ULFO \
                "${DMG_PATH}"
 
 rm -rf "${STAGING_DIR}"

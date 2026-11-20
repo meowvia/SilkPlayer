@@ -849,8 +849,8 @@ public struct SilkSettingsView: View {
                                 .foregroundColor(primaryTextColor)
 
                             Text(L10n.tr(
-                                "Skip small trailer or sample video files below threshold when scanning.",
-                                "扫描时自动跳过小于指定体积的预告片或 Sample 样本。"
+                                "Skip trailer and sample clips below threshold",
+                                "扫描时自动跳过小于指定体积的预告片或样本"
                             ))
                             .font(.system(size: 10.5))
                             .foregroundColor(secondaryTextColor)
@@ -1381,7 +1381,7 @@ public struct SilkSettingsView: View {
                     .font(.system(size: 12))
                     .foregroundColor(secondaryTextColor)
             }
-            .frame(width: 125, alignment: .leading)
+            .frame(width: 148, alignment: .leading)
 
             if let url {
                 Link(value, destination: url)

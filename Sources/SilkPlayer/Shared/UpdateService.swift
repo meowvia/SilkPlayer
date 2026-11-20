@@ -86,6 +86,49 @@ public final class UpdateService {
             guard let self = self, hasUpdate, let version = version else { return }
             self.latestVersion = version
             self.isShowingUpdateAlert = true
+            self.presentColdStartAlertModalIfNeeded(version: version)
+        }
+    }
+
+    /// Presents a native modal/sheet alert on the active playback window during cold start
+    /// when the Settings window is not currently open.
+    public func presentColdStartAlertModalIfNeeded(version: String) {
+        guard !PlayerWindowManager.isRunningTests else { return }
+
+        // If Settings window is already visible and bound to SwiftUI alert, avoid duplicate presentation
+        if let settingsWin = NSApp.windows.first(where: { $0.title.contains("Settings") || $0.title.contains("偏好设置") }), settingsWin.isVisible {
+            return
+        }
+
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = L10n.tr(
+            "New version \(version) is available. Update now?",
+            "发现新版本 \(version)，是否立即更新？"
+        )
+        alert.informativeText = L10n.tr(
+            "SilkPlayer will download and install the update in the background.",
+            "新版本已就绪，SilkPlayer 将在端内静默下载并自动无损替换升级。"
+        )
+        alert.addButton(withTitle: L10n.tr("Yes", "是"))
+        alert.addButton(withTitle: L10n.tr("No", "否"))
+
+        let targetWindow = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) })
+        if let targetWindow = targetWindow {
+            alert.beginSheetModal(for: targetWindow) { [weak self] response in
+                if response == .alertFirstButtonReturn {
+                    self?.userAcceptedUpdate()
+                } else {
+                    self?.userDeclinedUpdate()
+                }
+            }
+        } else {
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                self.userAcceptedUpdate()
+            } else {
+                self.userDeclinedUpdate()
+            }
         }
     }
 
