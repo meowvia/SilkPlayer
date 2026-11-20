@@ -22,10 +22,10 @@ Engineered for hardware-direct rendering, pure local performance, and zero bloat
 
 <br>
 
-<img src="Documentation/Screenshots/hero_cover_2.0.png" alt="SilkPlayer 2.0 Interface Preview" width="100%" />
+<img src="Documentation/Screenshots/pro_library_posters.png" alt="SilkPlayer 2.0 Media Library" width="94%" />
 
 <br>
-<sub><em>SilkPlayer 2.0 · Native macOS Architecture · LAN Poster Wall · Two-Stage Music Mode · Metal HDR Direct Rendering</em></sub>
+<sub><em>SilkPlayer 2.0 · Native macOS Architecture · Local & LAN Poster Wall · Metal HDR Direct Rendering</em></sub>
 
 </div>
 
@@ -96,19 +96,19 @@ SilkPlayer returns to the fundamentals of macOS software engineering: native spe
 
 ### Preview Gallery
 
-#### 1. Pro Media Library & LAN Share Discovery
+#### 1. Core Player Canvas & LAN Share Discovery
 
 <table>
   <tr>
-    <td width="50%" align="center"><b>LAN & Local Media Library (Poster Wall)</b></td>
+    <td width="50%" align="center"><b>Distraction-Free Startup Canvas</b></td>
     <td width="50%" align="center"><b>Zero-Config SMB 2/3 & NFS Connect</b></td>
   </tr>
   <tr>
-    <td align="center"><img src="Documentation/Screenshots/pro_library_posters.png" alt="Media Library Poster Wall" width="100%" /></td>
+    <td align="center"><img src="Documentation/Screenshots/hero_welcome.png" alt="Distraction-Free Startup Canvas" width="100%" /></td>
     <td align="center"><img src="Documentation/Screenshots/lan_connect_modal.png" alt="LAN Share Connect" width="100%" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>Single-line compact header, fast category filters, and high-density poster grid with instant hover quick-play</sub></td>
+    <td align="center"><sub>Clean borderless startup canvas; drag video files in or click the center logo to start</sub></td>
     <td align="center"><sub>Automatic discovery and mount modal for local SMB 2/3 shares and NFS exports without Finder dependencies</sub></td>
   </tr>
 </table>
