@@ -2023,4 +2023,55 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssertFalse(isoManager.hasNext, "In unified mode, playing audio at last audio must not cross over to video")
     XCTAssertNil(isoManager.moveToNext(), "moveToNext must not cross audio boundary into video in unified mode")
     }
+
+    @MainActor
+    func test65_SubtitleDisablementRetentionAndMultiCueASSPositionInvariants() throws {
+        print("\n--- Test 65: Subtitle Disablement Retention & Multi-Cue ASS Position Alignment Invariants ---")
+        let player = PlayerCore()
+
+        // Setup dummy subtitles
+        let sub1 = SubtitleInfo(subtitleID: "1", name: "English", languageCode: "en", isEnabled: true)
+        let sub2 = SubtitleInfo(subtitleID: "2", name: "Chinese", languageCode: "zh", isEnabled: false)
+        player.subtitleModel.subtitleInfos = [sub1, sub2]
+
+        // Initial track refresh: Selects track (matches preferred Chinese language -> sub2)
+        player.refreshTracks()
+        XCTAssertEqual(player.selectedSubtitleTrackId, 2, "Initial auto-select prioritizes user preferred language")
+        XCTAssertFalse(player.isSubtitleDisabledByUser)
+
+        // User disables subtitle via HUD menu (id: 0)
+        player.setSubtitleTrack(id: 0, notifyOSD: false)
+        XCTAssertTrue(player.isSubtitleDisabledByUser, "User explicit disable sets isSubtitleDisabledByUser")
+        XCTAssertEqual(player.selectedSubtitleTrackId, 0, "selectedSubtitleTrackId becomes 0")
+        XCTAssertNil(player.subtitleModel.selectedSubtitleInfo)
+        XCTAssertTrue(player.subtitleModel.parts.isEmpty)
+
+        // Subsequent refreshTracks must NOT re-select subtitle
+        player.refreshTracks()
+        XCTAssertTrue(player.isSubtitleDisabledByUser, "isSubtitleDisabledByUser stays true")
+        XCTAssertEqual(player.selectedSubtitleTrackId, 0, "selectedSubtitleTrackId stays 0")
+        XCTAssertNil(player.subtitleModel.selectedSubtitleInfo, "selectedSubtitleInfo stays nil")
+        XCTAssertTrue(player.subtitleTracks.allSatisfy { !$0.isSelected }, "All subtitle tracks unselected")
+
+        // User manually chooses track 1
+        player.setSubtitleTrack(id: 1, notifyOSD: false)
+        XCTAssertFalse(player.isSubtitleDisabledByUser, "Manual selection clears isSubtitleDisabledByUser")
+        XCTAssertEqual(player.selectedSubtitleTrackId, 1)
+
+        // Verify ASS position alignment parser
+        let topPos7 = SilkSubtitleParser.parseASSPosition(from: "{\\an7}Erik Selvig")
+        let topPos8 = SilkSubtitleParser.parseASSPosition(from: "{\\an8}Top Center Title")
+        let topPos9 = SilkSubtitleParser.parseASSPosition(from: "{\\an9}Samuel Wilson")
+        XCTAssertEqual(topPos7?.verticalAlign, .top)
+        XCTAssertEqual(topPos8?.verticalAlign, .top)
+        XCTAssertEqual(topPos9?.verticalAlign, .top)
+
+        let centerPos = SilkSubtitleParser.parseASSPosition(from: "{\\an5}Center Screen")
+        XCTAssertEqual(centerPos?.verticalAlign, .center)
+
+        let bottomPos = SilkSubtitleParser.parseASSPosition(from: "{\\an2}Bottom Subtitle")
+        XCTAssertEqual(bottomPos?.verticalAlign, .bottom)
+
+        player.destroy()
+    }
 }

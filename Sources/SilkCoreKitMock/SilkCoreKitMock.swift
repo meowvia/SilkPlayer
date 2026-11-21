@@ -496,6 +496,7 @@ public enum SilkSubtitleParser {
     public static func parseVTT(_ text: String) -> [SubtitleCue] { [] }
     public static func parseASS(_ text: String) -> [SubtitleCue] { [] }
     public static func cleanSubtitleText(_ s: String) -> String { s }
+    public static func parseASSPosition(from text: String) -> TextPosition? { nil }
     public static func makeCinemaAttributedText(_ text: String) -> NSAttributedString { NSAttributedString(string: text) }
 }
 

@@ -170,6 +170,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var subtitleTracks: [TrackItem] = []
     @Published public var selectedAudioTrackId: Int = 1
     @Published public var selectedSubtitleTrackId: Int = 0
+    public private(set) var isSubtitleDisabledByUser: Bool = false
     @Published public var chapters: [ChapterItem] = []
 
     // MARK: - HDR, Color & Picture Controls
@@ -580,6 +581,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         cachedDuration = 0.0
         subtitleModel.url = nil
         subtitleModel.selectedSubtitleInfo = nil
+        subtitleModel.parts.removeAll()
+        isSubtitleDisabledByUser = false
         audioTracks.removeAll()
         subtitleTracks.removeAll()
         chapters.removeAll()
@@ -815,12 +818,14 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func setSubtitleTrack(id: Int, notifyOSD: Bool = false) {
-        guard let player = playerLayer?.player else { return }
-        let tracks = player.tracks(mediaType: .subtitle)
+        let player = playerLayer?.player
+        let tracks = player?.tracks(mediaType: .subtitle) ?? []
         if id == 0 {
             // Disable subtitles
+            isSubtitleDisabledByUser = true
             subtitleModel.selectedSubtitleInfo = nil
-            player.deselectTrack(mediaType: .subtitle)
+            subtitleModel.parts.removeAll()
+            player?.deselectTrack(mediaType: .subtitle)
             for track in tracks {
                 track.isEnabled = false
             }
@@ -832,18 +837,19 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             return
         }
 
+        isSubtitleDisabledByUser = false
         if !subtitleModel.subtitleInfos.isEmpty {
             let targetIdx = id - 1
             guard targetIdx >= 0 && targetIdx < subtitleModel.subtitleInfos.count else { return }
             let targetInfo = subtitleModel.subtitleInfos[targetIdx]
             subtitleModel.selectedSubtitleInfo = targetInfo
             if let mediaTrack = targetInfo as? (any MediaPlayerTrack) {
-                player.select(track: mediaTrack) { [weak self] in
+                player?.select(track: mediaTrack) { [weak self] in
                     self?.subtitleModel.objectWillChange.send()
                     self?.subtitleModel.updateActiveSubtitles()
                 }
             } else if let matched = tracks.first(where: { String($0.trackID) == targetInfo.subtitleID }) {
-                player.select(track: matched)
+                player?.select(track: matched)
             }
             selectedSubtitleTrackId = id
             refreshTracks()
@@ -853,7 +859,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             }
         } else {
             if let target = tracks.first(where: { $0.trackID == Int32(id) }) {
-                player.select(track: target)
+                player?.select(track: target)
                 selectedSubtitleTrackId = id
                 refreshTracks()
                 if notifyOSD {
@@ -871,6 +877,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func addSubtitle(path: String) {
+        isSubtitleDisabledByUser = false
         let subURL = URL(fileURLWithPath: path)
         let info = URLSubtitleInfo(url: subURL)
         subtitleModel.addSubtitle(info: info)
@@ -895,49 +902,51 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func refreshTracks() {
-        guard let player = playerLayer?.player else { return }
-        let aTracks = player.tracks(mediaType: .audio)
-        self.audioTracks = aTracks.map { track in
-            let codec = track.codecName
-            return TrackItem(
-                id: Int(track.trackID),
-                type: "audio",
-                title: track.name,
-                lang: track.languageCode ?? "",
-                codec: codec,
-                isExternal: false,
-                isSelected: track.isEnabled
-            )
-        }
-        if let selectedA = aTracks.first(where: { $0.isEnabled }) ?? aTracks.first {
-            self.selectedAudioTrackId = Int(selectedA.trackID)
-            if self.isAudioOnly, let path = self.currentFilePath {
-                var detectedSampleRate: Double? = nil
-                var detectedBitDepth: Int? = nil
-                if let desc = selectedA.formatDescription,
-                   let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(desc)?.pointee {
-                    if asbd.mSampleRate > 0 {
-                        detectedSampleRate = asbd.mSampleRate
-                    }
-                    if (detectedBitDepth ?? 0) <= 0 && asbd.mBitsPerChannel > 0 {
-                        detectedBitDepth = Int(asbd.mBitsPerChannel)
-                    }
-                }
-                AudioTrackMetadataService.shared.mergeLiveStreamInfo(
-                    path: path,
-                    rawTitle: self.mediaTitle,
-                    codec: selectedA.codecName,
-                    sampleRateHz: detectedSampleRate,
-                    bitDepth: detectedBitDepth,
-                    duration: self.duration > 0 ? self.duration : nil,
-                    tags: player.dynamicInfo?.metadata
+        let player = playerLayer?.player
+        if let player = player {
+            let aTracks = player.tracks(mediaType: .audio)
+            self.audioTracks = aTracks.map { track in
+                let codec = track.codecName
+                return TrackItem(
+                    id: Int(track.trackID),
+                    type: "audio",
+                    title: track.name,
+                    lang: track.languageCode ?? "",
+                    codec: codec,
+                    isExternal: false,
+                    isSelected: track.isEnabled
                 )
+            }
+            if let selectedA = aTracks.first(where: { $0.isEnabled }) ?? aTracks.first {
+                self.selectedAudioTrackId = Int(selectedA.trackID)
+                if self.isAudioOnly, let path = self.currentFilePath {
+                    var detectedSampleRate: Double? = nil
+                    var detectedBitDepth: Int? = nil
+                    if let desc = selectedA.formatDescription,
+                       let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(desc)?.pointee {
+                        if asbd.mSampleRate > 0 {
+                            detectedSampleRate = asbd.mSampleRate
+                        }
+                        if (detectedBitDepth ?? 0) <= 0 && asbd.mBitsPerChannel > 0 {
+                            detectedBitDepth = Int(asbd.mBitsPerChannel)
+                        }
+                    }
+                    AudioTrackMetadataService.shared.mergeLiveStreamInfo(
+                        path: path,
+                        rawTitle: self.mediaTitle,
+                        codec: selectedA.codecName,
+                        sampleRateHz: detectedSampleRate,
+                        bitDepth: detectedBitDepth,
+                        duration: self.duration > 0 ? self.duration : nil,
+                        tags: player.dynamicInfo?.metadata
+                    )
+                }
             }
         }
 
         if !subtitleModel.subtitleInfos.isEmpty {
-            // Auto-select subtitle based on user's preferred language if none selected yet
-            if subtitleModel.selectedSubtitleInfo == nil && options.autoSelectEmbedSubtitle {
+            // Auto-select subtitle based on user's preferred language if none selected yet AND not explicitly disabled by user
+            if !isSubtitleDisabledByUser && subtitleModel.selectedSubtitleInfo == nil && options.autoSelectEmbedSubtitle {
                 let preferred = AppSettings.shared.preferredSubtitleLang.lowercased()
                 var matched: SubtitleInfo? = nil
                 if preferred != "auto" {
@@ -969,8 +978,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             }
 
             // Guarantee the underlying engine selects and decodes the chosen subtitle track
-            if let active = subtitleModel.selectedSubtitleInfo, let mediaTrack = active as? (any MediaPlayerTrack) {
-                player.select(track: mediaTrack) { [weak self] in
+            if !isSubtitleDisabledByUser, let active = subtitleModel.selectedSubtitleInfo, let mediaTrack = active as? (any MediaPlayerTrack) {
+                player?.select(track: mediaTrack) { [weak self] in
                     self?.subtitleModel.objectWillChange.send()
                     self?.subtitleModel.updateActiveSubtitles()
                 }
@@ -994,16 +1003,16 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                     lang: lang,
                     codec: codec,
                     isExternal: subInfo is URLSubtitleInfo,
-                    isSelected: subInfo === subtitleModel.selectedSubtitleInfo
+                    isSelected: !isSubtitleDisabledByUser && subInfo === subtitleModel.selectedSubtitleInfo
                 )
             }
-            if let selected = subtitleModel.selectedSubtitleInfo,
+            if !isSubtitleDisabledByUser, let selected = subtitleModel.selectedSubtitleInfo,
                let selIdx = subtitleModel.subtitleInfos.firstIndex(where: { $0 === selected }) {
                 self.selectedSubtitleTrackId = selIdx + 1
             } else {
                 self.selectedSubtitleTrackId = 0
             }
-        } else {
+        } else if let player = player {
             let sTracks = player.tracks(mediaType: .subtitle)
             self.subtitleTracks = sTracks.map { track in
                 let codec = track.codecName
@@ -1014,12 +1023,17 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                     lang: track.languageCode ?? "",
                     codec: codec,
                     isExternal: false,
-                    isSelected: track.isEnabled
+                    isSelected: !isSubtitleDisabledByUser && track.isEnabled
                 )
             }
-            if let selectedS = sTracks.first(where: { $0.isEnabled }) {
+            if !isSubtitleDisabledByUser, let selectedS = sTracks.first(where: { $0.isEnabled }) {
                 self.selectedSubtitleTrackId = Int(selectedS.trackID)
+            } else {
+                self.selectedSubtitleTrackId = 0
             }
+        } else {
+            self.subtitleTracks = []
+            self.selectedSubtitleTrackId = 0
         }
     }
 
