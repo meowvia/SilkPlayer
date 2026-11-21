@@ -5,6 +5,16 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-11-22
+
+### Fixed
+- **双击全屏 Space 转场 WindowServer 驱动死锁彻底修复**:
+  - 解耦 Metal 主线程 `layout()` / `setFrameSize()` 与同步渲染请求（`renderCurrentFrameImmediately`），布局期间严格仅更新 `layer.drawableSize`，杜绝在 macOS 全屏跨 Space 动画高频插值期间向 `CAMetalLayer` 同步争抢 `nextDrawable()`，彻底终结因此引发的系统级 `WindowServer` 崩溃与强制注销（退回登录界面）缺陷。
+- **剔除私有分屏约束竞争**:
+  - 在 `toggleFullscreen()` 入口彻底移除调用 macOS 15 内部平铺机制的未公开私有方法 `_doUpdateTilingConstraintsImmediately`，消除全屏前与系统窗口管理器产生的时序竞争。
+- **渲染管线几何防御门禁**:
+  - 在 Metal 帧提交前加入图层尺寸正值校验，杜绝在零尺寸或过渡脏尺寸下调用 `nextDrawable()`，进一步巩固 ProMotion 120Hz 高刷新率屏幕与多显示器环境下的图形稳定性。
+
 ## [2.0.1] - 2026-11-21
 
 ### Fixed

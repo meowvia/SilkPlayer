@@ -1334,10 +1334,6 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         if !window.styleMask.contains(.fullScreen) {
             window.collectionBehavior.remove([.fullScreenAuxiliary, .fullScreenNone])
             window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
-            let refreshSel = NSSelectorFromString("_doUpdateTilingConstraintsImmediately")
-            if window.responds(to: refreshSel) {
-                _ = window.perform(refreshSel)
-            }
         }
         if !PlayerWindowManager.isRunningTests && !window.isKeyWindow {
             window.makeKeyAndOrderFront(nil)

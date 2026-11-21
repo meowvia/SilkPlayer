@@ -96,6 +96,7 @@ public class SilkMetalRenderView: NSView {
     public var isQualityEnhancementEnabled: Bool = false
 
     public func renderCurrentFrameImmediately() {}
+    public func updateMetalGeometry() {}
     public func updateMetalGeometryAndRedraw() {}
     public func updateColorPipeline() {}
     public func clear() {}
