@@ -5,7 +5,7 @@
 - 产品类型：SilkPlayer Pro（专业版）
 - 发布日期：2026-11-20
 - 分支与代码基准：
-  - 前端仓库 (LGPL-3.0)：`SilkPlayer/SilkPlayer` 分支 `main` (commit `9c3e0b3`)
+  - 前端仓库 (LGPL-3.0)：`SilkPlayer/SilkPlayer` 分支 `main` (commit `78025fa`)
   - 闭源内核 (Proprietary)：`SilkPlayer/SilkCoreKit` 分支 `release/2.0.0` (commit `7e1af5f`)
 - 官方发布镜像：SilkPlayer-2.0.0-universal.dmg
 - 镜像大小：约 23 MB

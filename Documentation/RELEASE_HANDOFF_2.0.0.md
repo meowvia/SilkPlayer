@@ -3,7 +3,7 @@
 ## 1. 工程与代码基准
 - 前端开源工程 (LGPL-3.0)：`/Volumes/2T/Projects/SilkPlayer/SilkPlayer`
   - 分支：`main`（与 `release/2.0.0` 保持严格同步）
-  - Commit 基准：`122d844`（docs: add release notes and delivery archive for 2.0.0）
+  - Commit 基准：`78025fa`（docs: align 2.0.0 documentation, theme names, and changelog with discipline standards）
   - 远程仓库：`origin` (SilkPlayer-Private.git) 与 `public` (SilkPlayer.git) 均已推送
   - GitHub Actions 流水线：`Test & Build (macOS)` 在 commit `9c3e0b3` 上顺利跑通（Conclusion: success，公开仓库绿标已亮）
 - 闭源内核工程 (Proprietary)：`/Volumes/2T/Projects/SilkPlayer/SilkCoreKit`
