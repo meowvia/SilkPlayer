@@ -5,10 +5,10 @@
 # SilkPlayer Pro
 
 <p>
-  <b>专为 macOS 打造的高端原生影视媒体库与全能播放器。</b><br>
+  <b>专为 macOS 打造的原生影视媒体库与全能播放器。</b><br>
   <b>The premier native media library and cinema player crafted for macOS.</b><br>
-  极致流畅的 4K/8K 画质还原、自动整理的私人影视海报墙、独立的黑胶音乐视窗，纯粹且纯净。<br>
-  Ultra-smooth 4K/8K playback, automated cinema poster wall, and standalone vinyl music mode.
+  基于 Metal 硬件加速的 4K/8K 画质还原、局域网影视海报墙与独立音乐模式，轻量纯净。<br>
+  Hardware-accelerated 4K/8K playback, automated cinema poster wall, and standalone music mode.
 </p>
 
 <p>
@@ -36,15 +36,15 @@
 
 ### 产品概述 / Product Overview
 
-> **把播放器还给电影，把时间留给享受 / Give the player back to movies, give your time back to enjoyment.**  
-> 告别复杂晦涩的解码参数与臃肿卡顿的跨平台界面，带来开箱即用的通透画质、整洁海报墙与纯净原生的 Mac 体验。  
-> Leave behind confusing codec settings and sluggish cross-platform wrappers. SilkPlayer Pro delivers stunning visuals, an automated cinema poster wall, and a pure native Mac experience out of the box.
+> **原生架构与开箱即用的音画体验 / Native Architecture & Clean Playback Out of the Box.**  
+> 告别复杂晦涩的解码参数与跨平台包装，提供通透画质、整洁海报墙与纯净原生的 macOS 体验。  
+> Leave behind confusing codec configurations and sluggish wrappers. SilkPlayer Pro delivers vivid visual fidelity, an automated cinema poster wall, and a native macOS experience out of the box.
 
 在 Mac 上看电影或听音乐，本该是一件轻松愉悦的事。然而许多传统播放器随着版本迭代，积累了大量令人望而生畏的技术设置、不统一的弹窗与繁重的系统负担。  
-SilkPlayer Pro 坚守原生 Mac 软件的高标准：启动即开、拖入即播、画质通透、界面克制。无论是存放在本地磁盘的高清大片，还是家庭网络存储设备中的海量剧集，双击即可呈现原汁原味的视听盛宴。
+SilkPlayer Pro 坚守原生 Mac 软件的高标准：启动即开、拖入即播、画质通透、界面克制。无论是存放在本地磁盘的高清大片，还是家庭网络存储设备中的海量剧集，双击即可呈现高保真画质与音质。
 
 Watching movies and listening to music on your Mac should be effortless and delightful. Yet many traditional players have become cluttered with complex configuration menus, disjointed dialogs, and heavy system overhead.  
-SilkPlayer Pro upholds the finest traditions of native Mac software: instant startup, drop-to-play simplicity, vivid color fidelity, and restrained design. Whether you are playing high-bitrate films stored on your internal drive or streaming massive series from home network storage, SilkPlayer Pro delivers a flawless audiovisual experience from the very first click.
+SilkPlayer Pro upholds the finest traditions of native Mac software: instant startup, drop-to-play simplicity, vivid color fidelity, and restrained design. Whether you are playing high-bitrate films stored on your internal drive or streaming massive series from home network storage, SilkPlayer Pro delivers a high-fidelity audiovisual experience from the very first click.
 
 ---
 
@@ -69,7 +69,7 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
         <li><b>4K / 8K 超高清极速直出 / 4K &amp; 8K High-Bitrate Playback</b><br>随心播放超高码率影片，拖拽进度条毫无拖沓，即拖即放，发热极低，长久观影省电安心。<br>Effortlessly plays high-bitrate 4K and 8K videos with instantaneous timeline seeking, low heat generation, and extended battery life.</li>
         <li><b>杜比视界与 HDR 高动态色彩还原 / Dolby Vision &amp; HDR Color Fidelity</b><br>充分释放 Mac 屏幕高动态范围潜力，暗部深邃有层次，高光透亮不过曝，彻底杜绝画面发白与偏色。<br>Unlocks the full dynamic range of your Mac display, delivering deep blacks and vibrant highlights without washed-out colors.</li>
         <li><b>全格式视频通吃 / Universal Video Format Support</b><br>全面支持 MP4、MKV、MOV、FLV、TS、WebM、AVI 等各种主流与专业视频封装，无需转码。<br>Seamlessly handles MP4, MKV, MOV, FLV, TS, WebM, AVI, and all major video containers without conversion.</li>
-        <li><b>纯透明悬浮播控栏 / Transparent Floating Controls</b><br>控制条如呼吸般轻盈浮于画面之上，播放时自动隐退，还你纯净无遮挡的全屏沉浸视野。<br>Sleek floating controls hover cleanly over the picture and vanish smoothly during playback for an unobstructed view.</li>
+        <li><b>纯透明悬浮播控栏 / Transparent Floating Controls</b><br>控制栏浮于画面之上，播放时自动淡出隐藏，提供无遮挡的全屏观影视野。<br>Sleek floating controls hover cleanly over the picture and vanish smoothly during playback for an unobstructed view.</li>
         <li><b>时间轴悬停预览缩略图 / Timeline Hover Thumbnail Previews</b><br>鼠标划过时间轴即刻显示对应画面的高清预览图，精彩片段与精彩对白一击即中。<br>Hover anywhere along the scrubber to view instant high-resolution frame previews for precise scene navigation.</li>
         <li><b>外挂字幕智能关联 / Automatic External Subtitle Matching</b><br>自动寻找同级目录与字幕文件夹下的所有外挂字幕（SRT、ASS、VTT 等），拖放也能即刻挂载。<br>Automatically detects external subtitles (SRT, ASS, VTT) in parent or companion folders, with instant drag-and-drop loading.</li>
       </ul>
@@ -80,16 +80,16 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
       <h4>独立桌面黑胶音乐播放器<br>Standalone Vinyl Music Mode</h4>
       <ul>
         <li><b>大窗列表与迷你卡片自由切换 / Full Queue &amp; Mini Card Views</b><br>提供展开模式（浏览完整播放队列与歌曲信息）与极简小卡片（随手摆放于桌面角落），适配各种分屏工作流。<br>Smoothly toggle between an expanded playlist queue view and a minimal desktop card tailored for focused workflows.</li>
-        <li><b>优雅拟真黑胶唱片视窗 / Realistic Rotating Vinyl Visualizer</b><br>伴随动听旋律缓缓旋转的拟真黑胶唱片，辅以随音乐起伏的柔和动态光晕，工作与学习时的绝佳伴侣。<br>Enjoy a beautifully rendered vinyl disc rotating to the rhythm, complete with a gentle ambient dynamic light glow.</li>
+        <li><b>拟物黑胶唱片视窗 / Rotating Vinyl Visualizer</b><br>匀速旋转的拟物黑胶唱片视窗，辅以随音乐起伏的柔和动态光晕。<br>Enjoy a beautifully rendered vinyl disc rotating to the rhythm, complete with a gentle ambient dynamic light glow.</li>
         <li><b>菜单栏常驻随身听 / Menu Bar Resident Micro-Player</b><br>可随时将音乐收拢至 Mac 顶部菜单栏，彻底释放 Dock 栏空间，点击即可快速切歌与调整音量。<br>Minimize directly to the macOS menu bar to keep your Dock clean while retaining one-click playback and track controls.</li>
-        <li><b>全格式高解析度无损音质 / Studio-Grade Lossless Audio Playback</b><br>完美还原 FLAC、APE、WAV、DSD、DTS 等母带级无损音频细节，声场宽广，人声纯净通透。<br>Faithfully reproduces FLAC, APE, WAV, DSD, DTS, and studio-grade lossless audio with expansive clarity and warmth.</li>
+        <li><b>全格式高解析度无损音质 / Studio-Grade Lossless Audio Playback</b><br>完整还原 FLAC、APE、WAV、DSD、DTS 等高保真无损音频细节，声场宽广，人声纯净通透。<br>Faithfully reproduces FLAC, APE, WAV, DSD, DTS, and studio-grade lossless audio with expansive clarity and warmth.</li>
         <li><b>智能多声道平衡与防破音 / Smart Audio Balance &amp; Protection</b><br>多声道音轨自动平衡，使用耳机或外放音响时人声清晰饱满，大动态电影爆破与交响乐平顺不刺耳。<br>Intelligently balances multichannel tracks for headphones and stereo speakers, ensuring clear dialog and preventing harsh distortion.</li>
       </ul>
     </td>
     <td width="50%" valign="top">
       <h4>纯正 Mac 原生质感与个性化<br>Pure Native Mac Craftsmanship</h4>
       <ul>
-        <li><b>4 套高品质主题随心切换 / 4 Curated High-Contrast Themes</b><br>内置经典深灰、深邃黑（OLED 纯黑）、钛金灰、冰霜白 4 款专属主题，完美契合你的桌面壁纸与视觉偏好。<br>Choose from Classic Dark, Deep Onyx (OLED Pure Black), Titanium Gray, and Frost White to complement your Mac setup.</li>
+        <li><b>4 套高品质主题随心切换 / 4 Curated High-Contrast Themes</b><br>内置深灰、冰蓝、暖白、青瓷 4 套高品质主题，适配深色与浅色桌面环境。<br>Choose from Dark Charcoal, Ice Blue, Warm Ivory, and Celadon to complement your Mac setup.</li>
         <li><b>多设备观影进度随行 / Seamless Multi-Device Watch History</b><br>支持在不同 Mac 设备之间同步观影进度，书房看一半，客厅接着看，进度无缝延续。<br>Optionally keeps your playback progress in sync across multiple Mac computers, picking up right where you left off.</li>
         <li><b>播放列表快速拼音搜索 / Instant Playlist Pinyin &amp; Text Search</b><br>直接输入汉字或拼音首字母，海量分集与音频曲目秒级精准过滤，找片找歌无需费神。<br>Filter through massive playlists in seconds using Chinese Pinyin initials or keyword search.</li>
         <li><b>极低资源占用与零多余常驻 / Ultra-Low Resource Footprint</b><br>静态浏览时维持极低系统消耗，退出即彻底释放，没有后台常驻守护进程，不抢占宝贵内存。<br>Maintains near-zero CPU and GPU usage when idle, completely freeing memory on exit with no background daemons.</li>
@@ -154,7 +154,7 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
   </tr>
   <tr>
     <td align="center"><sub>充分释放屏幕高动态画质潜力，暗部细节丰富深邃，高光通透自然，色彩真实还原<br>Delivers expansive dynamic contrast with deep shadow detail, pristine highlights, and faithful colors</sub></td>
-    <td align="center"><sub>纯透明悬浮播控胶囊，播放时自动优雅隐退，无任何多余方框遮挡观影视野<br>Minimalist floating pill control bar that fades away cleanly with zero opaque bottom boxes</sub></td>
+    <td align="center"><sub>纯透明悬浮播控胶囊，播放时自动淡出隐藏，无任何多余方框遮挡观影视野<br>Minimalist floating pill control bar that fades away cleanly with zero opaque bottom boxes</sub></td>
   </tr>
   <tr>
     <td colspan="2" align="center"><b>07. 视频规格属性与音画详细信息悬浮面板<br>Live Stream Properties &amp; Video Metadata Overlay</b></td>
@@ -181,7 +181,7 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
     <td align="center"><img src="Documentation/Screenshots/zh_09.png" alt="独立音乐播放器极简卡片" width="100%" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>优雅旋转的拟真黑胶唱片与随音乐起伏的柔和光晕，支持一键最小化至顶部菜单栏常驻<br>Realistic rotating vinyl disc with dynamic ambient glow; supports direct minimization to the menu bar</sub></td>
+    <td align="center"><sub>匀速旋转的拟物黑胶唱片与随音乐起伏的动态光晕，支持一键最小化至顶部菜单栏常驻<br>Rotating vinyl visualizer with dynamic ambient glow; supports direct minimization to the menu bar</sub></td>
     <td align="center"><sub>随手摆放在桌面角落或分屏边缘的超紧凑卡片，清晰呈现高清专辑封面与播控按钮<br>Ultra-compact card for desk placement or split-screen multitasking with embedded artwork and controls</sub></td>
   </tr>
   <tr>
@@ -227,7 +227,7 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
 
 <table>
   <tr>
-    <td width="50%" align="center"><b>15. 通用设置：外观与 4 款高品质主题随心选<br>General Settings: Appearance &amp; 4 Curated Themes</b></td>
+    <td width="50%" align="center"><b>15. 通用设置：外观与 4 款高品质主题切换<br>General Settings: Appearance &amp; 4 Curated Themes</b></td>
     <td width="50%" align="center"><b>16. 播放与连续性设置：紧凑零滚动舒适布局<br>Playback Settings: Compact Zero-Scrolling Layout</b></td>
   </tr>
   <tr>
@@ -261,10 +261,10 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
 
 #### 方式一：官方全球高速直连下载 / Option 1: Direct Edge Download (Recommended)
 
-直接从官方全球网络高速下载最新通用安装镜像（满速秒下，无任何跳转与拦截）：  
+直接从官方全球网络高速下载最新通用安装镜像：  
 Download the latest universal disk image directly from our global network:
 
-* **通用安装镜像 / Universal DMG (Apple Silicon &amp; Intel)**: [SilkPlayer-2.0.0-universal.dmg](https://silkplayer.1999909.xyz/api/download)（安装包体积仅 22.8 MiB，精简轻巧 / 22.8 MiB, ultra-compact）
+* **通用安装镜像 / Universal DMG (Apple Silicon &amp; Intel)**: [SilkPlayer-2.0.0-universal.dmg](https://silkplayer.1999909.xyz/downloads/SilkPlayer-2.0.0-universal.dmg)（备用网关 / Fallback: [api/download](https://silkplayer.1999909.xyz/api/download)，安装包体积约 22.8 MiB，精简轻巧 / 22.8 MiB, ultra-compact）
 
 亦可前往 / Alternatively download from [GitHub Releases](https://github.com/meowvia/SilkPlayer/releases/latest)。
 

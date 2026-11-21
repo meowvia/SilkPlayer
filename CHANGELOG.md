@@ -5,6 +5,43 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-11-20
+
+### Added
+- **Native SMB 2/3 & NFS LAN Media Library**:
+  - Embedded native SMB and NFS protocol support with zero-config local network storage discovery.
+  - Automated credential persistence via macOS Keychain and resilient network reconnect handling.
+- **Cinema Poster Wall Scraper & Offline .nfo Parsing**:
+  - Integrated TMDB metadata fetching for posters, cast arrays, ratings, and plot summaries.
+  - Added resilient local `.nfo` XML parser supporting Kodi, Jellyfin, Emby, and TinyMediaManager formats for fully offline environments.
+- **Two-Column Media Detail & Multi-Season Series Navigation**:
+  - Immersive detail view featuring ambient backdrop lighting, technical format badges (4K, HDR, Dolby Vision, audio layout), and contextual recommendations.
+  - Multi-season series aggregation with episode selection drawers and per-episode resume checkpoints.
+- **Standalone Audio Player & Menu Bar Resident Controller**:
+  - Dedicated music mode supporting two-stage interface (expanded queue management and minimal companion card).
+  - Rotating vinyl visualizer with real-time multi-band audio spectrum glow.
+  - macOS menu bar resident micro-player enabling playback control with zero Dock clutter.
+- **Discrete Multichannel LPCM Passthrough (5.1 / 7.1)**:
+  - Native CoreAudio discrete multichannel LPCM output over HDMI and external multi-channel audio DACs without forced stereo downmixing.
+- **Four Studio Appearance Themes**:
+  - Integrated Dark Charcoal (深灰), Ice Blue (冰蓝), Warm Ivory (暖白), and Celadon (青瓷) themes synchronized globally across library, playback HUD, and settings.
+- **Cross-Device Playback Sync via iCloud**:
+  - Multi-device playback progress checkpoints and episode watch-status synchronization with explicit opt-out toggle in Settings.
+- **Decoupled Standard Audio Playback**:
+  - Lightweight audio playback pipeline for standard local audio files without forcing Pro music mode.
+
+### Changed
+- **Compact Media Library Header**:
+  - Re-architected toolbar layout into a compact single-line mode, recovering 36pt vertical viewport height.
+- **Floating Cinema HUD**:
+  - Completely removed dark translucent rectangular backing behind controls, adopting floating minimal pill controls that fade out cleanly during playback.
+
+### Fixed
+- **Multichannel Stereo Downmixing Clipping Defense**:
+  - Tuned soft-knee limiting in `SilkAudioEngine` to prevent clipping distortion when high-bitrate multichannel audio tracks are downmixed to stereo interfaces.
+
+---
+
 ## [1.7.0] - 2026-11-16
 
 ### Added
