@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 在 `toggleFullscreen()` 入口彻底移除调用 macOS 15 内部平铺机制的未公开私有方法 `_doUpdateTilingConstraintsImmediately`，消除全屏前与系统窗口管理器产生的时序竞争。
 - **渲染管线几何防御门禁**:
   - 在 Metal 帧提交前加入图层尺寸正值校验，杜绝在零尺寸或过渡脏尺寸下调用 `nextDrawable()`，进一步巩固 ProMotion 120Hz 高刷新率屏幕与多显示器环境下的图形稳定性。
+- **字幕同屏防重叠与关闭状态持久化**:
+  - 修复 ASS 九宫格位置解析丢失（`\an7` / `\an8` / `\an9` 顶部与 `\an1` / `\an2` / `\an3` 底部）导致角色人名与台词叠字的问题，渲染图层重构为自适应垂直堆叠（`VStack`），实现同屏多字幕分离排版。
+  - 引入 `isSubtitleDisabledByUser` 状态锁，修复用户在菜单选择“关闭字幕”后被音轨刷新机制自动回选激活的缺陷，确保关闭字幕后彻底清空画布并停止底层解码。
 
 ## [2.0.1] - 2026-11-21
 

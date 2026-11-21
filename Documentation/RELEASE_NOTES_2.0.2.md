@@ -21,6 +21,10 @@ SilkPlayer 2.0.2 is a critical stability hotfix. It resolves an issue where togg
   在 Metal 渲染帧提交前增加图层有效尺寸保护，严禁在零尺寸或过渡脏尺寸下执行 `nextDrawable()`，进一步加固高刷新率（120Hz ProMotion）与多显示器环境下的图形稳定性。
   Added defensive size validation prior to frame submission, preventing `nextDrawable()` from executing on zero or uninitialized layer dimensions to ensure rock-solid stability on ProMotion 120Hz and multi-display environments.
 
+- 字幕渲染防重叠与关闭状态持久化 / Subtitle Multi-Cue Defense & Disablement Persistence:
+  修复了 ASS 特效字幕九宫格对齐（`\an7` / `\an8` / `\an9` 顶部与 `\an1` / `\an2` / `\an3` 底部）在解析时丢失导致同屏多字幕叠字的问题，重构文本字幕渲染容器为自适应垂直堆叠（`VStack`），实现人物姓名与台词天然分离排版；引入 `isSubtitleDisabledByUser` 用户显式状态锁，修复选择“关闭字幕”后被音视频轨刷新机制越权自动回选激活的逻辑缺陷，确保关闭字幕后彻底清空画布与停止解码。
+  Restored ASS alignment tag parsing (`\an7`-`\an9` top, `\an1`-`\an3` bottom) to prevent character labels and dialogues from collapsing onto the same vertical coordinate, and refactored text subtitle layouts with responsive vertical stacks (`VStack`) to eliminate visual overlap. Introduced explicit user disablement locking (`isSubtitleDisabledByUser`) to resolve an issue where track synchronization unexpectedly re-selected disabled subtitles.
+
 ---
 
 ## 系统要求 / Requirements
