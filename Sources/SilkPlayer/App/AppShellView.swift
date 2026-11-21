@@ -395,6 +395,23 @@ public struct AppShellView: View {
             }
             return true
         }
+        .alert(
+            L10n.tr(
+                "New version \(UpdateService.shared.latestVersion ?? "") is available. Update now?",
+                "发现新版本 \(UpdateService.shared.latestVersion ?? "")，是否立即更新？"
+            ),
+            isPresented: Binding(
+                get: { UpdateService.shared.isShowingUpdateAlert && !isSecondaryWindow && !isPlaying },
+                set: { UpdateService.shared.isShowingUpdateAlert = $0 }
+            )
+        ) {
+            Button(L10n.tr("Yes", "是")) {
+                UpdateService.shared.userAcceptedUpdate()
+            }
+            Button(L10n.tr("No", "否"), role: .cancel) {
+                UpdateService.shared.userDeclinedUpdate()
+            }
+        }
     }
 
     // MARK: - Playback Controls & Routing

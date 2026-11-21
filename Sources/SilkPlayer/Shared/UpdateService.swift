@@ -85,6 +85,11 @@ public final class UpdateService {
         checkForUpdates(silent: true) { [weak self] hasUpdate, version in
             guard let self = self, hasUpdate, let version = version else { return }
             self.latestVersion = version
+
+            // 规则：播放中绝不弹窗打扰，仅在冷启动、静态待机时弹出
+            let isAnyPlaying = PlayerWindowManager.shared.sessions.contains { $0.player?.isPlaying == true }
+            guard !isAnyPlaying else { return }
+
             self.isShowingUpdateAlert = true
             self.presentColdStartAlertModalIfNeeded(version: version)
         }
@@ -94,6 +99,9 @@ public final class UpdateService {
     /// when the Settings window is not currently open.
     public func presentColdStartAlertModalIfNeeded(version: String) {
         guard !PlayerWindowManager.isRunningTests else { return }
+
+        let isAnyPlaying = PlayerWindowManager.shared.sessions.contains { $0.player?.isPlaying == true }
+        guard !isAnyPlaying else { return }
 
         // If Settings window is already visible and bound to SwiftUI alert, avoid duplicate presentation
         if let settingsWin = NSApp.windows.first(where: { $0.title.contains("Settings") || $0.title.contains("偏好设置") }), settingsWin.isVisible {

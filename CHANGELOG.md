@@ -5,6 +5,16 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-11-21
+
+### Fixed
+- **AV1 10-bit 核心解码与渲染修复**:
+  - 彻底剔除 AV1 的假硬件解码候选与无效硬件格式回调，统一路由至高性能 libdav1d 多线程切片软解，开放 CPU 核心并发池，直通原生 YUV 渲染管线，解决有声无画、黑屏且时间轴停滞问题。
+- **音视频主时钟防丢帧死锁**:
+  - 重构大时钟差丢帧判定（`diff < -0.250`），增加连续丢帧上限（最多允许丢弃 2 帧追赶时钟），超限立即平滑重锚定音频时钟（`audio.reanchor`），杜绝无限丢帧死循环。
+- **冷启动版本更新提示层级与免打扰优化**:
+  - 将新版本对话框直接绑定于主视窗，增加全局播放态互斥门控，观影或听歌期间绝不弹窗打扰，仅在静态待机或冷启动就绪时提示，并严格遵循 7 天周期静默期。
+
 ## [2.0.0] - 2026-11-16
 
 ### 专业版 (Pro Edition)
