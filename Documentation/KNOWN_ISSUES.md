@@ -31,6 +31,8 @@
 | ISSUE-021 | macOS 多显示器扩展屏全屏播放时，副屏移动鼠标误触发控件唤醒与沉浸态退出 | 全屏与交互 / SilkPlayer (PlayerHUDView) | Medium | 已修复 (1.7.0/2.0.0) | 1.6.0 |
 | ISSUE-022 | 播放竖屏视频后关闭，播放窗口未复位为标准横向尺寸导致空状态视窗形状异常 | 窗口几何与生命周期 / SilkPlayer (AppShellView & WindowGeometry) | Medium | 已修复 (1.7.0/2.0.0) | 1.6.0 |
 | ISSUE-023 | 多声道（DTS-ES 6.1 等）无损 LPCM 输出在立体声物理设备下引起 DAC 削顶爆音 | 纯音频与多声道播放 / SilkCoreKit (SilkAudioEngine) | High | 已修复 (1.7.0/2.0.0) | 2.0.0-pro |
+| ISSUE-024 | AV1 10-bit 编码格式视频播放黑屏有声音且时间轴停滞缺陷 | 解码与主时钟同步 / SilkCoreKit (SilkVideoDecoder & SilkPlayerEngine) | Critical | 已修复 (2.0.1) | 2.0.0 |
+| ISSUE-025 | 冷启动版本更新提示在播放视频时弹窗打扰观影缺陷 | 版本更新与窗口交互 / SilkPlayer (UpdateService & AppShellView) | Medium | 已修复 (2.0.1) | 2.0.0 |
 
 ---
 
