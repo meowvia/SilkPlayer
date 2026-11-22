@@ -35,6 +35,20 @@
   - 在 `SilkPlayer/Sources/SilkPlayer/Player/SubtitleOverlayView.swift` 中重构文本字幕渲染容器为自适应垂直堆叠（`VStack(spacing: 6)`），同屏多字幕自然上下排开，彻底根除叠字；
   - 在 `SilkPlayer/Sources/SilkPlayer/PlayerCore.swift` 中引入 `isSubtitleDisabledByUser` 用户显式状态锁，彻底杜绝 `refreshTracks()` 越权自动回选。
 
+### 1.3 退出全屏 Space 转场 WindowServer 死锁深入排查与治理加固 (2.0.2-test)
+- **背景与现象**:
+  - 部分 Mac Studio (M2 Max) 用户在 macOS 14.6 下双击缩小（退出全屏）时，触发 WindowServer 看门狗熔断（PID 155 在 `AGXG14X` 驱动中内核挂起 40s/80s，触发 `userspace_watchdog_timeout`）。
+- **根因深度定位**:
+  - `windowWillExitFullScreen` 中遗留有 `window.setFrame(targetFrame, display: false, animate: false)`。在系统全屏 Space 退出转场准备阶段，AppKit 向 WindowServer 提交了窗口尺寸同步 IPC，导致系统跨桌面图层合成器向 GPU 提交了状态突变的表面栅栏，引发 `AGXG14X` 驱动内核死锁。
+  - 用户后台常驻有 DisplayBuddy、BetterMouse、Ice 等强行 Hook WindowServer 与鼠标/菜单栏全局事件的工具，在极高频连续双击下加剧了 Dock 转场队列积压。
+- **技术实现路径**:
+  - **P0-1 移除违规 setFrame**: 彻底移除 `windowWillExitFullScreen` 里的 `window.setFrame` 强制调用，转场几何完全交由 AppKit 原生平滑缩回；
+  - **P0-2 异步安全微调**: 仅在 `windowDidExitFullScreen` 后且目标帧未落位时，通过 `DispatchQueue.main.async` 异步到下一 RunLoop 校验调整；
+  - **P0-4 Metal 提交闸门与看门狗**: 在 `SilkMetalRenderView.render(pixelBuffer:)` 中增加 `isFullscreenTransitioning` 状态门禁，转场期间跳过硬件合成，仅维持音频和解码时钟，并挂载 3 秒看门狗自动复位与转场落定补帧；
+  - **P1-1 & P1-2 防重入与诊断日志**: 全屏入口增加防重入校验，新增 `~/Library/Logs/SilkPlayer/fullscreen.log` 并强制每次写入执行 `fsync`；
+- **验证结论**:
+  - 实测验证表明，单次退出全屏的必死硬伤被完全根除，已支持反复多次进出全屏；极高频连续连击涉及系统 Dock 与内核 GPU 队列饱和，后续规划在 2.1.0 引入“无边框桌面全屏”彻底绕开原生 Space 流程。
+
 ---
 
 ## 2. 交付资产与校验和 (Delivery Assets & Checksums)

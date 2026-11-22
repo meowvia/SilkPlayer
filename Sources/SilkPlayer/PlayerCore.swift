@@ -1321,11 +1321,18 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     // MARK: - Window & UI Navigation
-    public var isFullscreenTransitioning: Bool = false
+    public var isFullscreenTransitioning: Bool = false {
+        didSet {
+            (renderContainer?.metalRenderView ?? (playerLayer?.player.view as? SilkMetalRenderView))?.isFullscreenTransitioning = isFullscreenTransitioning
+        }
+    }
 
     public func toggleFullscreen() {
         guard let window = hostWindow ?? NSApp.keyWindow else { return }
-        guard !isFullscreenTransitioning else { return }
+        guard !isFullscreenTransitioning else {
+            FullscreenDiag.log("toggle ignored: in transition", window: window, player: self)
+            return
+        }
 
         // Music Mode disables fullscreen transitions (zoom & Space fullscreen stay locked)
         if isAudioOnly && !isFullscreen && !window.styleMask.contains(.fullScreen) {
