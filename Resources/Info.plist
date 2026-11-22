@@ -26,9 +26,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.7.0</string>
+    <string>2.0.2</string>
     <key>CFBundleVersion</key>
-    <string>1.7.0</string>
+    <string>2.0.2</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
@@ -49,6 +49,13 @@
     <string>SilkPlayer 需要访问桌面文件夹以播放视频 / SilkPlayer requires access to your desktop folder to play videos.</string>
     <key>NSNetworkVolumesUsageDescription</key>
     <string>SilkPlayer 需要访问网络共享磁盘以播放视频 / SilkPlayer requires access to network volumes to play videos.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>SilkPlayer 需要发现局域网 SMB/NAS 设备以挂载共享片库 / SilkPlayer discovers LAN SMB/NAS servers to mount your media library.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_smb._tcp</string>
+        <string>_nfs._tcp</string>
+    </array>
 
     <key>CFBundleDocumentTypes</key>
     <array>

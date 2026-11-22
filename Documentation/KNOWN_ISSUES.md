@@ -26,11 +26,13 @@
 | ISSUE-016 | 音乐模式收起态退出后保存 `228pt` 高度（设计目标 `224pt`）及锁屏期实机复测缺口 | 窗口几何与生命周期 / SilkPlayer (AppDelegate & PlayerWindowManager) | Low | 已修复并实机验证 (1.7.0-music-preview) | 1.7.0-music-preview |
 | ISSUE-017 | 音乐模式快速拖拽窗口与光标分离（及视频模式/主界面起手快甩偏移待合入 1.7.0 优化） | 窗口拖拽与几何协调 / SilkPlayer (MusicModeView, PlayerCore+WindowGeometry, VideoView, EmptyPlaybackView) | High | 预览版已修复；视频/主界面优化登记待合入 1.7.0 正式版 | 1.7.0-music-preview |
 | ISSUE-018 | 冷启动被 `WindowGroup` 桌面平铺状态 (`tilingPosition: 9`) 恢复为铺满屏尺寸 | 窗口生命周期与冷启动几何 / SilkPlayer (SilkPlayerApp, AppShellView, AppDelegate, PlayerCore+WindowGeometry) | High | 预览版已修复；冷启动防平铺隔离登记待合入 1.7.0 正式版 | 1.7.0-music-preview |
-| ISSUE-019 | 竖屏/极窄窗口（`.minimal` 档）底栏音量按钮未隐藏导致与“下一首”按钮重叠冲突 | 视频 HUD 底栏 / SilkPlayer (PlayerHUDView, HUDVolumeSlider) | Medium | **已修复**（`1.6.0` 已落地） | 1.6.0 |
-| ISSUE-020 | 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题 | 顶部菜单栏 / SilkPlayer (PlayerCommands, PlayerCore) | Low | **已解决**（`1.6.0` 已移除并由右键菜单方案替代） | 1.6.0 |
-| ISSUE-021 | macOS 多显示器扩展屏全屏播放时，副屏移动鼠标误触发控件唤醒与沉浸态退出 | 全屏与交互 / SilkPlayer (PlayerHUDView) | Medium | 已修复 (1.7.0) | 1.6.0 |
-| ISSUE-022 | 播放竖屏视频后关闭，播放窗口未复位为标准横向尺寸导致空状态视窗形状异常 | 窗口几何与生命周期 / SilkPlayer (AppShellView & WindowGeometry) | Medium | 已修复 (1.7.0) | 1.6.0 |
-| ISSUE-023 | Pro 版本多声道（DTS-ES 6.1 等）无损 LPCM 输出在立体声物理设备下引起 DAC 削顶爆音 | 纯音频与多声道播放 / SilkCoreKit (SilkAudioEngine) | High | 已定位根因，待晚间针对 Pro 统一优化与修复 | 2.0.0-pro |
+| ISSUE-019 | 竖屏/极窄窗口（`.minimal` 档）底栏音量按钮未隐藏导致与“下一首”按钮重叠冲突 | 视频 HUD 底栏 / SilkPlayer (PlayerHUDView, HUDVolumeSlider) | Medium | 已修复 (1.6.0) | 1.6.0 |
+| ISSUE-020 | 顶栏双“窗口”菜单重名及「贴合画面尺寸 (100%/200%)」交互失效与冗余问题 | 顶部菜单栏 / SilkPlayer (PlayerCommands, PlayerCore) | Low | 已解决 (1.6.0) | 1.6.0 |
+| ISSUE-021 | macOS 多显示器扩展屏全屏播放时，副屏移动鼠标误触发控件唤醒与沉浸态退出 | 全屏与交互 / SilkPlayer (PlayerHUDView) | Medium | 已修复 (1.7.0/2.0.0) | 1.6.0 |
+| ISSUE-022 | 播放竖屏视频后关闭，播放窗口未复位为标准横向尺寸导致空状态视窗形状异常 | 窗口几何与生命周期 / SilkPlayer (AppShellView & WindowGeometry) | Medium | 已修复 (1.7.0/2.0.0) | 1.6.0 |
+| ISSUE-023 | 多声道（DTS-ES 6.1 等）无损 LPCM 输出在立体声物理设备下引起 DAC 削顶爆音 | 纯音频与多声道播放 / SilkCoreKit (SilkAudioEngine) | High | 已修复 (1.7.0/2.0.0) | 2.0.0-pro |
+| ISSUE-024 | AV1 10-bit 编码格式视频播放黑屏有声音且时间轴停滞缺陷 | 解码与主时钟同步 / SilkCoreKit (SilkVideoDecoder & SilkPlayerEngine) | Critical | 已修复 (2.0.1) | 2.0.0 |
+| ISSUE-025 | 冷启动版本更新提示在播放视频时弹窗打扰观影缺陷 | 版本更新与窗口交互 / SilkPlayer (UpdateService & AppShellView) | Medium | 已修复 (2.0.1) | 2.0.0 |
 
 ---
 
@@ -863,11 +865,9 @@ public enum WindowPresentationState: Equatable {
    - [`bottomControls`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift#L409-L428) 使用 `ZStack` 将绝对居中的 `centerControls` 与 `HStack { leftWingControls; Spacer(); rightWingControls }` 叠加排版，叠加多层水平内边距（`16 + 16 + 8 = 40 pt` 单侧）。
    - 在 `< 480 pt` 的竖屏窗口宽度下，右翼同时渲染 `HUDVolumeSlider`（折叠态 `28 pt`、悬停展开 `> 100 pt`）、更多按钮与全屏按钮，总宽超出右侧可用余量，向左侵入并遮挡 `centerControls` 最右侧的“下一首”按钮。
 
-### 3. 修复落地（解决版本：`1.6.0`）
-- **核心改动**：
-  - 在 `PlayerHUDView.swift` 中保持 `.minimal`（`< 480 pt`）隐藏底栏音量控件（`HUDLayoutTier.showsVolumeSlider` 返回 `!isAudioOnly && self != .minimal`），并将横向外边距与翼栏间距收紧（`outerBottomHorizontalPadding = 10`，`wingItemSpacing = 6`），在溢出菜单 (`moreMenuContent`) 保留静音/取消静音入口（兼容滚轮、方向键及 `M` 键）；
-  - 为 `480 ..< 950 pt` 桌面窄窗（含 `.compact` 档宽竖屏、`9:16` 放大至 `100%` 的 `578 pt`、`.standard` 与窄 `.expanded`）新增 [`supportsInlineHorizontalVolumeExpansion`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift#L63-L68) 判定，使 [`HUDVolumeSlider`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/HUD/HUDVolumeSlider.swift) 在窄窗下保持固定 `28 pt` 占位并在悬停/拖拽时向上垂直弹出 `32 × 92 pt` 音量条，同时收紧 `.compact` / `.standard` 翼栏边距与间距，消除所有窗口宽度下的遮挡冲突；
-- **测试补全**：更新 `Tests/SilkPlayerTests/PlaylistTests.swift` Test 63，验证 `.minimal` 音量隐藏、各档位全清空间隔余量与 `< 950 pt` 垂直弹出开关。
+### 3. 修复规划（目标版本：`1.6.0`）
+- **核心改动**：在 `feature/v1.6.0` / `main`（发版 `1.6.0` 前）及后续预览分支中修改 [`HUDLayoutTier.showsVolumeSlider(isAudioOnly:)`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerHUDView.swift#L37-L41)，在 `.minimal`（竖屏/极窄窗口）下隐藏底栏内联音量控件（保留滚轮/触控板、方向键及 `M` 键静音调节）；
+- **测试补全**：新增断言校验 `HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false`，并实机验证竖屏窗口底栏左右两翼与中心播控组零重叠。
 
 ---
 
@@ -882,129 +882,9 @@ public enum WindowPresentationState: Equatable {
    - `PlayerCommands` 为普通 `struct`（仅在 `body` 顶部读取 `windowManager.commandSyncToken`），SwiftUI `Commands` 下 `.disabled(!isLoaded)` 存在状态刷新滞后/灰显问题；
    - [`PlayerCore.fitWindow(scale:)`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerCore.swift#L1374-L1415) 未在设帧前临时释放 `window.minSize`（缩小或切换方向易被现有 `minSize` 锁死）、缺少全屏拦截与 OSD 提示，且 1080p/4K 片源下 `100%` 与 `200%` 均被 [`maximumSafeContentSize`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerModels.swift#L392-L409) 钳制到同一桌面安全上限，切换时窗口尺寸无任何变化。
 
-### 3. 解决落地（解决版本：`1.6.0`）
-- **合并顶栏重名菜单并移除冗余入口**：在 `PlayerCommands.swift` 将自定义 `CommandMenu(L10n.menuWindow)` 替换为 `CommandGroup(before: .windowList)` 归入系统「窗口」菜单（保留媒体详情、播放列表、窗口置顶及分隔线），并移除 `Menu(L10n.fitToVideo)` 及其废弃本地化键值；
-- **窗口比例调节收拢至右键菜单**：按 [`提案 027`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Documentation/FEATURE_PROPOSALS.md) 在 `1.6.0` 于视频画布右键菜单提供 `50% / 75% / 100%` 与「恢复默认」入口，并完善 `fitWindow(scale:)` 的 `minSize` 释放、`.maximized` 复位、OSD 提示、边界置灰门控及全屏/纯音频禁用保护。
-
----
-
-## ISSUE-021: macOS 多显示器扩展屏全屏播放时，副屏移动鼠标误触发控件唤醒与沉浸态退出
-
-- **关联 GitHub Issue**: [#7 (macos双屏鼠标移动问题)](https://github.com/meowvia/SilkPlayer/issues/7)
-- **提出时间**: 2026-11-14
-- **影响范围**: macOS 双屏/多屏扩展工作流、全屏沉浸式观影
-- **严重程度**: Medium
-- **当前状态**: **已复现并定位根因，已列入 1.7.0 修复计划**
-
-### 1. 缺陷现象
-在多显示器（如 Mac mini / MacBook 连接 2 个或多个外接屏幕）环境下：
-- 屏幕 A：SilkPlayer 处于全屏播放状态，进入沉浸式播放（控制栏、顶栏、时间轴与鼠标光标已自动淡出隐藏）；
-- 屏幕 B：用户在另一块屏幕上浏览网页或处理其他日常工作；
-- **异常表现**：用户在屏幕 B 移动鼠标、点击或滚动滚轮时，屏幕 A 上的 SilkPlayer 误将该键鼠事件判定为对播放窗口的用户活动，导致屏幕 A 立即退出沉浸态，强行弹出底栏进度条、顶栏及控制控件，严重破坏多屏工作与观影体验。
-
-### 2. 代码核查与根因分析
-1. **`PlayerHUDView.swift:setupMouseMonitor` 窗口过滤逻辑漏洞**：
-   - 现存监听实现：
-     ```swift
-     mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .rightMouseDown, .leftMouseDragged, .scrollWheel]) { [weak player] event in
-         ...
-         guard let p = player else { return event }
-         if let hostWin = p.hostWindow, let evWin = event.window, evWin !== hostWin {
-             return event
-         }
-         ...
-         self.registerUserActivity()
-         return event
-     }
-     ```
-   - **根本原因 1（`event.window == nil` 逃逸）**：在 macOS 多屏幕间滑动光标、或者光标划过桌面/非应用窗口时，AppKit 派发的 `NSEvent.window` 往往为 `nil`。此时 `if let evWin = event.window` 判定为 `false`，导致拦截失效，事件直接穿透执行到 `registerUserActivity()`；
-   - **根本原因 2（物理视窗外坐标未过滤）**：即使在当前应用处于活跃状态时，该监听器也未对鼠标物理全局坐标（`NSEvent.mouseLocation`）进行窗口命中检测（Hit-test）。当鼠标在扩展屏幕（屏幕 B）物理空间内移动时，坐标完全在播放窗口（屏幕 A）的 `hostWin.frame` 之外，却依然触发了 `registerUserActivity() -> player.reportUserActivity() -> isHUDVisible = true`。
-
-### 3. 1.7.0 精确定向修复计划
-1. **增加物理视窗与屏幕边界硬拦截**：
-   在 `PlayerHUDView.swift:setupMouseMonitor` 中对鼠标事件进行双重门控：
-   - **窗口归属校验**：明确排除非主播放窗口事件；
-   - **坐标命中拦截**：利用 `hostWin.frame.contains(NSEvent.mouseLocation)` 进行全局物理屏幕坐标过滤；若光标未落在播放器窗口物理范围内（包括在其他扩展屏幕或外部桌面移动），绝对禁止调用 `registerUserActivity()`。
-2. **全屏非聚焦态行为强化**：
-   当全屏播放窗口处于非主键窗口（`!hostWin.isKeyWindow`）且鼠标未在其区域内时，严格保持静默沉浸态，绝不自发重置自动隐藏计时器。
-3. **自动化测试守卫**：
-   在 `Tests/SilkPlayerTests/` 中新增 Test 64，模拟全屏与非激活态下跨屏幕/窗口外事件派发，验证 `isHUDVisible` 保持 `false` 不受干扰。
-
----
-
-## ISSUE-022: 播放竖屏视频后关闭，播放窗口未复位为标准横向尺寸导致空状态视窗形状异常
-
-- **关联 GitHub Issue**: [#9 (先播放竖屏视频后关闭，播放器界面形状异常)](https://github.com/meowvia/SilkPlayer/issues/9)
-- **提出时间**: 2026-11-14
-- **影响范围**: 竖屏/短视频播放后退出、空状态欢迎界面布局
-- **严重程度**: Medium
-- **当前状态**: **已复现并定位根因，已列入 1.7.0 修复计划**
-
-### 1. 缺陷现象
-用户操作路径：
-1. 打开并播放竖屏视频（如 9:16 分辨率的短视频，尺寸 1080×1920 或 720×1280）；
-2. 播放器自动启用智能贴合，将窗口自适应调整为竖向细长长方形（如宽 450、高 800，或实测截图中的 640×821）；
-3. 用户关闭当前媒体播放（按 Esc 键、点击顶栏关闭媒体 X 按钮，或按快捷键 `⌘W`）；
-4. **异常表现**：当前视频关闭后，视窗切换回“拖拽视频至此处播放”的空状态欢迎界面（[`EmptyPlaybackView`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/EmptyPlaybackView.swift)），但**窗口物理尺寸完全停留在竖屏长条状态，没有恢复为标准的 16:9 横向桌面窗口（960×540）**，导致欢迎界面的 Logo、拖拽引导文案被严重挤压变形，呈现极度不协调的手机视窗比例。
-
-### 2. 代码核查与根因分析
-1. **`AppShellView.swift:stopPlayback()` 缺失视窗几何复位逻辑**：
-   - 现有退出播放实现：
-     ```swift
-     private func stopPlayback() {
-         ...
-         player.stop()
-         withAnimation(.easeInOut(duration: 0.22)) {
-             navigationModel.state = .idle
-         }
-     }
-     ```
-   - 在退出播放切回 `.idle` 状态时，仅调用了 `player.stop()` 清空播放核心状态，完全未对宿主窗口的几何矩形（`window.frame`）与最小尺寸约束（`window.minSize`）做复位处理；
-2. **竖屏视频播放时写入了纵向几何与极窄约束**：
-   - 在播放竖屏视频时，[`PlayerCore+WindowGeometry.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/Player/PlayerCore+WindowGeometry.swift) 将窗口设为了纵向比例，并将 `minContentSize` 锁定在竖屏比例；
-   - 当播放停止回到欢迎界面时，窗口残留着上一个竖屏媒体的尺寸与约束，且由于 `didCenterInitialColdLaunchWindow` 仅在冷启动运行一次，导致窗口被永久卡在纵向狭窄比例。
-
-### 3. 1.7.0 精确定向修复计划
-1. **退出播放时的自适应纵横比复位门控**：
-   在 `stopPlayback()` 与返回欢迎界面的关键路径中，检测当前窗口是否处于竖屏状态（`window.frame.width < window.frame.height`）或非标准比例：
-   - 若当前为竖屏残留尺寸，自动取之前记忆的横向尺寸（`lastLandscapeContentSize`）或系统默认基准横屏尺寸（`960 × 540`）；
-   - 以当前窗口中心为基准（居中平滑展开）执行带动画平滑复位：
-     `window.setFrame(centeredLandscapeFrame, display: true, animate: true)`；
-   - 彻底释放竖屏 `minSize`，将其重置为标准横向空状态最小约束（`480 × 270`）。
-2. **自动化测试守卫**：
-   在 `Tests/SilkPlayerTests/` 中新增 Test 65，模拟竖屏媒体播放后触发 `stopPlayback()`，断言窗口纵横比成功复位为 `>= 1.0` 的标准横向比例。
-
----
-
-## ISSUE-023: Pro 版本多声道（DTS-ES 6.1 等）无损 LPCM 输出在立体声物理设备下引起 DAC 削顶爆音
-
-- **影响范围**: Pro 版本多声道音频（DTS-CD、DTS-ES 6.1、TrueHD 7.1 等）在双声道设备下的回放
-- **涉及模块**: `SilkCoreKit (SilkAudioEngine.swift)`
-- **严重程度**: High
-- **发现版本**: 2.0.0-pro (commit `8362d2d`)
-- **当前状态**: **已定位根因，已完成定点方案设计，待晚间针对 Pro 进行统一优化与修复**
-
-### 1. 缺陷现象
-在测试 Pro 版本的音频播放时，播放特定无损音频（典型样本：`/Volumes/HDD2T/影音娱乐/音乐/一人一首成名曲/群星-真心英雄.wav`）时发生剧烈、刺耳的声音爆裂与杂音；而在 1.5.0 / 1.6.0 等主干免费版本中播放该曲目完全平稳顺畅、无任何爆音。
-
-### 2. 根因剖析
-1. **音源特征**：
-   - 探测显示整张专辑 191 首 WAV 文件中，其余 190 首均为标准双声道 PCM WAV，仅《群星-真心英雄.wav》为历史常见的 **DTS-CD（DTS-ES 6.1，7 个离散声道）** 格式；
-2. **免费版 vs Pro 版架构差异**：
-   - **免费版 (main)**：音频管线恒定输出 2 声道立体声，`Libswresample` 自动通过 ITU-R 标准下混矩阵将 6.1 声道按权重衰减后合流为立体声，总电平严格控制在 0 dBFS 以内，因此无爆音；
-   - **Pro 版 (feature/v2.0.0-pro)**：引入提案 026（多声道无损 LPCM 输出）后，因检测到 `rawChannels >= 7`，引擎盲目开启了 8 声道 AudioQueue 并直通 8 声道 Float32 LPCM；
-3. **硬件脱节与被动折叠削顶 (Clipping)**：
-   - 用户测试设备（Mac mini M4）物理硬件仅有 2 个声道（内置喇叭/3.5mm耳机/双声道显示器）；
-   - CoreAudio 在硬件驱动层对 8 声道进行被动累加，且 `kAudioQueueProperty_EnableTimePitch` 未配置限幅器，副歌大动态音频能量叠加后电平大幅突破 1.0（0 dBFS），DAC 产生严重的方波削顶畸变与爆鸣破音。
-
-### 3. 定点优化与修复方案（待晚间实施）
-1. **物理硬件输出声道动态感知**：
-   在 `SilkAudioEngine.open` 时通过 CoreAudio `kAudioDevicePropertyStreamConfiguration` 查询默认物理输出设备的实际物理声道数；若物理设备仅为 2 声道，强制回退至带有标准衰减矩阵的软件立体声下混管线，杜绝盲目开启 8 声道 AudioQueue；
-2. **多声道 PCM 防溢出软限幅 (Soft Limiter / Peak Clamp)**：
-   在音频帧入队前，对重采样后的 Float32 缓冲增加浮点电平安全限制（$[-1.0, 1.0]$），彻底消除瞬态叠加溢出。
-
-
-
+### 3. 处理规划（目标版本：`1.6.0`）
+- **在 `1.6.0` 直接移除顶栏「贴合画面尺寸」子菜单**：从 [`PlayerCommands.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerCommands.swift#L391-L399) 移除 `Menu(L10n.fitToVideo)` 入口（并按需清理冗余重名菜单或保留常用快捷键命令），停止用顶部菜单栏承载低频窗口尺寸调节；
+- 后续若需提供窗口倍率缩放（对应 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6)），按 [`提案 027`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Documentation/FEATURE_PROPOSALS.md#L964-L980) 统一做进视频画布右键菜单并先修复 `fitWindow(scale:)` 的 `minSize` 释放与全屏保护。
 
 
 

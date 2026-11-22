@@ -1,48 +1,90 @@
 ================================================================================
-SilkPlayer Open Source Notices & Third-Party Software Licenses
+SilkPlayer - Third-Party Licenses and Open Source Attributions
 ================================================================================
 
-This document contains licensing and copyright notices for third-party open source
-software components bundled, linked, or utilized by SilkPlayer.
+SilkPlayer is an open-source media player for macOS. This document provides the
+licenses, copyright notices, and redistribution terms for third-party software
+components bundled or dynamically linked with the SilkPlayer application.
 
 --------------------------------------------------------------------------------
-1. Host Application: SilkPlayer (Frontend & Interface)
+1. ARCHITECTURAL OVERVIEW & LICENSING BOUNDARIES
 --------------------------------------------------------------------------------
-Copyright (C) 2026 SilkPlayer Contributors / meowvia
 
-The SilkPlayer application frontend and interface code is licensed under the
-GNU Lesser General Public License version 3.0 (LGPL-3.0).
-Source code is available at: https://github.com/meowvia/SilkPlayer
+SilkPlayer employs a modular, decoupled architecture:
 
---------------------------------------------------------------------------------
-2. Multimedia Core Frameworks: FFmpeg (v6.1.2)
---------------------------------------------------------------------------------
-FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
-Copyright (c) 2000-2024 the FFmpeg developers.
+1. Host Application & Frontend (SilkPlayer):
+   - License: GNU Lesser General Public License v3.0 (LGPL-3.0)
+   - Scope: User interface, window management, playback controls, settings,
+     and open-source application shell.
+   - Repository: https://github.com/meowvia/SilkPlayer
 
-SilkPlayer dynamically links against the following FFmpeg shared frameworks:
-  - Libavformat.framework
-  - Libavcodec.framework
-  - Libavutil.framework
-  - Libswresample.framework
-  - Libswscale.framework
+2. Media Demuxing & Decoding Frameworks (FFmpeg & dav1d):
+   - Linkage: Dynamic Frameworks (Libavcodec, Libavformat, Libavutil,
+     Libswresample, Libswscale) loaded via @rpath.
+   - Licenses: GNU LGPL-3.0 (FFmpeg) and BSD 2-Clause (dav1d).
+   - Relinkability: Users may replace or relink these dynamic frameworks in
+     accordance with Section 4 of the GNU LGPL-3.0.
 
-These libraries are built strictly with:
-  --enable-shared --disable-static --enable-version3 --disable-gpl --disable-nonfree
-
-FFmpeg is licensed under the GNU Lesser General Public License version 3.0 (LGPL-3.0).
-In accordance with LGPL-3.0 Section 4, users have the right to modify these
-libraries and relink them with SilkPlayer.
-
-Upstream Source: https://ffmpeg.org/releases/ffmpeg-6.1.2.tar.xz
-SHA-256: 3b624649725ecdc96573b2ca895e0f56545f9119049c6934c9f13042127202b8
-Build and relinking instructions can be found in Documentation/THIRD_PARTY.md.
+3. Core Playback & Metal Rendering Engine (SilkCoreKit):
+   - License: SilkCoreKit Proprietary Binary License Agreement (meowvia).
+   - Scope: Closed-source core engine decoupled via SPM binaryTarget.
+   - Commercial Licensing & OEM Inquiries:
+     The closed-source playback engine, demuxing optimizations, and Metal direct
+     rendering components within SilkCoreKit are available for commercial OEM
+     licensing, third-party software integration, and enterprise licensing.
+     For commercial inquiries and licensing, please contact:
+     * Official Licensing Email: support@1999909.xyz
+     * Product Official Website: https://silkplayer.1999909.xyz
+   - Notice: Full terms are provided in SILKCOREKIT_LICENSE.md in this directory.
 
 --------------------------------------------------------------------------------
-3. AV1 Decoding Library: dav1d (v1.2.1)
+2. GNU LESSER GENERAL PUBLIC LICENSE VERSION 3.0 (LGPL-3.0)
 --------------------------------------------------------------------------------
-Copyright (c) 2018-2023, VideoLAN and dav1d authors.
-All rights reserved.
+
+The SilkPlayer host application and embedded FFmpeg dynamic frameworks are
+licensed under the GNU Lesser General Public License v3.0 (LGPL-3.0).
+
+Complete license texts are available in this directory:
+- GNU LGPL-3.0: Licenses/LICENSE
+- GNU GPL-3.0:  Licenses/LICENSE.GPL
+
+Under LGPL-3.0 Section 4, users have the right to modify the dynamically linked
+FFmpeg libraries and relink SilkPlayer against their modified versions. Detailed
+relinking instructions are documented in Documentation/THIRD_PARTY.md.
+
+--------------------------------------------------------------------------------
+3. FFMPEG
+--------------------------------------------------------------------------------
+
+Component: FFmpeg 6.1.2 ("Von Neumann")
+License: GNU Lesser General Public License v3.0 (LGPL-3.0)
+Origin: https://ffmpeg.org
+Copyright (c) 2000-2024 the FFmpeg developers
+
+FFmpeg is built strictly with:
+  --disable-gpl --enable-version3 --disable-nonfree --enable-shared
+
+FFmpeg contains no GPL-only code and is dynamically linked into the application
+bundle as macOS Frameworks:
+- Libavcodec.framework
+- Libavformat.framework
+- Libavutil.framework
+- Libswresample.framework
+- Libswscale.framework
+
+Corresponding Source Code & Build Configuration:
+The exact configure flags, patches, and build scripts are documented in
+Documentation/THIRD_PARTY.md and published as reproducible build assets at
+https://github.com/meowvia/SilkPlayer/releases.
+
+--------------------------------------------------------------------------------
+4. DAV1D (AV1 VIDEO DECODER)
+--------------------------------------------------------------------------------
+
+Component: dav1d 1.2.1
+License: BSD 2-Clause License
+Origin: https://code.videolan.org/videolan/dav1d
+Copyright (c) 2018-2023, VideoLAN and dav1d authors. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -66,23 +108,48 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --------------------------------------------------------------------------------
-4. Proprietary Core Engine & Pro Extensions: SilkCoreKit
+5. SILKCOREKIT (PROPRIETARY CORE ENGINE)
 --------------------------------------------------------------------------------
-Copyright (C) 2026 SilkPlayer. All rights reserved.
 
-The SilkCoreKit binary module (containing proprietary Metal tone mapping shaders,
-local media indexing engine, and licensing engines) is independent proprietary
-software developed by the author. It contains zero GPL-licensed code and is
-physically decoupled from the open-source frontend.
+Component: SilkCoreKit (SilkCoreKit.xcframework)
+Copyright (c) 2026 meowvia. All Rights Reserved.
+License: SilkCoreKit Proprietary Binary License Agreement
+
+SilkCoreKit is a proprietary core rendering and playback engine developed by
+meowvia. It is embedded into SilkPlayer as a precompiled binary framework.
+
+- Community / Standard Edition: Licensed free of charge for personal,
+  non-commercial media playback.
+- Pro Edition: Licensed under commercial terms pursuant to a valid SilkPlayer
+  Pro license.
+
+LGPL-3.0 Safe Harbor:
+Nothing in the SilkCoreKit license agreement shall restrict or impair the
+licensee's rights under Section 4 of the GNU LGPL-3.0 to inspect, debug, modify,
+or relink dynamically linked third-party LGPL libraries (FFmpeg), or to perform
+reverse engineering strictly to the extent necessary to debug modifications to
+such LGPL libraries.
 
 --------------------------------------------------------------------------------
-5. GNU Lesser General Public License (LGPL) Version 3
+6. APPLE PLATFORM FRAMEWORKS & SYSTEM LIBRARIES
 --------------------------------------------------------------------------------
-Version 3, 29 June 2007
-Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
 
-This version of the GNU Lesser General Public License incorporates the terms
-and conditions of version 3 of the GNU General Public License, supplemented
-by the additional permissions listed in the full LGPL-3.0 text at:
-https://www.gnu.org/licenses/lgpl-3.0.txt
-https://www.gnu.org/licenses/gpl-3.0.txt
+SilkPlayer interfaces with the following system frameworks provided by Apple
+Inc. under the macOS SDK agreement:
+- AppKit, SwiftUI (User Interface & Windowing)
+- Metal, QuartzCore (Hardware GPU Surface Rendering)
+- VideoToolbox (Hardware Video Decoding)
+- AudioToolbox, AVFoundation (Audio Engine & Spatial Routing)
+
+--------------------------------------------------------------------------------
+7. TRADEMARK NOTICES & DISCLAIMERS
+--------------------------------------------------------------------------------
+
+- Apple, macOS, Apple Silicon, Metal, VideoToolbox, AppKit, and SwiftUI are
+  trademarks of Apple Inc., registered in the U.S. and other countries.
+- Dolby, Dolby Vision, and Dolby TrueHD are trademarks or registered trademarks
+  of Dolby Laboratories Licensing Corporation.
+- DTS, DTS-HD, and DTS-ES are trademarks or registered trademarks of DTS, Inc.
+- SilkPlayer is an independent project and is not affiliated with, endorsed by,
+  or sponsored by Apple Inc., Dolby Laboratories, or DTS Inc.
+================================================================================

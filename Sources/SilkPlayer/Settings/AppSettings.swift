@@ -2,6 +2,7 @@ import Observation
 import SwiftUI
 import Combine
 import AppKit
+import SilkCoreKit
 
 public enum AppearanceMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case system = "System"
@@ -23,6 +24,14 @@ public enum AppearanceMode: String, CaseIterable, Identifiable, Codable, Sendabl
         case .system: return nil
         case .light: return .light
         case .dark: return .dark
+        }
+    }
+
+    public var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
         }
     }
 }
@@ -122,10 +131,49 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             applyAppearance()
         }
     }
+
+    /// Pro edition theme selection. Backed by `SilkLibraryTheme.userDefaultsKey`.
+    public var proLibraryTheme: SilkLibraryTheme {
+        didSet {
+            UserDefaults.standard.set(proLibraryTheme.rawValue, forKey: SilkLibraryTheme.userDefaultsKey)
+            applyAppearance()
+        }
+    }
+
+    /// Unified effective color scheme:
+    /// In Pro edition, directly driven by `proLibraryTheme` (nuanbai -> .light, shenghui -> .dark).
+    /// In Free edition, governed by native macOS `appearanceMode`.
+    public var effectiveColorScheme: ColorScheme? {
+        if SilkProLicenseEngine.shared.isProActive {
+            return proLibraryTheme.isLight ? .light : .dark
+        }
+        return appearanceMode.colorScheme
+    }
+
+    /// Unified effective NSAppearance:
+    /// In Pro edition, directly driven by `proLibraryTheme` (nuanbai -> aqua, shenghui -> darkAqua).
+    /// In Free edition, governed by native macOS `appearanceMode`.
+    public var effectiveNSAppearance: NSAppearance? {
+        if SilkProLicenseEngine.shared.isProActive {
+            return proLibraryTheme.isLight ? NSAppearance(named: .aqua) : NSAppearance(named: .darkAqua)
+        }
+        return appearanceMode.nsAppearance
+    }
     public var appLanguage: AppLanguage {
         didSet {
             UserDefaults.standard.set(appLanguage.rawValue, forKey: "appLanguage")
+            L10n.invalidateLanguageCache()
             NotificationCenter.default.post(name: .silkLanguageDidChange, object: nil)
+        }
+    }
+    /// Anonymous launch measurement used to compare first-seen and returning installations.
+    /// Enabled by default; users can disable it in General settings.
+    public var anonymousUsageAnalyticsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(anonymousUsageAnalyticsEnabled, forKey: "anonymousUsageAnalyticsEnabled")
+            Task { @MainActor in
+                await SilkUsageAnalytics.shared.setEnabled(anonymousUsageAnalyticsEnabled)
+            }
         }
     }
     public var keepWindowOnTop: Bool {
@@ -173,6 +221,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
     public var singleWindowMode: Bool {
         didSet {
             UserDefaults.standard.set(singleWindowMode, forKey: "singleWindowMode")
+            PlayerWindowManager.shared.syncCommandState()
         }
     }
 
@@ -201,10 +250,22 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             UserDefaults.standard.set(autoPlayNextItem, forKey: "autoPlayNextItem")
         }
     }
+    public var autoSkipIntro: Bool {
+        didSet {
+            UserDefaults.standard.set(autoSkipIntro, forKey: "autoSkipIntro")
+        }
+    }
     public var dualPlaylistMode: Bool {
         didSet {
             UserDefaults.standard.set(dualPlaylistMode, forKey: "dualPlaylistMode")
-            PlaylistManager.shared.applyDualPlaylistMode(dualPlaylistMode)
+            let sessionPlaylists = PlayerWindowManager.shared.sessions.compactMap(\.playlist)
+            if sessionPlaylists.isEmpty {
+                PlaylistManager.shared.applyDualPlaylistMode(dualPlaylistMode)
+            } else {
+                for playlist in sessionPlaylists {
+                    playlist.applyDualPlaylistMode(dualPlaylistMode)
+                }
+            }
         }
     }
     public var shortSeekStep: Double {
@@ -239,6 +300,18 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             UserDefaults.standard.set(keepRecentHistory, forKey: "keepRecentHistory")
         }
     }
+
+    public var isMusicQueueCollapsed: Bool = UserDefaults.standard.bool(forKey: "musicModeQueueCollapsed") {
+        didSet {
+            guard isMusicQueueCollapsed != oldValue else { return }
+            UserDefaults.standard.set(isMusicQueueCollapsed, forKey: "musicModeQueueCollapsed")
+        }
+    }
+
+    @ObservationIgnored private var lastPersistedProgressTime: CFAbsoluteTime = 0
+    @ObservationIgnored private var lastPersistedProgressPath: String = ""
+    @ObservationIgnored private var lastPersistedProgressPosition: Double = -1
+    @ObservationIgnored private var lastPersistedProgressPlaying: Bool = false
 
     // MARK: - 3. Audio & Subtitles (音频与字幕)
     public var maxVolumeLimit: Double {
@@ -298,6 +371,59 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    // MARK: - 5. Pro & Unified Library (Pro 与片库)
+    /// Enables replacing the idle startup dropzone with the unified Pro Media Library.
+    public var proLibraryHomeEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(proLibraryHomeEnabled, forKey: "proLibraryHomeEnabled")
+        }
+    }
+    /// Automatically suppresses the legacy right-side playlist drawer while Pro Library Mode is active.
+    public var proHideLegacyPlaylistDrawer: Bool {
+        didSet {
+            UserDefaults.standard.set(proHideLegacyPlaylistDrawer, forKey: "proHideLegacyPlaylistDrawer")
+        }
+    }
+    /// Separates audio extensions cleanly into the dedicated Audio / Album Library tab.
+    public var proDedicatedAudioLibrary: Bool {
+        didSet {
+            UserDefaults.standard.set(proDedicatedAudioLibrary, forKey: "proDedicatedAudioLibrary")
+        }
+    }
+    /// Runs Stat-Only incremental indexing on auto-scan sources on startup when Pro is active.
+    public var proAutoScanOnLaunch: Bool {
+        didSet {
+            UserDefaults.standard.set(proAutoScanOnLaunch, forKey: "proAutoScanOnLaunch")
+        }
+    }
+    /// Automatically fetches missing posters and metadata online after directory scans complete.
+    public var proAutoScrapeAfterScan: Bool {
+        didSet {
+            UserDefaults.standard.set(proAutoScrapeAfterScan, forKey: "proAutoScrapeAfterScan")
+        }
+    }
+    /// Skips video files smaller than this threshold (in MB) during directory scans; 0 means no size filtering.
+    public var proMinVideoFileSizeMB: Int {
+        didSet {
+            UserDefaults.standard.set(proMinVideoFileSizeMB, forKey: "proMinVideoFileSizeMB")
+            if proMinVideoFileSizeMB != oldValue,
+               SilkProLicenseEngine.shared.isProActive,
+               !SilkMediaLibraryEngine.shared.sources.isEmpty {
+                SilkMediaLibraryEngine.shared.enqueueBackgroundRescan(
+                    sourceIds: SilkMediaLibraryEngine.shared.sources.map(\.id)
+                )
+            }
+        }
+    }
+    /// Synchronizes playback progress and watch state across Macs via personal iCloud Drive container.
+    public var enableCloudPlaybackSync: Bool {
+        didSet {
+            UserDefaults.standard.set(enableCloudPlaybackSync, forKey: "enableCloudPlaybackSync")
+        }
+    }
+    /// Transient navigation signal allowing Pro UI actions to open a specific Settings tab.
+    @ObservationIgnored public var requestedSettingsTab: Int? = nil
+
     // MARK: - Playback History Dictionary
     private var progressHistory: [String: Double] = [:]
 
@@ -312,6 +438,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             let isZh = Locale.preferredLanguages.first?.hasPrefix("zh") ?? true
             self.appLanguage = isZh ? .zhHans : .en
         }
+        self.anonymousUsageAnalyticsEnabled = UserDefaults.standard.object(forKey: "anonymousUsageAnalyticsEnabled") as? Bool ?? true
         self.keepWindowOnTop = UserDefaults.standard.bool(forKey: "keepWindowOnTop")
         self.autoResizeWindow = UserDefaults.standard.object(forKey: "autoResizeWindow") as? Bool ?? true
         self.showLocalTimeInFullscreen = UserDefaults.standard.object(forKey: "showLocalTimeInFullscreen") as? Bool ?? true
@@ -329,6 +456,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         self.resumePlayback = UserDefaults.standard.object(forKey: "resumePlayback") as? Bool ?? true
         self.autoResumeOnLaunch = UserDefaults.standard.object(forKey: "autoResumeOnLaunch") as? Bool ?? false
         self.autoPlayNextItem = UserDefaults.standard.object(forKey: "autoPlayNextItem") as? Bool ?? true
+        self.autoSkipIntro = UserDefaults.standard.object(forKey: "autoSkipIntro") as? Bool ?? true
         self.dualPlaylistMode = UserDefaults.standard.object(forKey: "dualPlaylistMode") as? Bool ?? true
         self.shortSeekStep = UserDefaults.standard.object(forKey: "shortSeekStep") as? Double ?? 5.0
         self.longSeekStep = UserDefaults.standard.object(forKey: "longSeekStep") as? Double ?? 30.0
@@ -353,6 +481,17 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         let rawScroll = UserDefaults.standard.string(forKey: "scrollWheelAction") ?? ScrollWheelAction.volume.rawValue
         self.scrollWheelAction = ScrollWheelAction(rawValue: rawScroll) ?? .volume
 
+        // 5. Pro & Unified Library
+        self.proLibraryHomeEnabled = UserDefaults.standard.object(forKey: "proLibraryHomeEnabled") as? Bool ?? true
+        self.proHideLegacyPlaylistDrawer = UserDefaults.standard.object(forKey: "proHideLegacyPlaylistDrawer") as? Bool ?? false
+        self.proDedicatedAudioLibrary = UserDefaults.standard.object(forKey: "proDedicatedAudioLibrary") as? Bool ?? true
+        self.proAutoScanOnLaunch = UserDefaults.standard.object(forKey: "proAutoScanOnLaunch") as? Bool ?? true
+        self.proAutoScrapeAfterScan = UserDefaults.standard.object(forKey: "proAutoScrapeAfterScan") as? Bool ?? true
+        self.proMinVideoFileSizeMB = UserDefaults.standard.object(forKey: "proMinVideoFileSizeMB") as? Int ?? 0
+        self.enableCloudPlaybackSync = UserDefaults.standard.object(forKey: "enableCloudPlaybackSync") as? Bool ?? true
+        let rawTheme = UserDefaults.standard.string(forKey: SilkLibraryTheme.userDefaultsKey) ?? SilkLibraryTheme.shenghui.rawValue
+        self.proLibraryTheme = SilkLibraryTheme(rawValue: rawTheme) ?? .shenghui
+
         // Load progress history dictionary
         if let dict = UserDefaults.standard.dictionary(forKey: "playbackProgressHistory") as? [String: Double] {
             self.progressHistory = dict
@@ -363,13 +502,17 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 
     public func applyAppearance() {
-        switch appearanceMode {
-        case .system:
-            NSApp?.appearance = nil
-        case .light:
-            NSApp?.appearance = NSAppearance(named: .aqua)
-        case .dark:
-            NSApp?.appearance = NSAppearance(named: .darkAqua)
+        let appearance = effectiveNSAppearance
+        NSApp?.appearance = appearance
+        if let settingsWin = PlayerWindowManager.shared.settingsWindow {
+            settingsWin.appearance = appearance
+        }
+        for session in PlayerWindowManager.shared.sessions {
+            if let win = session.window {
+                if session.player?.isPlaying != true || session.player?.isAudioOnly == true {
+                    win.appearance = appearance
+                }
+            }
         }
     }
 
@@ -398,13 +541,62 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             progressHistory[norm] = position
         }
         UserDefaults.standard.set(progressHistory, forKey: "playbackProgressHistory")
+        lastPersistedProgressTime = CFAbsoluteTimeGetCurrent()
+        lastPersistedProgressPath = path
+        lastPersistedProgressPosition = position
+
+        if SilkProLicenseEngine.shared.isProActive, !norm.isEmpty {
+            let capturedDuration = duration
+            let capturedPos = position
+            Task { @MainActor in
+                await SilkMediaLibraryEngine.shared.recordPlaybackProgress(
+                    path: norm,
+                    position: capturedPos,
+                    duration: capturedDuration
+                )
+            }
+        }
+    }
+
+    /// Persists continuous playback progress at a throttled cadence (~3s) while flushing immediately on track changes, seeks, pause, or explicit force.
+    public func recordPlaybackProgress(path: String, current: Double, duration: Double, isPlaying: Bool, force: Bool = false) {
+        guard keepRecentHistory, !path.isEmpty else { return }
+        let now = CFAbsoluteTimeGetCurrent()
+        let pathChanged = (path != lastPersistedProgressPath)
+        let pausedFromPlaying = (!isPlaying && lastPersistedProgressPlaying)
+        let seekJumped = (lastPersistedProgressPosition >= 0 && abs(current - lastPersistedProgressPosition) >= 4.0 && (now - lastPersistedProgressTime) >= 0.5)
+        let intervalElapsed = ((now - lastPersistedProgressTime) >= 3.0) && (abs(current - lastPersistedProgressPosition) >= 0.25 || pathChanged || isPlaying != lastPersistedProgressPlaying)
+
+        guard force || pathChanged || pausedFromPlaying || seekJumped || intervalElapsed else {
+            return
+        }
+
+        if pathChanged || force {
+            UserDefaults.standard.set(path, forKey: "lastPlayedFilePath")
+        }
+        UserDefaults.standard.set(current, forKey: "lastPlayedPosition")
+        UserDefaults.standard.set(duration, forKey: "lastPlayedDuration")
+        savePosition(for: path, position: current, duration: duration)
+        lastPersistedProgressTime = now
+        lastPersistedProgressPath = path
+        lastPersistedProgressPosition = current
+        lastPersistedProgressPlaying = isPlaying
     }
 
     public func clearAllHistory() {
         progressHistory.removeAll()
+        lastPersistedProgressTime = 0
+        lastPersistedProgressPath = ""
+        lastPersistedProgressPosition = -1
+        lastPersistedProgressPlaying = false
         UserDefaults.standard.removeObject(forKey: "playbackProgressHistory")
         UserDefaults.standard.removeObject(forKey: "lastPlayedFilePath")
         UserDefaults.standard.removeObject(forKey: "lastPlayedPosition")
         UserDefaults.standard.removeObject(forKey: "lastPlayedDuration")
+        if SilkProLicenseEngine.shared.isProActive {
+            Task { @MainActor in
+                await SilkMediaLibraryEngine.shared.clearAllWatchMemory()
+            }
+        }
     }
 }

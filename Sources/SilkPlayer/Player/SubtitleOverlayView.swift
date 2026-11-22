@@ -39,8 +39,15 @@ public struct SubtitleOverlayView: View {
             let originX = videoRect.minX
             let originY = videoRect.minY
 
+            let bitmapParts = subtitleModel.parts.filter { $0.image != nil }
+            let textParts = subtitleModel.parts.filter { $0.text != nil }
+            let topTextParts = textParts.filter { $0.textPosition?.verticalAlign == .top }
+            let centerTextParts = textParts.filter { $0.textPosition?.verticalAlign == .center }
+            let bottomTextParts = textParts.filter { $0.textPosition?.verticalAlign != .top && $0.textPosition?.verticalAlign != .center }
+
             ZStack {
-                ForEach(subtitleModel.parts) { part in
+                // 1. PGS / Bitmap subtitles (spatially positioned by origin)
+                ForEach(bitmapParts) { part in
                     if let image = part.image {
                         renderBitmapSubtitle(
                             image: image,
@@ -54,17 +61,64 @@ public struct SubtitleOverlayView: View {
                             viewW: viewW,
                             viewH: viewH
                         )
-                    } else if let attrText = part.text {
-                        renderTextSubtitle(
-                            attrText: attrText,
-                            textPosition: part.textPosition,
-                            renderedW: renderedW,
-                            renderedH: renderedH,
-                            originY: originY,
-                            viewW: viewW,
-                            viewH: viewH
-                        )
                     }
+                }
+
+                // 2. Cinema Text subtitles (SRT, ASS, VTT) with multi-cue vertical stacking defense
+                if !textParts.isEmpty {
+                    VStack(spacing: 0) {
+                        if !topTextParts.isEmpty {
+                            VStack(spacing: 6) {
+                                ForEach(topTextParts) { part in
+                                    if let attrText = part.text {
+                                        renderTextSubtitleContent(
+                                            attrText: attrText,
+                                            renderedW: renderedW,
+                                            renderedH: renderedH
+                                        )
+                                    }
+                                }
+                            }
+                            .padding(.top, max(originY + 16.0, player.isFullscreen ? 24.0 : 48.0))
+                        }
+
+                        Spacer()
+
+                        if !centerTextParts.isEmpty {
+                            VStack(spacing: 6) {
+                                ForEach(centerTextParts) { part in
+                                    if let attrText = part.text {
+                                        renderTextSubtitleContent(
+                                            attrText: attrText,
+                                            renderedW: renderedW,
+                                            renderedH: renderedH
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer()
+                        }
+
+                        if !bottomTextParts.isEmpty {
+                            let bottomClearance: CGFloat = player.isHUDVisible ? 126.0 : 42.0
+                            let videoBottomMargin = max(0.0, viewH - (originY + renderedH))
+                            let effectiveBottomPadding = max(bottomClearance, videoBottomMargin + 24.0)
+
+                            VStack(spacing: 6) {
+                                ForEach(bottomTextParts) { part in
+                                    if let attrText = part.text {
+                                        renderTextSubtitleContent(
+                                            attrText: attrText,
+                                            renderedW: renderedW,
+                                            renderedH: renderedH
+                                        )
+                                    }
+                                }
+                            }
+                            .padding(.bottom, effectiveBottomPadding)
+                        }
+                    }
+                    .frame(width: viewW, height: viewH)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -153,14 +207,10 @@ public struct SubtitleOverlayView: View {
 
     // MARK: - Text Subtitle Rendering (e.g. Spider-Man, Red Sparrow, SRT, ASS, VTT)
     @ViewBuilder
-    private func renderTextSubtitle(
+    private func renderTextSubtitleContent(
         attrText: NSAttributedString,
-        textPosition: TextPosition?,
         renderedW: CGFloat,
-        renderedH: CGFloat,
-        originY: CGFloat,
-        viewW: CGFloat,
-        viewH: CGFloat
+        renderedH: CGFloat
     ) -> some View {
         let textStr = attrText.string.trimmingCharacters(in: .whitespacesAndNewlines)
         if !textStr.isEmpty {
@@ -174,35 +224,10 @@ public struct SubtitleOverlayView: View {
                 fontSize: finalFontSize,
                 maxWidth: maxContentWidth
             ) {
-                let subW = subtitleImage.size.width
-                let subH = subtitleImage.size.height
-                let isTop = textPosition?.verticalAlign == .top
-
-                let targetCenterY: CGFloat = {
-                    if isTop {
-                        let minSafeTop = max(originY + 16.0, player.isFullscreen ? 24.0 : 48.0)
-                        return minSafeTop + (subH / 2.0)
-                    } else {
-                        // Bottom-anchored layout:
-                        // Multi-line subtitles expand UPWARDS so bottom descenders never clip or sink into the HUD.
-                        let bottomClearance: CGFloat = player.isHUDVisible ? 126.0 : 42.0
-                        let videoBottom = originY + renderedH
-                        // Anchor to the higher of video bottom margin or window HUD avoidance
-                        let targetBottom = min(videoBottom - bottomClearance, viewH - (player.isHUDVisible ? 126.0 : 20.0))
-                        let computedCenterY = targetBottom - (subH / 2.0)
-                        let minTopCenterY = originY + 20.0 + (subH / 2.0)
-                        return max(minTopCenterY, computedCenterY)
-                    }
-                }()
-
                 Image(nsImage: subtitleImage)
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: subW, height: subH)
-                    .position(
-                        x: viewW / 2.0,
-                        y: targetCenterY
-                    )
+                    .frame(width: subtitleImage.size.width, height: subtitleImage.size.height)
             }
         }
     }

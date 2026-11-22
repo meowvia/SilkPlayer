@@ -171,12 +171,16 @@ public enum MediaFilenameSanitizer: Sendable {
         let preRaw = ns.substring(to: match.range.location)
         let postRaw = ns.substring(from: match.range.location + match.range.length)
 
+        let noisePunctuation = CharacterSet(charactersIn: " -_:;,./|·•—~～[]【】()")
+
         // Clean noise from postRaw (remove codec tags, ads, etc.)
         var cleanPost = adBracketsRegex.stringByReplacingMatches(in: postRaw, range: NSRange(location: 0, length: (postRaw as NSString).length), withTemplate: " ")
         cleanPost = mediaTokensRegex.stringByReplacingMatches(in: cleanPost, range: NSRange(location: 0, length: (cleanPost as NSString).length), withTemplate: " ")
         cleanPost = cleanPost.replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: "_", with: " ")
-        let postWords = cleanPost.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
-        let epSubtitle = postWords.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: " -_:;,./|"))
+        let postWords = cleanPost.components(separatedBy: .whitespacesAndNewlines).filter {
+            !$0.trimmingCharacters(in: noisePunctuation).isEmpty
+        }
+        let epSubtitle = postWords.joined(separator: " ").trimmingCharacters(in: noisePunctuation)
 
         guard !epSubtitle.isEmpty else {
             return cleanTitle
@@ -185,8 +189,10 @@ public enum MediaFilenameSanitizer: Sendable {
         // Clean preRaw
         var cleanPre = adBracketsRegex.stringByReplacingMatches(in: preRaw, range: NSRange(location: 0, length: (preRaw as NSString).length), withTemplate: " ")
         cleanPre = cleanPre.replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: "_", with: " ")
-        let preWords = cleanPre.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
-        let preTitle = preWords.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: " -_:;,./|"))
+        let preWords = cleanPre.components(separatedBy: .whitespacesAndNewlines).filter {
+            !$0.trimmingCharacters(in: noisePunctuation).isEmpty
+        }
+        let preTitle = preWords.joined(separator: " ").trimmingCharacters(in: noisePunctuation)
 
         // Language-adaptive title extraction
         let langCode = UserDefaults.standard.string(forKey: "appLanguage") ?? Locale.current.language.languageCode?.identifier

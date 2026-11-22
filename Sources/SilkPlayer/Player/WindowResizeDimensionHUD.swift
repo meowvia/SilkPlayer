@@ -14,7 +14,7 @@ public struct WindowDimensionFormatter: Sendable {
         let dimStr = "\(w) × \(h)"
 
         if isAudioOnly {
-            return (dimStr, "1:1")
+            return (dimStr, L10n.tr("Fixed Width", "固定宽度"))
         }
 
         guard w > 0 && h > 0 else {

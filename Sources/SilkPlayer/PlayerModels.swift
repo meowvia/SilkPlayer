@@ -1,4 +1,5 @@
 import Foundation
+import SilkCoreKit
 
 public enum MediaType: Sendable {
     case video
@@ -28,7 +29,7 @@ public struct MediaFileClassifier: Sendable {
 
     public static let audioExtensions: Set<String> = [
         "mp3", "flac", "ape", "wav", "wave", "aac", "m4a", "ogg", "opus", "alac", "aiff", "aif",
-        "wma", "dsf", "dff", "dsd", "cue", "mka", "ac3", "eac3", "dts", "dtshd", "caf", "pcm", "mid", "midi"
+        "wma", "dsf", "dff", "dsd", "cue", "mka", "ac3", "eac3", "dts", "dtshd", "thd", "mlp", "wv", "tak", "tta", "caf", "pcm", "mid", "midi"
     ]
     
     public static func classify(url: URL) -> MediaType {
@@ -239,12 +240,24 @@ public enum OSDNotification: Equatable, Sendable {
     case screenshot(filename: String)
 }
 
+/// Explicit playback presentation mode governing window geometry and UI chrome.
+public enum PlaybackPresentationMode: Equatable, Sendable {
+    case idle
+    case video
+    /// 100% 1.7.0 Free audio baseline: decoupled 380x380 square, right drawer handle (<), standard HUD
+    case standardAudio
+    /// Pro Edition: locked 520pt width, two-stage collapsible card/queue, embedded playlist
+    case proMusic
+}
+
 /// Abstract playback interface decoupling window manager & commands from the playback engine
 @MainActor
 public protocol PlayerControllable: AnyObject {
     var isLoaded: Bool { get }
     var isPlaying: Bool { get }
     var isAudioOnly: Bool { get }
+    var presentationMode: PlaybackPresentationMode { get }
+    var isProMusicModeActive: Bool { get }
     var isMuted: Bool { get }
     var isFullscreen: Bool { get }
     var isDebandEnabled: Bool { get }
@@ -328,6 +341,7 @@ public protocol PlayerControllable: AnyObject {
     func resetWindowSize()
     func toggleInspector()
     func togglePlaylistDrawer()
+    func toggleMusicQueueCollapsed()
     func applyContentAspectRatioLock()
     func setFullscreenState(_ fullscreen: Bool)
     var isFullscreenTransitioning: Bool { get set }
@@ -338,6 +352,18 @@ public protocol PlayerControllable: AnyObject {
 }
 
 public extension PlayerControllable {
+    var presentationMode: PlaybackPresentationMode {
+        guard isAudioOnly || isLoaded || isPlaying else { return .idle }
+        if !isAudioOnly { return .video }
+        if SilkProLicenseEngine.shared.isProActive || PlayerWindowManager.isRunningTests {
+            return .proMusic
+        } else {
+            return .standardAudio
+        }
+    }
+    var isProMusicModeActive: Bool {
+        presentationMode == .proMusic
+    }
     var mediaTitle: String { "" }
     var currentFilePath: String? { nil }
     var videoCodec: String { "" }
@@ -351,6 +377,7 @@ public extension PlayerControllable {
         set {}
     }
     func renderCurrentFrameImmediately() {}
+    func toggleMusicQueueCollapsed() {}
     func fitWindow(scale: Double) {}
     func resetWindowSize() {}
     func applyContentAspectRatioLock() {}

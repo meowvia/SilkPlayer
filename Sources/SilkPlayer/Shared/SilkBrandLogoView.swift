@@ -1,4 +1,5 @@
 import SwiftUI
+import SilkCoreKit
 
 /// Pure vector brand emblem for SilkPlayer, designed to reflect the "Silk" (fluidity)
 /// and "Metal" (native hardware acceleration) identity without any artificial AI clutter.
@@ -6,21 +7,32 @@ import SwiftUI
 public struct SilkBrandLogoView: View {
     public var size: CGFloat = 84
     public var isInteractive: Bool = true
+    public var forceProTheme: Bool? = nil
     
+    @ObservedObject private var licenseEngine = SilkProLicenseEngine.shared
     @State private var isHovered: Bool = false
     
-    public init(size: CGFloat = 84, isInteractive: Bool = true) {
+    public init(size: CGFloat = 84, isInteractive: Bool = true, forceProTheme: Bool? = nil) {
         self.size = size
         self.isInteractive = isInteractive
+        self.forceProTheme = forceProTheme
+    }
+
+    private var isPro: Bool {
+        forceProTheme ?? licenseEngine.isProActive
     }
     
     public var body: some View {
         ZStack {
-            // Ambient Sapphire Glow behind the squircle
+            // Ambient Glow behind the squircle
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                 .fill(
                     RadialGradient(
-                        colors: [
+                        colors: isPro ? [
+                            Color(red: 0.96, green: 0.62, blue: 0.15).opacity(isHovered ? 0.35 : 0.18),
+                            Color(red: 0.85, green: 0.47, blue: 0.21).opacity(isHovered ? 0.20 : 0.08),
+                            Color.clear
+                        ] : [
                             Color.cyan.opacity(isHovered ? 0.35 : 0.15),
                             Color.blue.opacity(isHovered ? 0.20 : 0.08),
                             Color.clear
@@ -34,11 +46,14 @@ public struct SilkBrandLogoView: View {
                 .blur(radius: size * 0.18)
                 .animation(.easeOut(duration: 0.25), value: isHovered)
 
-            // Outer Apple Squircle Substrate (Midnight Obsidian)
+            // Outer Apple Squircle Substrate
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [
+                        colors: isPro ? [
+                            Color(red: 0.23, green: 0.19, blue: 0.16), // #3a3028 warm walnut
+                            Color(red: 0.14, green: 0.11, blue: 0.09)  // #231c16 deep espresso
+                        ] : [
                             Color(red: 0.11, green: 0.13, blue: 0.18),
                             Color(red: 0.05, green: 0.06, blue: 0.09)
                         ],
@@ -49,11 +64,15 @@ public struct SilkBrandLogoView: View {
                 .frame(width: size, height: size)
                 .shadow(color: Color.black.opacity(0.45), radius: size * 0.14, x: 0, y: size * 0.06)
 
-            // Specular Chamfer Rim (Soft anti-aliased gradient, zero white fringe on dark backgrounds)
+            // Specular Chamfer Rim
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
-                        colors: [
+                        colors: isPro ? [
+                            Color(red: 0.85, green: 0.47, blue: 0.21).opacity(isHovered ? 0.65 : 0.45),
+                            Color.white.opacity(isHovered ? 0.25 : 0.12),
+                            Color(red: 0.76, green: 0.37, blue: 0.14).opacity(0.35)
+                        ] : [
                             Color.cyan.opacity(isHovered ? 0.35 : 0.22),
                             Color.white.opacity(isHovered ? 0.12 : 0.05),
                             Color.blue.opacity(0.18)
@@ -70,7 +89,11 @@ public struct SilkBrandLogoView: View {
                 .trim(from: 0.15, to: 0.85)
                 .stroke(
                     LinearGradient(
-                        colors: [
+                        colors: isPro ? [
+                            Color(red: 0.98, green: 0.75, blue: 0.25).opacity(0.95), // gold amber
+                            Color(red: 0.85, green: 0.47, blue: 0.21).opacity(0.85), // terracotta
+                            Color(red: 0.60, green: 0.20, blue: 0.07).opacity(0.20)  // deep burnt orange
+                        ] : [
                             Color.cyan.opacity(0.85),
                             Color.blue.opacity(0.40),
                             Color.clear
@@ -88,7 +111,11 @@ public struct SilkBrandLogoView: View {
             PlayTriangleShape()
                 .fill(
                     LinearGradient(
-                        colors: [
+                        colors: isPro ? [
+                            Color.white,
+                            Color(red: 1.0, green: 0.97, blue: 0.93),
+                            Color(red: 0.99, green: 0.84, blue: 0.67)
+                        ] : [
                             Color.white,
                             Color(red: 0.85, green: 0.94, blue: 1.0),
                             Color.cyan.opacity(0.9)
@@ -99,7 +126,12 @@ public struct SilkBrandLogoView: View {
                 )
                 .frame(width: size * 0.36, height: size * 0.38)
                 .offset(x: size * 0.035) // Optical center offset
-                .shadow(color: Color.cyan.opacity(0.4), radius: size * 0.08, x: 0, y: 0)
+                .shadow(
+                    color: isPro ? Color(red: 0.85, green: 0.47, blue: 0.21).opacity(0.4) : Color.cyan.opacity(0.4),
+                    radius: size * 0.08,
+                    x: 0,
+                    y: 0
+                )
                 .shadow(color: Color.black.opacity(0.35), radius: size * 0.05, x: 0, y: size * 0.02)
         }
         .scaleEffect(isInteractive && isHovered ? 1.05 : 1.0)

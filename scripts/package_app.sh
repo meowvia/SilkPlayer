@@ -180,6 +180,18 @@ plutil -replace CFBundleVersion -string "${VERSION}" "${APP_BUNDLE}/Contents/Inf
 if [[ -f "${PROJECT_DIR}/Resources/AppIcon.icns" ]]; then
     cp "${PROJECT_DIR}/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
 fi
+if [[ -f "${PROJECT_DIR}/Resources/AppIcon_Pro.icns" ]]; then
+    cp "${PROJECT_DIR}/Resources/AppIcon_Pro.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon_Pro.icns"
+fi
+if [[ -f "${PROJECT_DIR}/Resources/AppIcon_Standard.icns" ]]; then
+    cp "${PROJECT_DIR}/Resources/AppIcon_Standard.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon_Standard.icns"
+fi
+if [[ -f "${PROJECT_DIR}/Resources/AppIcon_Pro_1024.png" ]]; then
+    cp "${PROJECT_DIR}/Resources/AppIcon_Pro_1024.png" "${APP_BUNDLE}/Contents/Resources/AppIcon_Pro_1024.png"
+fi
+if [[ -f "${PROJECT_DIR}/Resources/AppIcon_1024.png" ]]; then
+    cp "${PROJECT_DIR}/Resources/AppIcon_1024.png" "${APP_BUNDLE}/Contents/Resources/AppIcon_1024.png"
+fi
 if [[ -f "${PROJECT_DIR}/Resources/THIRD_PARTY_LICENSES.txt" ]]; then
     cp "${PROJECT_DIR}/Resources/THIRD_PARTY_LICENSES.txt" "${APP_BUNDLE}/Contents/Resources/THIRD_PARTY_LICENSES.txt"
 fi
@@ -194,6 +206,21 @@ done
 if [[ -d "${PROJECT_DIR}/Resources/Turntable" ]]; then
     cp -R "${PROJECT_DIR}/Resources/Turntable" "${APP_BUNDLE}/Contents/Resources/"
 fi
+
+# Embed all 4 mandatory licenses and third-party notices into Contents/Resources/Licenses
+mkdir -p "${APP_BUNDLE}/Contents/Resources/Licenses"
+cp "${PROJECT_DIR}/LICENSE" "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE"
+cp "${PROJECT_DIR}/LICENSE.GPL" "${APP_BUNDLE}/Contents/Resources/Licenses/LICENSE.GPL"
+cp "${PROJECT_DIR}/Resources/THIRD_PARTY_LICENSES.txt" "${APP_BUNDLE}/Contents/Resources/Licenses/THIRD_PARTY_LICENSES.txt"
+cp "${PROJECT_DIR}/SILKCOREKIT_LICENSE.md" "${APP_BUNDLE}/Contents/Resources/Licenses/SILKCOREKIT_LICENSE.md"
+
+# Assert license completeness (enforce all 4 required license assets)
+for req_license in LICENSE LICENSE.GPL THIRD_PARTY_LICENSES.txt SILKCOREKIT_LICENSE.md; do
+    if [[ ! -f "${APP_BUNDLE}/Contents/Resources/Licenses/${req_license}" ]]; then
+        echo "Fatal Error: Mandatory license asset '${req_license}' is missing from bundle Contents/Resources/Licenses!" >&2
+        exit 1
+    fi
+done
 
 # Copy SwiftPM resource bundles if present
 find "${PROJECT_DIR}/.build" -path "*/Release/*.bundle" -type d | while read -r b; do
@@ -234,10 +261,17 @@ mkdir -p "${STAGING_DIR}"
 cp -R "${APP_BUNDLE}" "${STAGING_DIR}/"
 ln -s /Applications "${STAGING_DIR}/Applications"
 
+if [[ -f "${PROJECT_DIR}/Resources/安装指南_Installation_Guide.txt" ]]; then
+    cp "${PROJECT_DIR}/Resources/安装指南_Installation_Guide.txt" "${STAGING_DIR}/"
+fi
+
+sync
+sleep 1
+
 hdiutil create -volname "${APP_NAME}" \
                -srcfolder "${STAGING_DIR}" \
                -ov \
-               -format UDZO \
+               -format ULFO \
                "${DMG_PATH}"
 
 rm -rf "${STAGING_DIR}"

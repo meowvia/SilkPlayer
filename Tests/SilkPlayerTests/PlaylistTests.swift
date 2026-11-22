@@ -549,7 +549,7 @@ final class PlaylistRegressionTests: XCTestCase {
     windowMgr.openSettings()
     XCTAssert(windowMgr.settingsWindow != nil, "Settings window is instantiated")
     XCTAssert(windowMgr.settingsWindow?.frame.width == 520, "Settings window width is 520")
-    XCTAssert(windowMgr.settingsWindow?.frame.height == 490, "Settings window height is 490")
+    XCTAssert(windowMgr.settingsWindow?.frame.height == 460, "Settings window height matches compact zero-scroll standard")
     XCTAssert(windowMgr.settingsWindow?.collectionBehavior.contains(.fullScreenAuxiliary) == true, "Settings window has .fullScreenAuxiliary behavior")
     XCTAssert(windowMgr.settingsWindow?.collectionBehavior.contains(.canJoinAllSpaces) == true, "Settings window has .canJoinAllSpaces behavior")
     windowMgr.closeSettings()
@@ -595,7 +595,7 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssert(windowMgr.settingsWindow != nil, "Settings window opened successfully")
     XCTAssert(windowMgr.settingsWindow?.level == .floating, "Settings window is permanently floating above player canvas")
     XCTAssert(windowMgr.settingsWindow?.frame.width == 520, "Settings window width is 520")
-    XCTAssert(windowMgr.settingsWindow?.frame.height == 490, "Settings window height is 490 for macOS HIG zero-scroll standard")
+    XCTAssert(windowMgr.settingsWindow?.frame.height == 460, "Settings window height matches compact zero-scroll standard")
     windowMgr.closeSettings()
     XCTAssert(windowMgr.settingsWindow == nil, "Settings window closed cleanly")
 
@@ -1492,21 +1492,23 @@ final class PlaylistRegressionTests: XCTestCase {
     renderView.videoRotation = 90
     XCTAssert(renderView.videoRotation == 90, "Video rotation is set correctly")
 
-    // 50. Audio-only Window Resize & 1:1 Proportional (等比) Scaling
-    print("\n--- Test 50: Audio-only Window Resize & 1:1 Proportional Scaling ---")
+    // 50. Music Mode Locked-Width & Vertical-Only Resize Clamping
+    print("\n--- Test 50: Music Mode Locked-Width & Vertical-Only Resize ---")
     let audioDelegate = PlayerWindowDelegate(session: nil, player: testPlayer)
     testPlayer.isAudioOnly = true
-    let dummyWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 520), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
-    let requestedResize = NSSize(width: 450, height: 420)
+    let dummyWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 760), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+    let dummyScreenFrame = (dummyWindow.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+    let expectedLockedW = MusicModeGeometry.lockedWidth(forScreenWidth: dummyScreenFrame.width)
+    let requestedResize = NSSize(width: 900, height: 680)
     let resolvedSize = audioDelegate.windowWillResize(dummyWindow, to: requestedResize)
-    XCTAssert(resolvedSize.width == resolvedSize.height, "Audio window resize strictly maintains 1:1 square aspect ratio")
-    XCTAssert(resolvedSize.width >= 380 && resolvedSize.width < 520, "Audio window resize scales proportionally without forcing 640")
+    XCTAssertEqual(resolvedSize.width, expectedLockedW, "Music Mode locks width per active screen resolution")
+    XCTAssertEqual(resolvedSize.height, min(dummyScreenFrame.height, max(MusicModeGeometry.minHeight, 680)), "Music Mode allows free vertical resizing")
 
-    // Clamping to min audio size 380
+    // Clamping to min height 500 while preserving locked width
     let tinyResize = NSSize(width: 200, height: 200)
     let clampedTiny = audioDelegate.windowWillResize(dummyWindow, to: tinyResize)
-    XCTAssert(clampedTiny.width == 380, "Audio window width is clamped to minimum 380")
-    XCTAssert(clampedTiny.height == 380, "Audio window height is clamped to minimum 380")
+    XCTAssertEqual(clampedTiny.width, expectedLockedW, "Music Mode keeps width locked on tiny resize proposals")
+    XCTAssertEqual(clampedTiny.height, MusicModeGeometry.effectiveMinHeight(forScreenHeight: dummyScreenFrame.height), "Music Mode clamps height to minimum 500")
 
     // 51. Audio File Drag-and-Drop Classification & Acceptance
     print("\n--- Test 51: Audio File Drag-and-Drop Classification & Acceptance ---")
@@ -1838,9 +1840,9 @@ final class PlaylistRegressionTests: XCTestCase {
     XCTAssertEqual(res239.dimensions, "1920 × 803", "Dimensions match 1920x803")
     XCTAssertEqual(res239.ratio, "2.39:1", "Recognized as Cinemascope 2.39:1")
 
-    let resAudio = WindowDimensionFormatter.format(size: CGSize(width: 520, height: 520), isAudioOnly: true)
-    XCTAssertEqual(resAudio.dimensions, "520 × 520", "Audio dimensions match 520x520")
-    XCTAssertEqual(resAudio.ratio, "1:1", "Audio mode strictly forces 1:1 aspect ratio")
+    let resAudio = WindowDimensionFormatter.format(size: CGSize(width: 520, height: 1026), isAudioOnly: true)
+    XCTAssertEqual(resAudio.dimensions, "520 × 1026", "Audio dimensions match Music Mode locked width")
+    XCTAssertEqual(resAudio.ratio, L10n.tr("Fixed Width", "固定宽度"), "Music Mode badge indicates fixed width vertical resizing")
 
     let resNative = WindowDimensionFormatter.format(size: CGSize(width: 1920, height: 1080), videoWidth: 1920, videoHeight: 1080)
     XCTAssertEqual(resNative.dimensions, "1920 × 1080", "Native 1080p dimensions")
@@ -1855,18 +1857,20 @@ final class PlaylistRegressionTests: XCTestCase {
     print("\n--- Test 63: Music Mode vs Video Mode Bottom HUD Control Visibility Invariants ---")
     let allTiers: [HUDLayoutTier] = [.minimal, .compact, .standard, .expanded]
     for tier in allTiers {
-        // Music mode: strip volume slider, audio/subtitle tracks, and more menu; preserve speed and settings across all tiers
+        // Music mode: shows inline volume slider, speed and settings, hides fullscreen, audio/subtitle tracks, and more menu
         XCTAssert(tier.showsSpeedButton(isAudioOnly: true) == true, "Music mode always shows speed button in \(tier)")
         XCTAssert(tier.showsDirectSettingsButton(isAudioOnly: true) == true, "Music mode always shows settings button in \(tier)")
-        XCTAssert(tier.showsVolumeSlider(isAudioOnly: true) == false, "Music mode hides bottom volume slider in \(tier)")
+        XCTAssert(tier.showsVolumeSlider(isAudioOnly: true) == true, "Music mode shows bottom volume slider in \(tier)")
+        XCTAssert(tier.showsFullscreenButton(isAudioOnly: true) == false, "Music mode hides fullscreen button in \(tier)")
         XCTAssert(tier.showsAudioTrackButton(isAudioOnly: true) == false, "Music mode hides audio track menu in \(tier)")
         XCTAssert(tier.showsSubtitleTrackButton(isAudioOnly: true) == false, "Music mode hides subtitle track menu in \(tier)")
         XCTAssert(tier.showsMoreMenuButton(isAudioOnly: true) == false, "Music mode hides more menu in \(tier)")
         XCTAssert(tier.retainsPrevNextButtons == true, "Music mode retains prev/next buttons in \(tier)")
     }
 
-    // Video mode remains completely unaffected across non-minimal tiers; minimal hides inline volume slider (ISSUE-019)
+    // Video mode hides inline volume slider on minimal tier (ISSUE-019) and retains fullscreen button
     XCTAssert(HUDLayoutTier.minimal.showsVolumeSlider(isAudioOnly: false) == false, "Video minimal hides inline volume slider")
+    XCTAssert(HUDLayoutTier.minimal.showsFullscreenButton(isAudioOnly: false) == true, "Video minimal retains fullscreen button")
     XCTAssert(HUDLayoutTier.compact.showsVolumeSlider(isAudioOnly: false) == true, "Video compact shows volume slider")
     XCTAssert(HUDLayoutTier.standard.showsVolumeSlider(isAudioOnly: false) == true, "Video standard shows volume slider")
     XCTAssert(HUDLayoutTier.expanded.showsVolumeSlider(isAudioOnly: false) == true, "Video expanded shows volume slider")
@@ -1913,5 +1917,161 @@ final class PlaylistRegressionTests: XCTestCase {
     let expandedHorizontalAvailable = 950.0 / 2.0 - (windowOuterPadding + HUDLayoutTier.expanded.outerBottomHorizontalPadding + HUDLayoutTier.expanded.wingHorizontalPadding) - 145.0
     let expandedRightWingInline = 114.0 + 28.0 * 4.0 + HUDLayoutTier.expanded.wingItemSpacing * 4.0
     XCTAssertGreaterThanOrEqual(expandedHorizontalAvailable, expandedRightWingInline, "Wide expanded >= 950pt clears centered Next even when inline horizontal slider is expanded")
+
+    // 64. Strict Playback Category Isolation & Cross-Playlist Boundary Defense
+    print("\n--- Test 64: Strict Playback Category Isolation & Cross-Playlist Boundary Defense ---")
+    let isoManager = PlaylistManager(isPersistenceEnabled: false, autoRestore: false)
+    let videoItem1 = PlaylistItem(path: "/media/movie_ep01.mp4", title: "Ep 01", duration: 1200.0)
+    let videoItem2 = PlaylistItem(path: "/media/movie_ep02.mp4", title: "Ep 02", duration: 1300.0)
+    let audioItem1 = PlaylistItem(path: "/music/song_01.flac", title: "Song 01", duration: 200.0)
+    let audioItem2 = PlaylistItem(path: "/music/song_02.mp3", title: "Song 02", duration: 210.0)
+
+    isoManager.appendItems([videoItem1, videoItem2, audioItem1, audioItem2])
+    XCTAssertEqual(isoManager.videoCount, 2)
+    XCTAssertEqual(isoManager.audioCount, 2)
+
+    // Subtest A: Playing Music with Drawer switched to Videos
+    isoManager.selectItem(audioItem1)
+    XCTAssertEqual(isoManager.playbackCategory, .audio)
+    XCTAssertEqual(isoManager.currentItem?.path, audioItem1.path)
+
+    // User opens drawer and clicks Video tab
+    isoManager.switchCategory(.video)
+    XCTAssertEqual(isoManager.activeCategory, .video, "UI tab is viewing video")
+    XCTAssertEqual(isoManager.playbackCategory, .audio, "Playback stream remains strictly locked to audio")
+    XCTAssertEqual(isoManager.currentItem?.path, audioItem1.path, "Current playing track is still song 01")
+    XCTAssertTrue(isoManager.hasNext, "Audio track 01 has next audio track")
+    XCTAssertEqual(isoManager.nextItem?.path, audioItem2.path, "Next item is strictly audio 02, not video")
+
+    // Move to next audio track
+    let nextAudio = isoManager.moveToNext()
+    XCTAssertEqual(nextAudio?.path, audioItem2.path, "Advanced to song 02")
+    XCTAssertEqual(isoManager.playbackCategory, .audio)
+
+    // Boundary at end of audio queue in sequential mode: Must NOT cross into video list
+    isoManager.setPlaybackMode(.sequential)
+    XCTAssertFalse(isoManager.hasNext, "At end of audio list, hasNext must be false even if videoItems exist")
+    XCTAssertNil(isoManager.nextItem, "nextItem must be nil at end of audio playlist")
+    XCTAssertNil(isoManager.moveToNext(), "moveToNext must return nil and refuse to cross to video list")
+    XCTAssertNil(isoManager.handleNaturalEOF(), "Natural EOF must stop cleanly at end of audio list without cross-list rollover")
+
+    // List Loop mode in Audio: Must loop strictly within audioItems
+    isoManager.setPlaybackMode(.listLoop)
+    XCTAssertTrue(isoManager.hasNext)
+    XCTAssertEqual(isoManager.nextItem?.path, audioItem1.path, "List loop next item loops to first audio track")
+    let loopedAudio = isoManager.handleNaturalEOF()
+    XCTAssertEqual(loopedAudio?.path, audioItem1.path, "Natural EOF loops strictly back to song 01")
+    XCTAssertEqual(isoManager.playbackCategory, .audio)
+
+    // Shuffle mode in Audio: All candidates and next items must only be audio tracks
+    isoManager.setPlaybackMode(.shuffle)
+    for _ in 0..<10 {
+        if let up = isoManager.upcomingItem {
+            XCTAssertEqual(PlaylistManager.category(for: up.url), .audio, "Upcoming shuffle item must always be audio")
+        }
+        let shuffled = isoManager.moveToNext()
+        if let shuffled {
+            XCTAssertEqual(PlaylistManager.category(for: shuffled.url), .audio, "Played shuffle item must strictly remain audio")
+        }
+    }
+
+    // Subtest B: Playing Video with Drawer switched to Music
+    isoManager.selectItem(videoItem1)
+    XCTAssertEqual(isoManager.playbackCategory, .video)
+    XCTAssertEqual(isoManager.currentItem?.path, videoItem1.path)
+
+    // User opens drawer and clicks Music tab
+    isoManager.switchCategory(.audio)
+    XCTAssertEqual(isoManager.activeCategory, .audio, "UI tab is viewing audio")
+    XCTAssertEqual(isoManager.playbackCategory, .video, "Playback stream remains strictly locked to video")
+    XCTAssertEqual(isoManager.currentItem?.path, videoItem1.path, "Current playing track is still video 01")
+    XCTAssertTrue(isoManager.hasNext)
+    XCTAssertEqual(isoManager.nextItem?.path, videoItem2.path, "Next item is strictly video 02, not music")
+
+    let nextVideo = isoManager.moveToNext()
+    XCTAssertEqual(nextVideo?.path, videoItem2.path)
+    XCTAssertEqual(isoManager.playbackCategory, .video)
+
+    // Boundary at end of video queue in sequential mode: Must NOT cross into audio list
+    isoManager.setPlaybackMode(.sequential)
+    XCTAssertFalse(isoManager.hasNext, "At end of video list, hasNext must be false even if audioItems exist")
+    XCTAssertNil(isoManager.nextItem)
+    XCTAssertNil(isoManager.moveToNext(), "moveToNext must return nil and refuse to cross to audio list")
+    XCTAssertNil(isoManager.handleNaturalEOF(), "Natural EOF stops at end of video list without cross-list rollover")
+
+    // List Loop mode in Video: Must loop strictly within videoItems
+    isoManager.setPlaybackMode(.listLoop)
+    XCTAssertTrue(isoManager.hasNext)
+    XCTAssertEqual(isoManager.nextItem?.path, videoItem1.path, "List loop next item loops to first video")
+    let loopedVideo = isoManager.handleNaturalEOF()
+    XCTAssertEqual(loopedVideo?.path, videoItem1.path, "Natural EOF loops strictly back to video 01")
+    XCTAssertEqual(isoManager.playbackCategory, .video)
+
+    // Subtest C: Unified List Mode (isDualPlaylistMode == false) Strict Category Isolation
+    isoManager.applyDualPlaylistMode(false)
+    XCTAssertFalse(isoManager.isDualPlaylistMode)
+
+    // While playing video in unified mode, sequential progression must not cross to audio
+    isoManager.selectItem(videoItem2)
+    isoManager.setPlaybackMode(.sequential)
+    XCTAssertFalse(isoManager.hasNext, "In unified mode, playing video at last video must not cross over to audio")
+    XCTAssertNil(isoManager.moveToNext(), "moveToNext must not cross video boundary into audio in unified mode")
+
+    // While playing audio in unified mode, sequential progression must not cross to video
+    isoManager.selectItem(audioItem2)
+    isoManager.setPlaybackMode(.sequential)
+    XCTAssertFalse(isoManager.hasNext, "In unified mode, playing audio at last audio must not cross over to video")
+    XCTAssertNil(isoManager.moveToNext(), "moveToNext must not cross audio boundary into video in unified mode")
+    }
+
+    @MainActor
+    func test65_SubtitleDisablementRetentionAndMultiCueASSPositionInvariants() throws {
+        print("\n--- Test 65: Subtitle Disablement Retention & Multi-Cue ASS Position Alignment Invariants ---")
+        let player = PlayerCore()
+
+        // Setup dummy subtitles
+        let sub1 = SubtitleInfo(subtitleID: "1", name: "English", languageCode: "en", isEnabled: true)
+        let sub2 = SubtitleInfo(subtitleID: "2", name: "Chinese", languageCode: "zh", isEnabled: false)
+        player.subtitleModel.subtitleInfos = [sub1, sub2]
+
+        // Initial track refresh: Selects track (matches preferred Chinese language -> sub2)
+        player.refreshTracks()
+        XCTAssertEqual(player.selectedSubtitleTrackId, 2, "Initial auto-select prioritizes user preferred language")
+        XCTAssertFalse(player.isSubtitleDisabledByUser)
+
+        // User disables subtitle via HUD menu (id: 0)
+        player.setSubtitleTrack(id: 0, notifyOSD: false)
+        XCTAssertTrue(player.isSubtitleDisabledByUser, "User explicit disable sets isSubtitleDisabledByUser")
+        XCTAssertEqual(player.selectedSubtitleTrackId, 0, "selectedSubtitleTrackId becomes 0")
+        XCTAssertNil(player.subtitleModel.selectedSubtitleInfo)
+        XCTAssertTrue(player.subtitleModel.parts.isEmpty)
+
+        // Subsequent refreshTracks must NOT re-select subtitle
+        player.refreshTracks()
+        XCTAssertTrue(player.isSubtitleDisabledByUser, "isSubtitleDisabledByUser stays true")
+        XCTAssertEqual(player.selectedSubtitleTrackId, 0, "selectedSubtitleTrackId stays 0")
+        XCTAssertNil(player.subtitleModel.selectedSubtitleInfo, "selectedSubtitleInfo stays nil")
+        XCTAssertTrue(player.subtitleTracks.allSatisfy { !$0.isSelected }, "All subtitle tracks unselected")
+
+        // User manually chooses track 1
+        player.setSubtitleTrack(id: 1, notifyOSD: false)
+        XCTAssertFalse(player.isSubtitleDisabledByUser, "Manual selection clears isSubtitleDisabledByUser")
+        XCTAssertEqual(player.selectedSubtitleTrackId, 1)
+
+        // Verify ASS position alignment parser
+        let topPos7 = SilkSubtitleParser.parseASSPosition(from: "{\\an7}Erik Selvig")
+        let topPos8 = SilkSubtitleParser.parseASSPosition(from: "{\\an8}Top Center Title")
+        let topPos9 = SilkSubtitleParser.parseASSPosition(from: "{\\an9}Samuel Wilson")
+        XCTAssertEqual(topPos7?.verticalAlign, .top)
+        XCTAssertEqual(topPos8?.verticalAlign, .top)
+        XCTAssertEqual(topPos9?.verticalAlign, .top)
+
+        let centerPos = SilkSubtitleParser.parseASSPosition(from: "{\\an5}Center Screen")
+        XCTAssertEqual(centerPos?.verticalAlign, .center)
+
+        let bottomPos = SilkSubtitleParser.parseASSPosition(from: "{\\an2}Bottom Subtitle")
+        XCTAssertEqual(bottomPos?.verticalAlign, .bottom)
+
+        player.destroy()
     }
 }

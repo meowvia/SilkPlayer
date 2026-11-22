@@ -52,6 +52,7 @@ defaults delete "${BUNDLE_ID}" 2>/dev/null || true
 rm -f "${HOME}/Library/Preferences/${BUNDLE_ID}.plist"
 rm -rf "${HOME}/Library/Application Support/${APP_NAME}"
 rm -rf "${HOME}/Library/Caches/${APP_NAME}"
+rm -rf "${HOME}/Library/Caches/${BUNDLE_ID}"
 rm -rf "${HOME}/Library/Saved Application State/${BUNDLE_ID}.savedState"
 rm -rf "${HOME}/Library/Saved Application State/${APP_NAME}.savedState"
 killall Dock 2>/dev/null || true

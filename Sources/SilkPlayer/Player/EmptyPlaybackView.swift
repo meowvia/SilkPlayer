@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import SilkCoreKit
 
 /// Empty Playback Canvas for SilkPlayer.
 /// Features pure minimalist Apple aesthetics, iridescent Silk ambient backdrops,
@@ -11,6 +12,7 @@ public struct EmptyPlaybackView: View {
     var onFileDropped: ((URL) -> Void)?
     var onFilesDropped: (([URL]) -> Void)?
 
+    @ObservedObject private var licenseEngine = SilkProLicenseEngine.shared
     @State private var isDropTargeted: Bool = false
     @State private var isHoveringLogo: Bool = false
 
@@ -33,7 +35,11 @@ public struct EmptyPlaybackView: View {
 
             // 2. Ambient Gradient & Vignette
             RadialGradient(
-                gradient: Gradient(colors: [
+                gradient: Gradient(colors: licenseEngine.isProActive ? [
+                    Color(red: 0.96, green: 0.62, blue: 0.15).opacity(isHoveringLogo ? 0.18 : 0.09),
+                    Color(red: 0.18, green: 0.14, blue: 0.11).opacity(0.45),
+                    Color(red: 0.08, green: 0.06, blue: 0.05).opacity(0.92)
+                ] : [
                     Color.cyan.opacity(isHoveringLogo ? 0.16 : 0.08),
                     Color(red: 0.06, green: 0.08, blue: 0.14).opacity(0.45),
                     Color(red: 0.03, green: 0.04, blue: 0.07).opacity(0.88)
@@ -71,7 +77,46 @@ public struct EmptyPlaybackView: View {
 
             // 4. Centered Interactive Logo (Pure Minimalist Entrypoint)
             Button(action: onOpenFile) {
-                SilkBrandLogoView(size: 104, isInteractive: true)
+                VStack(spacing: 12) {
+                    SilkBrandLogoView(size: 104, isInteractive: true)
+
+                    if licenseEngine.isProActive {
+                        Text("PRO")
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 1.0, green: 0.88, blue: 0.65),
+                                        Color(red: 0.95, green: 0.65, blue: 0.25)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2.5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .fill(Color(red: 0.22, green: 0.16, blue: 0.12).opacity(0.95))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 0.95, green: 0.65, blue: 0.25).opacity(0.8),
+                                                Color(red: 0.65, green: 0.35, blue: 0.15).opacity(0.4)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 0.8
+                                    )
+                            )
+                            .shadow(color: Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.25), radius: 3, x: 0, y: 1)
+                            .opacity(isHoveringLogo ? 1.0 : 0.85)
+                    }
+                }
             }
             .buttonStyle(.plain)
             .focusable(false)
@@ -210,6 +255,7 @@ public final class WindowDragCanvasView: NSView {
     override public var mouseDownCanMoveWindow: Bool { false }
     private var initialMouseLocation: NSPoint = .zero
     private var initialWindowOrigin: NSPoint = .zero
+    private var pendingDragMouseDownEvent: NSEvent?
 
     override public func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -230,6 +276,7 @@ public final class WindowDragCanvasView: NSView {
     }
 
     override public func mouseDown(with event: NSEvent) {
+        pendingDragMouseDownEvent = nil
         guard let window = self.window else { return }
         let loc = self.convert(event.locationInWindow, from: nil)
         let b = bounds
@@ -250,22 +297,28 @@ public final class WindowDragCanvasView: NSView {
             return
         }
 
+        pendingDragMouseDownEvent = event
         initialMouseLocation = NSEvent.mouseLocation
         initialWindowOrigin = window.frame.origin
     }
 
     override public func mouseDragged(with event: NSEvent) {
-        guard let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
+        guard let dragEvent = pendingDragMouseDownEvent,
+              let window = self.window, !window.styleMask.contains(.fullScreen) else { return }
         if let del = window.delegate as? PlayerWindowDelegate, del.currentInteractiveMode == .maximized {
+            pendingDragMouseDownEvent = nil
             return
         }
         let current = NSEvent.mouseLocation
         let dx = current.x - initialMouseLocation.x
         let dy = current.y - initialMouseLocation.y
         if hypot(dx, dy) > 3.0 {
-            window.performDrag(with: event)
+            pendingDragMouseDownEvent = nil
+            window.performDrag(with: dragEvent)
         }
     }
 
-    override public func mouseUp(with event: NSEvent) {}
+    override public func mouseUp(with event: NSEvent) {
+        pendingDragMouseDownEvent = nil
+    }
 }

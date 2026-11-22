@@ -2,12 +2,16 @@ import Foundation
 import AppKit
 
 /// Centralized Update Service for SilkPlayer (Proposal 020).
-/// Provides smart silent update checks, 7-day weekly quiet cadence,
-/// persistent "About" red dot indicator, and lossless in-place overwrite upgrades.
+/// Prioritizes official Cloudflare Edge endpoints (`silkplayer.1999909.xyz`) for reliable
+/// Mainland China connectivity, with automatic fallback to GitHub Releases.
 @MainActor
 @Observable
 public final class UpdateService {
     public static let shared = UpdateService()
+
+    public nonisolated static let officialVersionEndpoint = "https://silkplayer.1999909.xyz/api/version"
+    public nonisolated static let officialDownloadEndpoint = "https://silkplayer.1999909.xyz/api/download?arch=universal"
+    public nonisolated static let githubLatestAPIEndpoint = "https://api.github.com/repos/meowvia/SilkPlayer/releases/latest"
 
     public private(set) var isChecking: Bool = false
     public private(set) var isDownloading: Bool = false
@@ -34,7 +38,7 @@ public final class UpdateService {
     }
 
     public var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0"
     }
 
     public init() {
@@ -74,7 +78,6 @@ public final class UpdateService {
 
         // If user clicked "No" within the past 7 days, enforce strict quiet period
         if lastReminderTime > 0 && (now - lastReminderTime) < sevenDays {
-            // Still perform lightweight quiet check in background to refresh red dot status
             checkForUpdates(silent: true) { _, _ in }
             return
         }
@@ -82,7 +85,58 @@ public final class UpdateService {
         checkForUpdates(silent: true) { [weak self] hasUpdate, version in
             guard let self = self, hasUpdate, let version = version else { return }
             self.latestVersion = version
+
+            // 规则：播放中绝不弹窗打扰，仅在冷启动、静态待机时弹出
+            let isAnyPlaying = PlayerWindowManager.shared.sessions.contains { $0.player?.isPlaying == true }
+            guard !isAnyPlaying else { return }
+
             self.isShowingUpdateAlert = true
+            self.presentColdStartAlertModalIfNeeded(version: version)
+        }
+    }
+
+    /// Presents a native modal/sheet alert on the active playback window during cold start
+    /// when the Settings window is not currently open.
+    public func presentColdStartAlertModalIfNeeded(version: String) {
+        guard !PlayerWindowManager.isRunningTests else { return }
+
+        let isAnyPlaying = PlayerWindowManager.shared.sessions.contains { $0.player?.isPlaying == true }
+        guard !isAnyPlaying else { return }
+
+        // If Settings window is already visible and bound to SwiftUI alert, avoid duplicate presentation
+        if let settingsWin = NSApp.windows.first(where: { $0.title.contains("Settings") || $0.title.contains("偏好设置") }), settingsWin.isVisible {
+            return
+        }
+
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = L10n.tr(
+            "New version \(version) is available. Update now?",
+            "发现新版本 \(version)，是否立即更新？"
+        )
+        alert.informativeText = L10n.tr(
+            "SilkPlayer will download and install the update in the background.",
+            "新版本已就绪，SilkPlayer 将在端内静默下载并自动无损替换升级。"
+        )
+        alert.addButton(withTitle: L10n.tr("Yes", "是"))
+        alert.addButton(withTitle: L10n.tr("No", "否"))
+
+        let targetWindow = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) })
+        if let targetWindow = targetWindow {
+            alert.beginSheetModal(for: targetWindow) { [weak self] response in
+                if response == .alertFirstButtonReturn {
+                    self?.userAcceptedUpdate()
+                } else {
+                    self?.userDeclinedUpdate()
+                }
+            }
+        } else {
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                self.userAcceptedUpdate()
+            } else {
+                self.userDeclinedUpdate()
+            }
         }
     }
 
@@ -101,60 +155,108 @@ public final class UpdateService {
         }
     }
 
-    // MARK: - GitHub Releases Network Check
+    // MARK: - Edge-First + GitHub Fallback Network Check
     public func checkForUpdates(
         silent: Bool,
         completion: @escaping @MainActor (Bool, String?) -> Void
     ) {
-        guard let url = URL(string: "https://api.github.com/repos/meowvia/SilkPlayer/releases/latest") else {
-            completion(false, nil)
-            return
-        }
-
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 8.0
-        request.setValue("SilkPlayer/\(currentAppVersion)", forHTTPHeaderField: "User-Agent")
-        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        let appVer = currentAppVersion
 
         Task(priority: .utility) { [weak self] in
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                    completion(false, nil)
-                    return
-                }
-
-                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let rawTagName = json["tag_name"] as? String else {
-                    completion(false, nil)
-                    return
-                }
-
-                let remoteVersion = rawTagName.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
-                let assets = json["assets"] as? [[String: Any]]
-                let resolvedDownloadURL = Self.resolveDownloadURLString(version: remoteVersion, assets: assets)
-
-                guard let self = self else { return }
-                let current = self.currentAppVersion
-                let comparison = Self.compareVersions(remoteVersion, current)
-
-                if comparison == .orderedDescending {
-                    self.latestVersion = remoteVersion
-                    self.latestDownloadURL = resolvedDownloadURL
-                    self.hasPendingUpdate = true
-                    UserDefaults.standard.set(remoteVersion, forKey: self.userDefaultsLatestVersionKey)
-                    UserDefaults.standard.set(resolvedDownloadURL, forKey: self.userDefaultsLatestDownloadURLKey)
-                    completion(true, remoteVersion)
-                } else {
-                    self.latestDownloadURL = nil
-                    self.hasPendingUpdate = false
-                    UserDefaults.standard.removeObject(forKey: self.userDefaultsLatestVersionKey)
-                    UserDefaults.standard.removeObject(forKey: self.userDefaultsLatestDownloadURLKey)
-                    completion(false, nil)
-                }
-            } catch {
-                completion(false, nil)
+            if let edgeResult = await Self.fetchFromOfficialEdge(appVersion: appVer) {
+                self?.applyRemoteVersionResult(
+                    remoteVersion: edgeResult.version,
+                    resolvedDownloadURL: edgeResult.downloadURL,
+                    completion: completion
+                )
+                return
             }
+
+            if let ghResult = await Self.fetchFromGitHubFallback(appVersion: appVer) {
+                self?.applyRemoteVersionResult(
+                    remoteVersion: ghResult.version,
+                    resolvedDownloadURL: ghResult.downloadURL,
+                    completion: completion
+                )
+                return
+            }
+
+            completion(false, nil)
+        }
+    }
+
+    private func applyRemoteVersionResult(
+        remoteVersion: String,
+        resolvedDownloadURL: String,
+        completion: @escaping @MainActor (Bool, String?) -> Void
+    ) {
+        let comparison = Self.compareVersions(remoteVersion, currentAppVersion)
+        if comparison == .orderedDescending {
+            latestVersion = remoteVersion
+            latestDownloadURL = resolvedDownloadURL
+            hasPendingUpdate = true
+            UserDefaults.standard.set(remoteVersion, forKey: userDefaultsLatestVersionKey)
+            UserDefaults.standard.set(resolvedDownloadURL, forKey: userDefaultsLatestDownloadURLKey)
+            completion(true, remoteVersion)
+        } else {
+            latestDownloadURL = nil
+            hasPendingUpdate = false
+            UserDefaults.standard.removeObject(forKey: userDefaultsLatestVersionKey)
+            UserDefaults.standard.removeObject(forKey: userDefaultsLatestDownloadURLKey)
+            completion(false, nil)
+        }
+    }
+
+    private nonisolated static func fetchFromOfficialEdge(
+        appVersion: String
+    ) async -> (version: String, downloadURL: String)? {
+        guard let url = URL(string: officialVersionEndpoint) else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 6.0
+        request.setValue("SilkPlayer/\(appVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return nil
+            }
+            let rawVer = (json["version"] as? String) ?? (json["tag"] as? String)
+            guard let rawVer else { return nil }
+            let cleanVer = rawVer.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
+            guard !cleanVer.isEmpty else { return nil }
+            return (cleanVer, officialDownloadEndpoint)
+        } catch {
+            return nil
+        }
+    }
+
+    private nonisolated static func fetchFromGitHubFallback(
+        appVersion: String
+    ) async -> (version: String, downloadURL: String)? {
+        guard let url = URL(string: githubLatestAPIEndpoint) else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 8.0
+        request.setValue("SilkPlayer/\(appVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let rawTagName = json["tag_name"] as? String else {
+                return nil
+            }
+            let cleanVer = rawTagName.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
+            guard !cleanVer.isEmpty else { return nil }
+            let assets = json["assets"] as? [[String: Any]]
+            let ghURL = resolveDownloadURLString(version: cleanVer, assets: assets)
+            // Prefer official Cloudflare Edge download mirror so Mainland China users don't stall on GitHub CDN
+            _ = ghURL
+            return (cleanVer, officialDownloadEndpoint)
+        } catch {
+            return nil
         }
     }
 
@@ -209,44 +311,63 @@ public final class UpdateService {
         downloadAndInstall(version: version)
     }
 
-    // MARK: - In-Place Lossless Overwrite Installer
+    // MARK: - In-Place Lossless Overwrite Installer (Edge-First + GitHub Fallback)
     public func downloadAndInstall(version: String) {
         isDownloading = true
         downloadProgress = 0.05
 
-        let downloadURLString: String
+        let primaryURLString: String
         if let cachedURL = latestDownloadURL,
            !cachedURL.isEmpty,
            latestVersion == version {
-            downloadURLString = cachedURL
+            primaryURLString = cachedURL
         } else {
-            downloadURLString = Self.resolveDownloadURLString(version: version)
+            primaryURLString = Self.officialDownloadEndpoint
+        }
+        let fallbackGitHubURLString = Self.resolveDownloadURLString(version: version)
+
+        var candidateURLs: [URL] = []
+        if let primaryURL = URL(string: primaryURLString) {
+            candidateURLs.append(primaryURL)
+        }
+        if fallbackGitHubURLString != primaryURLString, let fallbackURL = URL(string: fallbackGitHubURLString) {
+            candidateURLs.append(fallbackURL)
         }
 
-        guard let downloadURL = URL(string: downloadURLString) else {
+        guard !candidateURLs.isEmpty else {
             isDownloading = false
             alertErrorMessage = L10n.tr("Invalid download URL", "下载地址无效")
             return
         }
 
-        let dmgName = downloadURL.lastPathComponent.isEmpty ? "SilkPlayer-\(version)-universal.dmg" : downloadURL.lastPathComponent
-        let tempDir = FileManager.default.temporaryDirectory
-        let targetDMG = tempDir.appendingPathComponent(dmgName)
+        let targetDMG = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SilkPlayer-\(version)-universal.dmg")
 
         Task(priority: .userInitiated) { [weak self] in
-            do {
-                let (tempLocalURL, _) = try await URLSession.shared.download(from: downloadURL)
-                try? FileManager.default.removeItem(at: targetDMG)
-                try FileManager.default.moveItem(at: tempLocalURL, to: targetDMG)
+            var lastError: Error? = nil
 
-                guard let self = self else { return }
-                self.downloadProgress = 1.0
-                self.launchInPlaceUpdateScript(dmgPath: targetDMG.path)
-            } catch {
-                guard let self = self else { return }
-                self.isDownloading = false
-                self.alertErrorMessage = L10n.tr("Download failed: ", "下载失败: ") + error.localizedDescription
+            for candidateURL in candidateURLs {
+                do {
+                    let (tempLocalURL, response) = try await URLSession.shared.download(from: candidateURL)
+                    if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                        throw URLError(.badServerResponse)
+                    }
+                    try? FileManager.default.removeItem(at: targetDMG)
+                    try FileManager.default.moveItem(at: tempLocalURL, to: targetDMG)
+
+                    guard let self = self else { return }
+                    self.downloadProgress = 1.0
+                    self.launchInPlaceUpdateScript(dmgPath: targetDMG.path)
+                    return
+                } catch {
+                    lastError = error
+                }
             }
+
+            guard let self = self else { return }
+            self.isDownloading = false
+            let message = lastError?.localizedDescription ?? "Unknown error"
+            self.alertErrorMessage = L10n.tr("Download failed: ", "下载失败: ") + message
         }
     }
 
@@ -273,6 +394,7 @@ public final class UpdateService {
         if [ -d "$MOUNT_DIR/SilkPlayer.app" ]; then
             rm -rf "$APP_PATH"
             cp -R "$MOUNT_DIR/SilkPlayer.app" "$APP_PATH"
+            xattr -rd com.apple.quarantine "$APP_PATH" 2>/dev/null || true
         fi
 
         hdiutil detach "$MOUNT_DIR" -quiet || true

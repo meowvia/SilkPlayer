@@ -11,12 +11,14 @@ public final class MetalPlayerContainerView: NSView {
     private var dragInitialWindowOrigin: NSPoint = .zero
     private var isDraggingWindow: Bool = false
     private var canDragWindowFromCurrentMouseDown: Bool = false
+    private var pendingDragMouseDownEvent: NSEvent?
     private var pendingSingleClickWorkItem: DispatchWorkItem?
     private var lastMouseActivityTime: TimeInterval = 0
     private var localMouseDownMonitor: Any?
     private var lastCanvasMouseDownTime: TimeInterval = 0
     private var lastCanvasMouseDownLocation: NSPoint = .zero
     private var lastHandledDoubleClickTime: TimeInterval = 0
+    private var isDrawerDismissClick: Bool = false
 
     isolated deinit {
         if let monitor = localMouseDownMonitor {
@@ -133,6 +135,7 @@ public final class MetalPlayerContainerView: NSView {
             self.pendingSingleClickWorkItem?.cancel()
             self.pendingSingleClickWorkItem = nil
             self.canDragWindowFromCurrentMouseDown = false
+            self.pendingDragMouseDownEvent = nil
 
             let isMaximized: Bool
             if let delegate = window.delegate as? PlayerWindowDelegate {
@@ -324,10 +327,19 @@ public final class MetalPlayerContainerView: NSView {
                 scrubInitialTime = player.currentTime
 
             case .changed:
+                let loc = self.convert(event.locationInWindow, from: nil)
+                let isBottomControlArea = (loc.y <= 112.0)
+
                 if currentGestureAxis == .undefined {
                     let dx = abs(event.scrollingDeltaX)
                     let dy = abs(event.scrollingDeltaY)
-                    if dx > 1.2 || dy > 1.2 {
+                    // 光标处于底栏控制区/进度条区域时：严格锁定水平轴快进快退，彻底杜绝意外触发纵向音量调节
+                    if isBottomControlArea {
+                        if dx > 0.8 || dy > 0.8 {
+                            currentGestureAxis = .horizontal
+                            player.startScrubbing()
+                        }
+                    } else if dx > 1.2 || dy > 1.2 {
                         currentGestureAxis = (dy >= dx) ? .vertical : .horizontal
                         if currentGestureAxis == .horizontal {
                             player.startScrubbing()
@@ -353,6 +365,7 @@ public final class MetalPlayerContainerView: NSView {
                     let targetTime = max(0.0, min(duration, scrubInitialTime + scrubOffset))
                     player.updateScrubbing(to: targetTime)
                     player.showSeekOSD(targetTime: targetTime, offset: scrubOffset, duration: duration)
+                    SilkThumbnailEngine.shared.requestThumbnail(for: player.currentFilePath, at: targetTime)
                     player.reportUserActivity()
                 }
 
@@ -363,6 +376,7 @@ public final class MetalPlayerContainerView: NSView {
                     let scrubOffset = Double(accumulatedScrubDelta / 300.0) * scrubSpeedFactor
                     let targetTime = max(0.0, min(duration, scrubInitialTime + scrubOffset))
                     player.finishScrubbing(to: targetTime)
+                    SilkThumbnailEngine.shared.clearCurrent()
                 }
                 currentGestureAxis = .undefined
                 accumulatedScrubDelta = 0.0
@@ -637,6 +651,7 @@ public final class MetalPlayerContainerView: NSView {
         }
         let isFullscreen = window.styleMask.contains(.fullScreen)
         canDragWindowFromCurrentMouseDown = false
+        pendingDragMouseDownEvent = nil
 
         // 1. 边缘 8pt 预留给 AppKit 原生 NSThemeFrame 八向拉伸，绝不在此拦截
         if !isFullscreen {
@@ -651,12 +666,15 @@ public final class MetalPlayerContainerView: NSView {
             ((playerCore?.isPlaylistDrawerVisible == true) ? (PlaylistDrawerDimensions.drawerWidth(for: b.width, isFullscreen: isFullscreen) + 8.0) : 0.0)
 
         if let player = playerCore {
-            // 抽屉外点击关闭抽屉
+            // 抽屉外点击关闭抽屉：首要交互为关闭抽屉，绝对防穿透
             if player.isPlaylistDrawerVisible || player.isInspectorVisible {
                 let insideDrawer = (loc.x >= b.width - activeDrawerWidth) && (loc.y >= 96 && loc.y <= b.height - 64)
                 if !insideDrawer {
+                    isDrawerDismissClick = true
                     player.isPlaylistDrawerVisible = false
                     player.isInspectorVisible = false
+                    canDragWindowFromCurrentMouseDown = false
+                    pendingDragMouseDownEvent = nil
                     return
                 }
             }
@@ -712,6 +730,7 @@ public final class MetalPlayerContainerView: NSView {
 
             // C. 顶栏空白处/标题胶囊处单击：允许拖拽移动窗口（非最大化时）
             canDragWindowFromCurrentMouseDown = !isFullscreen && !isMaximized
+            pendingDragMouseDownEvent = canDragWindowFromCurrentMouseDown ? event : nil
             dragInitialMouseScreenLocation = NSEvent.mouseLocation
             dragInitialWindowOrigin = window.frame.origin
             isDraggingWindow = false
@@ -739,11 +758,13 @@ public final class MetalPlayerContainerView: NSView {
         // 4. 底部控制栏区域：HUD 激活时保护控制面板，禁止单次点击穿透暂停或发起窗口拖拽
         if isBottomControlArea && player.isHUDVisible {
             canDragWindowFromCurrentMouseDown = false
+            pendingDragMouseDownEvent = nil
             return
         }
 
         // 5. 画面区域（已排除四周 8pt 边框）单次点击按下：允许拖拽移动窗口（超过 8pt 调用 window.performDrag）或松开触发播放/暂停
         canDragWindowFromCurrentMouseDown = !isFullscreen && !isMaximized
+        pendingDragMouseDownEvent = canDragWindowFromCurrentMouseDown ? event : nil
         dragInitialMouseScreenLocation = NSEvent.mouseLocation
         dragInitialWindowOrigin = window.frame.origin
         isDraggingWindow = false
@@ -771,12 +792,21 @@ public final class MetalPlayerContainerView: NSView {
             pendingSingleClickWorkItem?.cancel()
             pendingSingleClickWorkItem = nil
             canDragWindowFromCurrentMouseDown = false
-            window.performDrag(with: event)
+            let dragEvent = pendingDragMouseDownEvent ?? event
+            pendingDragMouseDownEvent = nil
+            window.performDrag(with: dragEvent)
         }
     }
 
     override public func mouseUp(with event: NSEvent) {
         canDragWindowFromCurrentMouseDown = false
+        pendingDragMouseDownEvent = nil
+
+        // 若前序点击用于关闭抽屉，本次抬手 100% 拦截，严禁穿透触发播放/暂停
+        if isDrawerDismissClick {
+            isDrawerDismissClick = false
+            return
+        }
 
         guard event.clickCount == 1 else { return }
 
@@ -843,5 +873,6 @@ public struct VideoView: NSViewRepresentable {
 
     public func updateNSView(_ nsView: MetalPlayerContainerView, context: Context) {
         playerCore.attachRenderContainer(nsView)
+        nsView.window?.invalidateCursorRects(for: nsView)
     }
 }

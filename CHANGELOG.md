@@ -5,355 +5,99 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-11-20
-
-### Added
-- **Native SMB 2/3 & NFS LAN Media Library**:
-  - Embedded native SMB and NFS protocol support with zero-config local network storage discovery.
-  - Automated credential persistence via macOS Keychain and resilient network reconnect handling.
-- **Cinema Poster Wall Scraper & Offline .nfo Parsing**:
-  - Integrated TMDB metadata fetching for posters, cast arrays, ratings, and plot summaries.
-  - Added resilient local `.nfo` XML parser supporting Kodi, Jellyfin, Emby, and TinyMediaManager formats for fully offline environments.
-- **Two-Column Media Detail & Multi-Season Series Navigation**:
-  - Immersive detail view featuring ambient backdrop lighting, technical format badges (4K, HDR, Dolby Vision, audio layout), and contextual recommendations.
-  - Multi-season series aggregation with episode selection drawers and per-episode resume checkpoints.
-- **Standalone Audio Player & Menu Bar Resident Controller**:
-  - Dedicated music mode supporting two-stage interface (expanded queue management and minimal companion card).
-  - Rotating vinyl visualizer with real-time multi-band audio spectrum glow.
-  - macOS menu bar resident micro-player enabling playback control with zero Dock clutter.
-- **Discrete Multichannel LPCM Passthrough (5.1 / 7.1)**:
-  - Native CoreAudio discrete multichannel LPCM output over HDMI and external multi-channel audio DACs without forced stereo downmixing.
-- **Four Studio Appearance Themes**:
-  - Integrated Dark Charcoal (深灰), Ice Blue (冰蓝), Warm Ivory (暖白), and Celadon (青瓷) themes synchronized globally across library, playback HUD, and settings.
-- **Cross-Device Playback Sync via iCloud**:
-  - Multi-device playback progress checkpoints and episode watch-status synchronization with explicit opt-out toggle in Settings.
-- **Decoupled Standard Audio Playback**:
-  - Lightweight audio playback pipeline for standard local audio files without forcing Pro music mode.
-
-### Changed
-- **Compact Media Library Header**:
-  - Re-architected toolbar layout into a compact single-line mode, recovering 36pt vertical viewport height.
-- **Floating Cinema HUD**:
-  - Completely removed dark translucent rectangular backing behind controls, adopting floating minimal pill controls that fade out cleanly during playback.
+## [2.0.2] - 2026-11-22
 
 ### Fixed
-- **Multichannel Stereo Downmixing Clipping Defense**:
-  - Tuned soft-knee limiting in `SilkAudioEngine` to prevent clipping distortion when high-bitrate multichannel audio tracks are downmixed to stereo interfaces.
+- **双击全屏 Space 转场 WindowServer 驱动死锁彻底修复**:
+  - 解耦 Metal 主线程 `layout()` / `setFrameSize()` 与同步渲染请求（`renderCurrentFrameImmediately`），布局期间严格仅更新 `layer.drawableSize`，杜绝在 macOS 全屏跨 Space 动画高频插值期间向 `CAMetalLayer` 同步争抢 `nextDrawable()`，彻底终结因此引发的系统级 `WindowServer` 崩溃与强制注销（退回登录界面）缺陷。
+- **剔除私有分屏约束竞争**:
+  - 在 `toggleFullscreen()` 入口彻底移除调用 macOS 15 内部平铺机制的未公开私有方法 `_doUpdateTilingConstraintsImmediately`，消除全屏前与系统窗口管理器产生的时序竞争。
+- **渲染管线几何防御门禁**:
+  - 在 Metal 帧提交前加入图层尺寸正值校验，杜绝在零尺寸或过渡脏尺寸下调用 `nextDrawable()`，进一步巩固 ProMotion 120Hz 高刷新率屏幕与多显示器环境下的图形稳定性。
+- **字幕同屏防重叠与关闭状态持久化**:
+  - 修复 ASS 九宫格位置解析丢失（`\an7` / `\an8` / `\an9` 顶部与 `\an1` / `\an2` / `\an3` 底部）导致角色人名与台词叠字的问题，渲染图层重构为自适应垂直堆叠（`VStack`），实现同屏多字幕分离排版。
+  - 引入 `isSubtitleDisabledByUser` 状态锁，修复用户在菜单选择“关闭字幕”后被音轨刷新机制自动回选激活的缺陷，确保关闭字幕后彻底清空画布并停止底层解码。
 
----
-
-## [1.7.0] - 2026-11-16
-
-### Added
-- **Playlist ⌘F Instant Search & Pinyin Initial Matching (Proposal 022)**:
-  - Added a responsive search overlay to the playlist drawer triggered by `⌘F`, supporting full Pinyin, Pinyin initials (e.g. `zwy` to match track titles), and case-insensitive fuzzy filtering.
-  - Smoothly navigates filtered results via keyboard arrow keys, supports inline track removal, and dismisses via `Esc` to restore the full playlist.
-- **Recursive Companion Subtitle Discovery (Proposal 008)**:
-  - Expanded companion subtitle search logic beyond the immediate parent directory to recursively scan nested `Subs/`, `subtitles/`, and `Sub/` folders.
-  - Automatically indexes and binds matching `ASS`, `SSA`, `SRT`, `VTT`, and `SUB` files to the active media session.
-- **Two-Step Playlist Clear Confirmation**:
-  - Implemented a 3-second two-step confirmation state machine on the drawer clear button, preventing accidental deletion of the active playlist.
-- **Full-Format High-Definition Audio Demuxing (`dts`, `dtshd`, `truehd`, `mlp`)**:
-  - Embedded Universal FFmpeg libraries with comprehensive demuxers and decoders for DTS-CD, DTS-ES, DTS-HD Master Audio, and Dolby TrueHD formats.
-
-### Changed
-- **Floating Cinema HUD & Gradient Backing Removal (Proposal 021)**:
-  - Completely eliminated the translucent dark gradient backing box beneath the timeline scrubber and transport controls, transitioning to an unoccluded floating cinema HUD with native subtle drop-shadows.
-- **Window Drag Initiation Optimization (ISSUE-017)**:
-  - Tuned window drag initiation threshold from `8.0pt` to `4.0pt` and forwarded raw `mouseDown` events to the native window server, eliminating initial grab latency when rapidly dragging the player window.
-- **Multichannel Stereo Downmixing Soft-Knee Limiter**:
-  - Implemented an in-place `tanh` soft-knee limiter (`applySoftLimiter`) in `SilkAudioEngine` to compress float peaks above 0.8 smoothly towards 1.0, eliminating square-wave clipping distortion and DAC popping on stereo devices.
-- **Audio Container Deep Probing**:
-  - Configured `10MB` probe buffer and `2.0s` analyze duration in `SilkDemuxer`, ensuring accurate stream layout resolution for complex container files upon initial load.
+## [2.0.1] - 2026-11-21
 
 ### Fixed
-- **Multi-Screen Fullscreen Secondary Display Cursor Wakeup (ISSUE-021 / GitHub Issue #7)**:
-  - Added global physical screen coordinate bounding checks in `PlayerHUDView` mouse monitoring, ignoring cursor movements on secondary displays during fullscreen playback.
-- **Vertical Video Window Geometry Restoration (ISSUE-022 / GitHub Issue #9)**:
-  - Added aspect ratio recovery gating in `AppShellView`, automatically centering and restoring a standard 16:9 landscape frame (`960 × 540`) when closing portrait videos.
-- **Standard PCM Audio Stream False-Positive Sniffing Distortion**:
-  - Removed disruptive 2-byte packet sniffing from the audio engine pipeline, preventing random PCM waveform byte coincidences from erroneously triggering AC-3 decoder re-instantiation and high-frequency noise.
-- **Cold-Start Desktop Tiling Fill State Isolation (ISSUE-018)**:
-  - Purged macOS window tiling state persistence on cold launch, enforcing centered 960×540 default presentation.
+- **AV1 10-bit 核心解码与渲染修复**:
+  - 彻底剔除 AV1 的假硬件解码候选与无效硬件格式回调，统一路由至高性能 libdav1d 多线程切片软解，开放 CPU 核心并发池，直通原生 YUV 渲染管线，解决有声无画、黑屏且时间轴停滞问题。
+- **音视频主时钟防丢帧死锁**:
+  - 重构大时钟差丢帧判定（`diff < -0.250`），增加连续丢帧上限（最多允许丢弃 2 帧追赶时钟），超限立即平滑重锚定音频时钟（`audio.reanchor`），杜绝无限丢帧死循环。
+- **冷启动版本更新提示层级与免打扰优化**:
+  - 将新版本对话框直接绑定于主视窗，增加全局播放态互斥门控，观影或听歌期间绝不弹窗打扰，仅在静态待机或冷启动就绪时提示，并严格遵循 7 天周期静默期。
+
+## [2.0.0] - 2026-11-16
+
+### 专业版 (Pro Edition)
+
+#### Added
+- **独立折叠音乐模式视窗 (Collapsible Two-Stage Music Window - Proposal 024)**:
+  - 深度重构音频播放体验，推出两段式独立音乐模式界面（顶层聚焦卡片 + 底部折叠抽屉列表），支持 188pt / 420pt 自由折叠缩放；
+  - 搭载全物理惯性平滑旋转黑胶唱片（`FloatingVinylDiscView`）与多频段自适应声学共振光环（`AudioVisualizerHaloView`）；
+  - 支持状态栏常驻微型播控与 Dock 图标静默隐匿（Proposal 025），点击状态栏图标即可呼出紧凑音频小窗。
+- **全新高质感「冰蓝」与 4 色主题矩阵 (Curated Theme Matrix - Proposal 028)**:
+  - 引入全新「冰蓝」（Ice Blue）主题：基于 macOS 原生 `behindWindow` 毛玻璃透光底板，搭配深邃冷青渐变与极光棱镜切光折射边，主点缀色采用液态电光冰青（`#00DCFA`）；
+  - 全局文字对比度提升至 WCAG AAA 顶级标准（主文本超亮纯冷白 `#FFFFFF` 对比度达 19.5:1，次级文本通透天青灰 `#A8B8C8` 达 9.4:1）；
+  - 提供深灰、冰蓝、暖白、青瓷 4 套高质感色彩矩阵，全局联动主界面、播放播控、设置与局域网媒体库。
+- **局域网 SMB / NFS 影视媒体库 (Pro LAN Media Library - Proposal 017 & 029)**:
+  - 原生支持局域网 SMB 2/3、NFS 自动服务发现与远程挂载，极速索引 NAS 与私有服务器影视资产；
+  - 沉浸式详情页双栏响应式设计（2/3 影视规格/剧情简介/选集 + 1/3 智能关联推荐），结合多维偏好加权算法；
+  - 剧集选集播放按键独立放大（30×30 pt），单击即播；
+  - 播放器与媒体库物理层级完全解耦，原生自适应窗口比例还原，彻底消除黑边；
+  - 播放器右上角退出交互重构为高质感毛玻璃「‹ 返回」胶囊按钮，左上角格式信息清爽通透；
+  - 剧集网格全面虚拟化（`LazyVGrid`），彻底根除行内抽屉连击彩虹圈死锁；
+  - 影视卡片支持多季剧集智能识别与在架切集抽屉（Season Switcher），折叠式分类（电影/剧集）与进度云端同步。
+- **全格式无损音频与多声道输出管线 (Multichannel LPCM Output)**:
+  - CoreAudio 渲染管线深度适配多声道 Float32 LPCM 无损直通（5.1 / 7.1 声道），原生保留 TrueHD、Dolby Atmos 与 DTS-HD Master Audio 空间沉浸声场。
+- **本地 .NFO 元数据解析引擎 (Local NFO Metadata Engine)**:
+  - 兼容 Kodi、Jellyfin、Emby 与 TinyMediaManager 的 XML 规范，自动关联 `<stem>.nfo`、`movie.nfo` 与 `tvshow.nfo`，离线提取海报、剧情简介、年代、评分与流派并持久化至 SQLite 媒体库。
+
+#### Fixed
+- 修复影片详情页背景在冰蓝等半透明主题下穿透露出媒体库海报墙的问题，注入 `solidBackgroundBase` 100% 遮罩基底；
+- 修复青瓷浅色主题在独立音乐模式和播放进度条中失效退化为深色模式的问题；
+- 修复局域网挂载等模态弹窗在弹出时系统默认在取消按钮绘制蓝色焦点框的问题（引入底层 `SilkSheetFocusRingSuppressor`）；
+- 修复快捷键速查表与偏好设置激活区硬编码系统强调色的问题，全局对齐主题色与深浅外观；
+- 修复影片详情页「从头播放」按钮因未透传参数导致回落读取历史断点的问题；
+- 修复详情页按空格无法起播、按 Esc 无法关闭详情的问题（放行全局键盘拦截器并绑定焦点）；
+- 修复后台听歌模式下在访达双击视频打开时，Dock 图标与 Cmd+Tab 切换项处于失踪状态的问题；
+- 修复在局域网挂载弹窗输入或浏览详情页时按 Cmd+W 误杀主窗口的问题（重构为优先退出弹窗或详情页）；
+- 修复海报卡片因并挂单击与双击手势导致的 300~400ms 点击粘滞延迟，解决批量模式下双击复选卡顿问题。
+
+### 免费版 (Standard Edition)
+
+#### Added
+- **播放列表 ⌘F 即时搜索与拼音首字母过滤 (Playlist ⌘F Instant Search & Pinyin Initial Matching - Proposal 022)**:
+  - 播放列表内置即时过滤，支持文件名原文字符匹配以及完整中文拼音首字母过滤，海量分集秒级定位。
+- **外挂字幕 Subs/ 目录深度递归检索 (Recursive Companion Subtitle Discovery - Proposal 008)**:
+  - 自动递归扫描影视同级及 `Subs/`、`Subtitles/` 等多级子目录，智能关联提取同名外挂字幕，免除手动拖拽加载繁琐步骤。
+- **全格式高清音频解复用 (Full-Format High-Definition Audio Demuxing)**:
+  - Universal FFmpeg 编入 `dts`、`dtshd`、`truehd`、`mlp` 完整解复用库，配合 10MB 前置探测缓冲区彻底消除标准 PCM 假阳性误判。
+- **播放列表两步清空防误触确认机制 (Two-Step Playlist Clear Confirmation)**。
+
+#### Changed
+- **影院级纯透明悬浮播控栏 (Floating Cinema HUD & Gradient Backing Removal - Proposal 021)**:
+  - 彻底移除原有底部深灰不透明方框底板，升级为直接融入视频画面的悬浮控制胶囊，观影视觉更加通透无遮挡。
+- **多声道立体声下混软限幅防削顶 (Multichannel Stereo Downmixing Soft-Knee Limiter)**:
+  - 双声道播放高规格多声道音轨时，自动应用平滑软限幅算法，杜绝音量过大引起的爆音与 DAC 硬件削顶失真。
+- **标准音频播放独立解耦 (Decoupled Standard Audio Playback)**:
+  - 免费版双击本地音频文件直接流畅播放，支持 1:1 视窗自由缩放吸附、播放列表抽屉快捷唤出与画布空白处点击播放/暂停，不绑定 Pro 音乐模式，保持轻巧纯粹。
+- **起手快甩拖拽平滑跟手度调优 (Window Drag Initiation Optimization - ISSUE-017)**。
+
+#### Fixed
+- **多屏扩展全屏防光标误唤醒 (ISSUE-021 / GitHub Issue #7)**:
+  - 修复多显示器全屏播放时副屏光标移动导致主屏播放控件异常弹出的问题。
+- **竖屏短视频关闭后视窗横屏居中复位 (ISSUE-022 / GitHub Issue #9)**:
+  - 修复播放竖屏视频后关闭，主窗口未恢复标准横屏比例的问题。
+- **冷启动桌面平铺隔离 (Cold-Start Desktop Tiling Fill State Isolation - ISSUE-018)**:
+  - 修复冷启动时异常吸附系统分屏磁贴状态的问题。
 
 ## [1.6.0] - 2026-11-12
 
 ### Added
-- **Context Menu Window Size Presets (Proposal 027 / GitHub Issue #6)**:
-  - Added a `Window Size` submenu (`50%`, `75%`, `100%`, and `Reset to Default`) to the video canvas context menu (`MetalPlayerContainerView`), with dynamic boundary state/enablement gating and automatic disablement in fullscreen, audio-only, or unloaded states.
-  - Refactored window geometry helpers (`PlayerGeometry.adaptiveVideoContentSize`, `windowPresetContentSize`, `windowPresetMenuState`) and `PlayerCore.fitWindow(scale:)` / `resetWindowSize()` with aspect-locked uncropped bounding inside desktop visible limits, temporary `minSize` relaxation, maximized-state reset, and percentage OSD feedback.
-- **Window Live-Resize Precision Dimension HUD (Proposal 023)**:
-  - Dynamically displays a translucent, monospaced dimension badge top-centered inside the window (`12 pt` from top) during manual window edge resizing.
-  - Reports exact physical pixel dimensions (`width × height`) and standard aspect ratios (`16:9`, `16:10`, `4:3`, `21:9`, `2.39:1`, `1:1`).
-  - Automatically identifies native resolution with `100%` badge for pixel-perfect promotional screenshots and professional viewing, smoothly fading out 0.35s after resize ends.
-- **Dynamic EDR Tone-Mapping & Rational Highlight Roll-off (Proposal 013)**:
-  - Injected dynamic display physical headroom (`cachedEDRHeadroom`) into Metal fragment shaders for HDR10 and Dolby Vision pipelines.
-  - Standardized on ITU-R BT.2408 diffuse white reference level ($Y \le 1.0$) for 1:1 uncompressed absolute fidelity.
-  - Implemented $C^1$-continuous rational shoulder roll-off for extreme highlights, scaling RGB channels proportionately to prevent solarization, cloud blowout, and chromaticity shift on both Apple XDR and SDR screens.
-- **Smart Silent Update & Lossless In-Place Overwrite Installer (Proposal 020)**:
-  - Built-in `UpdateService` providing asynchronous background release checking against GitHub API, resolving `-universal.dmg` release assets first via `resolveDownloadURLString` (with architecture fallback).
-  - Cold-start prompt displays target latest version number with minimal binary choice ("Yes" / "No") and 7-day quiet cadence gatekeeper upon dismissal.
-  - Persistent 6pt red dot indicator on the Settings "About" tab when an update is pending.
-  - End-to-end in-place lossless updater replacing `/Applications/SilkPlayer.app` cleanly while 100% preserving all user history, playlists, and preferences.
-- **Playlist Drawer Handle Border-Flush Redesign (Proposal 019)**:
-  - Replaced solid pill handle with a 100% transparent cutout, eliminating visual blockage.
-  - 1.0pt delicate three-sided border with open right edge and 0pt margin flush against the window border.
-  - Replaced standard triangle with an ultra-slender 9.5pt flattened indicator triangle.
-  - AppKit native view implementation with explicit hit-test lock, permanently preventing NSThemeFrame from triggering window resize dragging.
-- **Playback History Retention Toggle**:
-  - Added the `Playback History` (`keepRecentHistory`) toggle under Settings -> Playback alongside the existing history clear control.
-
-### Changed
-- **Settings Architecture macOS HIG Overhaul (Proposal 018)**:
-  - Consolidated settings into 3 standard top-level tabs: General, Playback, and About (`520 × 490 pt` fixed dimensions with zero vertical scrollbars and native macOS form controls), replacing `Single Window Mode` with the `Startup Window` picker (`Remember Last Position` / `Center on Screen`).
-  - Embedded official high-resolution vector brand emblem and Universal Binary architecture information (`AboutAppIconView`).
-  - Simplified secondary toggles by applying automated defaults for hardware decoding, pop-guard, and subtitle styling/loading.
-- **Core Demuxer Buffering & Seek Pipeline (`SilkCoreKit`)**:
-  - Added resolution-adaptive packet queue sizing, texture cache flushing on seek (`flushTextureCache`), and backward-flash frame filtering to improve seek smoothness.
-- **Music Mode Bottom HUD Streamlining**:
-  - Simplified pure audio mode bottom-right controls to `Settings` and `Fullscreen` while keeping speed control visible across widths to prevent control overlap.
-- **Policy & Architecture Narrative Alignment**:
-  - Removed obsolete absolute claims across codebase and documentation, standardizing on: "Native, lightweight, and minimal design with zero built-in ads and no redundant background processes."
-
-### Fixed
-- **Automated Testing Focus Isolation (ISSUE-014)**:
-  - Guarded window activation and foreground ordering checks behind `PlayerWindowManager.isRunningTests` so running test suites no longer steals focus or disturbs active player windows.
-- **HUD Narrow Window Volume Control Overlap (ISSUE-019)**:
-  - Hid the inline bottom volume slider in `.minimal` layout tier (`< 480 pt` narrow/portrait windows) while keeping a mute/unmute toggle inside the overflow menu;
-  - Added width-aware vertical volume popover expansion in `HUDVolumeSlider` for narrow windows (`< 950 pt` windowed / `< 930 pt` fullscreen) and tightened wing margins/spacing in `.compact` and `.standard` tiers so hovering or dragging volume never overlaps the centered Next track button across portrait and compact sizes.
-- **Top Menu Bar Duplicate Window Menu & Fit-to-Video Cleanup (ISSUE-020)**:
-  - Replaced the duplicate `Window` `CommandMenu` with `CommandGroup(before: .windowList)` so Media Inspector, Playlist, and Float on Top integrate into the standard macOS Window menu, and removed the redundant `Fit to Video (100% / 200%)` menu item.
-
----
-
-## [1.5.1] - 2026-11-08
-
-### Fixed
-- **AV1 Video Decoding Support via libdav1d**:
-  - Integrated high-performance `libdav1d` library into FFmpeg multimedia decoding pipeline across both Apple Silicon (`arm64`) and Intel (`x86_64`) architectures.
-  - Resolved issue where playing MKV, MP4, or WebM media containing AV1 video streams resulted in audio playback with a black video display due to lack of hardware accelerated AV1 decoding on macOS.
-
----
-
-## [1.5.0] - 2026-11-07
-
-### Added
-- **Universal Binary Distribution**: Native dual-slice images containing arm64 and x86_64 architectures, executing natively on both Apple Silicon (M1-M4) and Intel Macs without Rosetta 2 translation.
-- **Interactive Volume Slider & Pre-play Audio Ramp**:
-  - Upgraded HUD volume icon to dynamic state button; hovering smoothly reveals high-precision slider for fine-grained adjustments (Proposal 015).
-  - Implemented pre-play smooth audio ramp transition algorithm to eliminate transient pop noises during initial playback and seek jumps.
-- **Global Natural Semantic Sorting for Episodes**:
-  - Recursive multi-folder scanning with flat media extraction (Proposal 016).
-  - Built-in natural semantic sorting recognizing episode tags (S01E01, EP02) to preserve natural sequence across batch imports.
-
-### Optimized
-- **4K Video Memory & Demuxer Overhead Reduction**:
-  - Bound frame caching to 3 frames during continuous playback, slashing resident memory footprint for 4K 10-bit media (Proposal 017).
-  - Replaced busy-waiting with `NSCondition` synchronization in demuxing pipeline, eliminating idle CPU waste.
-  - Automatic pause of bloom rendering during idle/pause states to prevent wasteful redraws.
-- **Pure Audio Rendering Efficiency**:
-  - Removed real-time Gaussian blur from vinyl artwork and ambient glow pipeline.
-  - Throttled audio spectrum sampler and beat timer to 20Hz with dynamic threshold deadzone filtering.
-
-### Fixed
-- Fixed window state deadlock where double-clicking failed to enter fullscreen after toggling always-on-top or manual resizing (ISSUE-012).
-- Fixed issue where pressing Esc in fill-maximized mode exited playback, accurately restoring normal window dimensions (ISSUE-013).
-- Fixed window border jitter during manual window resizing in pure audio mode (ISSUE-011).
-
----
-
-## [1.4.0] - 2026-10-31
-
-### Added
-- **Dual-Track Media Playlist**: Split queue into dedicated Video and Audio categories with automatic routing, isolated position tracking, and distinct playback state machines (Proposal 006).
-- **Fallback Document Icons & Branding**: Added custom document icons and fallback branding artwork for non-native media preview formats (Proposal 011).
-
-### Fixed
-- **4K External Storage Seek Synchronization**: Fixed out-of-sync playback and hunger re-anchor failure on 4K 10-bit HEVC files stored on external USB/SMB drives (ISSUE-009).
-- **Packaging Dynamic Library Path Leak**: Enforced zero-leak `@rpath` assertions in `package_app.sh`, resolving launch crashes on Intel Macs (ISSUE-010).
-- **Window Interaction Audit Resolutions**: Resolved scroll wheel event interception in `PlayerHUDView`, unified always-on-top state source, corrected top-bar double-click bounding box, and prevented canvas drag in bottom control regions.
-
----
-
-## [1.3.0] - 2026-10-24
-
-### Added
-- **Default Player & Format Associations**: Built-in format association manager in Settings, allowing one-click registration as default handler for common video/audio extensions via LaunchServices (Proposal 002).
-
-### Fixed
-- **Audio Scrubber Seek Clock Offset**: Fixed hardware sample accumulation clock offset during paused-state scrub operations in `SilkAudioEngine` (ISSUE-007).
-- **macOS Dock Icon Contrast**: Enhanced edge contrast and ambient highlight curve for application Dock icon (ISSUE-008).
-
----
-
-## [1.2.0] - 2026-10-20
-
-### Fixed
-- **Audio Playback Speed**: Fixed playback rate parameter application in `SilkAudioEngine` with pitch-preserved time-domain stretching (ISSUE-001).
-- **Shuffle Playback History Memory**: Implemented memory-based sampling queue preventing rapid repeat of recently played tracks (ISSUE-002).
-- **Pure Audio Layout Collisions**: Resolved window layout clipping and visual artifact collisions in pure audio mode (ISSUE-003).
-- **Window Geometry & Interaction Topology**: Comprehensive overhaul of window constraint state machine, aspect-ratio preservation, and live-resize event flow (ISSUE-004).
-- **Metal Occlusion Audio Streaming**: Guarded audio output clock from render stalling when video window is fully occluded (ISSUE-005).
-- **SMB Streaming Buffer Starvation**: Optimized streaming buffer watermark and packet pre-fetch for network-attached shares (ISSUE-006).
-
----
-
-## [1.1.0] - 2026-10-15
-
-### Added
-- **Resonance Corona & Audiophile Vinyl Turntable**:
-  - Circular acoustic resonance corona (`Resonance Corona`) dynamically reacting to real-time playback amplitude with centered glow emission.
-  - Centered vinyl disc with continuous 60fps rotation driven by `TimelineView` and deterministic playback synchronization.
-  - High-fidelity audiophile metal tonearm with high-contrast cartridge, visible stylus needle, and calibrated tracking kinematics synced with audio duration.
-  - Expanded 32-band real-time audio horizon spectrum analyzer.
-- **Dynamic Upcoming Track Preview**:
-  - Responsive upcoming track indicator positioned underneath title metadata with 18pt offset indent.
-  - 0ms reactive synchronization with `PlaylistManager` across single repeat, playlist repeat, shuffle (aligned PRNG seeds), and sequential queue boundaries.
-- **Universal Audio Format Support**:
-  - Direct playback, drag-and-drop ingestion, and playlist queuing for lossless FLAC, Monkey's Audio (APE), Apple Lossless (ALAC), WAV, AAC, MP3, and OGG.
-  - Audio mode 1:1 proportional free resizing eliminating full-height screen snaps and Dock boundary invasion.
-
-### Fixed
-- **Zero-Flicker Track Transitions**:
-  - Audio state keepalive and layout constraints preservation eliminating window re-layout flashes, black blinks, and vinyl rotation jerks during rapid song switches.
-- **Window Geometry Stability**:
-  - Orientation-aware window size memory read/write loop with safe dimension clamping and aspect ratio reset defense.
-- **Core Stability**:
-  - Eliminated audio playback deadlocks, timeline render re-entry loops, and dock boundary layout issues.
-- **Metal Render Pipeline Compatibility & Fallback Defense**:
-  - Enforced macOS 14.0 minimum deployment target for Metal shader bytecode (`air64_v26-apple-macosx14.0.0`) and added two-tier MSL source runtime compilation fallback (`dev.makeLibrary(source:)`), eliminating black screen rendering failures across varied macOS versions and GPU drivers.
-
----
-
-## [1.0.0] - 2026-10-11
-
-### Added
-- **SilkCoreKit Proprietary Architecture**: Standardized core proprietary media subsystems into `SilkCoreKit.xcframework`:
-  - **SilkPlayback Engine**: Swift 6 strict concurrency playback engine with VideoToolbox hardware decoding and native AudioUnit synchronized master clock.
-  - **SilkRender Pipeline**: Metal 3 zero-copy GPU direct presentation with proprietary Dolby Vision Profile 5 (IPTPQc2) RPU dynamic color reshaping shaders.
-  - **SilkThumb Engine**: Dedicated keyframe extraction and adaptive memory two-tier LRU caching pipeline (`SilkThumbEngine`), rendering instantaneous 16:9 hover previews and chapter cues.
-- **Pure LGPL-3.0 Dynamic Architecture**: Built standalone lightweight dynamic XCFrameworks for core media processing libraries (`Libavcodec`, `Libavformat`, `Libavutil`, `Libswresample`, `Libswscale`) using pure LGPL configuration (`--disable-gpl --disable-nonfree --enable-shared --disable-static --enable-version3`).
-- **Dynamic Linking & Bundle Assembly**: Conforming fully to LGPL-3.0 dynamic linking with `@rpath` dynamic framework linkage inside `Contents/Frameworks/`.
-- **Inside-Out Code Signing**: Implemented layered code signing for embedded dynamic frameworks and the main application bundle.
-- **Performance & Energy Optimizations**:
-  - Configured `CAMetalLayer.framebufferOnly = true` to activate Apple GPU direct scanout, reducing GPU memory bandwidth and thermal footprint.
-  - Wrapped high-frequency packet demuxing and frame rendering loops in fine-grained `autoreleasepool` scopes, strictly flattening physical resident memory (RSS).
-  - Added periodic `CVMetalTextureCacheFlush` every 120 frames to bound CoreVideo texture cache residency.
-- **Window Management & HIG Alignment**:
-  - Implemented 0.16s `DispatchWorkItem` debounce isolating single-click pause from double-click fullscreen toggles.
-  - Enabled 3.0pt drag threshold handoff to native macOS 15 Sequoia WindowServer tiling with 8pt border resize guard.
-  - Blu-ray PGS canonical canvas normalization and dynamic typography sizing.
-- **Automated Regression Suite**: Verified all 480 test assertions and 4-sample real-world playback stress benchmarks pass cleanly with 0 regressions.
-
-### Changed
-- **Terminology & Copywriting Standardization**: Systematically aligned documentation, user interface descriptions, and settings metadata with industry-standard terminology.
-- **Project Licensing**: Formally released under GNU Lesser General Public License v3.0 (LGPL-3.0).
-
----
-
-## [1.0.1] - 2026-10-08
-
-### Added
-- **Timeline Hover Preview (`SilkThumbnailEngine`)**:
-  - Added keyframe thumbnail extraction using native FFmpeg C interfaces (`libavformat`, `libavcodec`, `libswscale`).
-  - Container support for MP4, MKV, MOV, WebM, TS, M2TS, AVI, FLV, ProRes, etc.
-  - Basic luminance and color tone-mapping for HDR10 and Dolby Vision (Profile 5 & 8) content using PQ LUT and Reinhard tone mapping.
-  - Direct bitmap memory transfer using `CGDataProvider` and `NSBitmapImageRep` with BGRA pixel layout.
-- **Scrubber Hover Card View (`ScrubberHoverCardView`)**:
-  - Anchored 16:9 preview canvas (`156 × 88`) positioned above the progress track.
-  - Displays chapter title and timestamps with transient image caching.
-
----
-
-## [1.0.0] - 2026-10-05
-
-### Added
-- **Blu-ray PGS Canonical Canvas Normalization**: Subtitle bitmaps are mapped according to standard BD-ROM PGS 1920x1080 canvas specifications, ensuring accurate placement in bottom letterboxes across 4K UHD and 1080p media.
-- **Text Subtitle Dynamic Sizing**: Overrode hardcoded 16pt styling from FFmpeg SRT/SubRip decoder to dynamically scale typography to video canvas height (~4.6%) and respect user font size presets.
-- **Mouse Cursor Autohide Integration**: Implemented hardware display cursor hiding (`CGDisplayHideCursor` / `NSCursor`) synchronized with HUD auto-fading during playback, restoring immediately on mouse movement or pause.
-- **Window Mouse Event Dispatch**: Configured `acceptsMouseMovedEvents = true` on the player window for continuous tracking.
-
----
-
-## [0.5.0] - 2026-10-05
-
-### Added
-- **Native SilkEngine & Metal Rendering Pipeline**: Integrated initial hardware decoding directly outputting to `CAMetalLayer` surfaces via Apple VideoToolbox.
-- **Aspect Ratio & Window Geometry Enforcement**: Implemented native AppKit window aspect ratio locking (`aspectRatio`, `contentAspectRatio`, and `windowWillResize`), ensuring correct proportions during window resizing and full-screen maximization per macOS standard behavior.
-- **Subtitle & Audio Subsystem Overhaul**:
-  - Activated Blu-ray PGS keyframe seek decoding (`isSeekImageSubtitle = true`).
-  - Corrected PGS bitmap aspect-ratio calculation and letterbox compensation to prevent vertical distortion.
-  - Implemented deduplicated subtitle track synchronization (`syncEmbeddedSubtitles`).
-  - Added stream language metadata enrichment (`lang`, `codec`) and user-preferred language auto-selection.
-  - Bound subtitle delay adjustments directly to the playback engine for real-time offset synchronization.
-- **Unified Sidebar Drawer (`SilkUnifiedDrawerView`)**: Unified queue management and media inspection diagnostics into a collapsible sidebar.
-- **Native Preferences View (`SilkSettingsView`)**: Multi-tab settings panel covering General, Playback & Controls, Audio & Subtitles, and About, with isolated event routing.
-- **Keyboard Shortcuts Alignment**: Assigned `S` to cycle subtitle tracks, `A` to cycle audio tracks, and isolated screenshot capture to `⌘S`.
-- **Automated Regression Suite**: Expanded automated test suite to 33 test suites (216 test assertions passing cleanly).
-
-### Changed
-- **Dependencies**: Migrated from legacy C bindings to pure Swift Package Manager dependency resolution targeting Apple system frameworks (`Metal`, `QuartzCore`, `VideoToolbox`, `AudioToolbox`, `AVFoundation`) and underlying FFmpeg libraries.
-- **Memory Management**: Optimized buffer lifecycles and cache configurations to maintain stable memory usage during extended playback sessions.
-- **Diagnostic Tools**: Relocated diagnostic and stress suites into `Tools/DiagnosticSuites/` to maintain clean production build targets.
-
----
-
-## [0.4.6] - 2026-10-04
-
-### Added
-- **Fullscreen Space Compatibility**: Configured `.fullScreenAuxiliary` window behaviors for auxiliary sheets.
-- **Event Isolation**: Modal views intercept `Esc` and `⌘W` to dismiss themselves without interrupting the underlying playback session.
-- **Format Indicators**: Added format indicator badges for Dolby Vision (`dvhe`/`dvh1`/`dovi`), HDR10, and HLG profiles with tone-mapping toggle (`H`).
-- **Safe Area Insets**: Adjusted UI margins to account for macOS window controls and menu bar insets.
-
-### Changed
-- **Control Bar Layout**: Standardized control bar button sizing and visual hierarchies.
-- **Buffer Configurations**: Optimized streaming read-ahead buffers for local storage and network volumes.
-
----
-
-## [0.4.5] - 2026-10-03
-
-### Added
-- **Settings Reorganization**: Streamlined preferences into structured functional categories.
-- **Timeline Hover Indicator**: Added visual seek position indicator during timeline scrubbing.
-
-### Fixed
-- **Audio Output Buffering**: Addressed buffer underflow during initial stream setup.
-
----
-
-## [0.4.4] - 2026-10-02
-
-### Added
-- **Dynamic Window Sizing**: Dynamic sizing calculations for auxiliary sheets and dialogs.
-- **Visual Materials**: Applied system translucent materials across HUD overlays.
-
-### Fixed
-- **Resource Teardown**: Ensured deallocation of pixel buffers and render textures upon closing player windows.
-
----
-
-## [0.4.3] - 2026-10-01
-
-### Added
-- **Multi-Window Support**: Added multi-window topology managed by `PlayerWindowManager`.
-- **Network Storage Playback**: Enhanced buffer management for Finder-mounted SMB/NFS network shares.
-
----
-
-## [0.4.2] - 2026-09-30
-
-### Added
-- **Multi-Track Audio**: Added support for selecting between multi-channel audio tracks.
-- **Vector Subtitles**: Supported ASS/SSA, SRT, and WebVTT subtitle rendering.
-- **Companion Subtitle Pairing**: Automatic loading of companion subtitle files sharing the same directory and base name.
-
----
-
-## [0.1.0-beta] - 2026-09-28
-
-### Added
-- **Initial Native Architecture**: Swift 6 project setup targeting Apple Silicon on macOS 14.0+.
-- **VideoToolbox Integration**: Initial pipeline verification for hardware-accelerated video decoding.
-- **File System Indexer**: FSEvents-based directory monitoring and metadata persistence.
+- **Context Menu Window Size Presets (Proposal 027 / GitHub Issue #6)**
+- **Window Live-Resize Precision Dimension HUD (Proposal 023)**
+- **Dynamic EDR Tone-Mapping & Rational Highlight Roll-off (Proposal 013)**
+- **Smart Silent Update & Lossless In-Place Overwrite Installer (Proposal 020)**
+- **Playlist Drawer Handle Border-Flush Redesign (Proposal 019)**

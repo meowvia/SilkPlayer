@@ -21,6 +21,7 @@ public struct PlayerCommands: Commands {
     }
 
     public var body: some Commands {
+        let _ = windowManager.commandSyncToken
         // MARK: - Native Preferences Command
         CommandGroup(replacing: .appSettings) {
             Button(L10n.settings + "...") {
@@ -276,6 +277,7 @@ public struct PlayerCommands: Commands {
                 activePlayer?.toggleFullscreen()
             }
             .keyboardShortcut("f", modifiers: [.command])
+            .disabled(activePlayer?.isAudioOnly == true)
 
             Button(L10n.tr("Capture Screenshot", "截取画面")) {
                 activePlayer?.takeScreenshot()
@@ -367,6 +369,16 @@ public struct PlayerCommands: Commands {
             }
             .keyboardShortcut("p", modifiers: .command)
             .disabled(activePlayer == nil)
+
+            Button(
+                settings.isMusicQueueCollapsed
+                    ? L10n.tr("Expand Music Queue", "展开音乐列表")
+                    : L10n.tr("Collapse Music Queue", "收起音乐列表")
+            ) {
+                activePlayer?.toggleMusicQueueCollapsed()
+            }
+            .keyboardShortcut("l", modifiers: .command)
+            .disabled(activePlayer?.isProMusicModeActive != true)
 
             Divider()
 

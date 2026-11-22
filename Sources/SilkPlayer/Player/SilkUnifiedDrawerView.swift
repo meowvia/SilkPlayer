@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import SilkCoreKit
 
 /// Dedicated Pure Playlist Sidebar Drawer for SilkPlayer.
 /// Focused entirely on playlist duties: drag-and-drop, playback queue management,
@@ -14,6 +15,16 @@ public struct SilkPlaylistDrawerView: View {
     public var drawerWidth: CGFloat
     public var onSelectPlaylistItem: (PlaylistItem) -> Void
     public var onClose: () -> Void
+
+    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
+
+    private var theme: SilkLibraryTheme {
+        SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
+    }
+
+    private var isLight: Bool {
+        theme.isLight
+    }
 
     @State private var hoveredIndex: Int? = nil
     @State private var isFooterClearHovered: Bool = false
@@ -44,7 +55,7 @@ public struct SilkPlaylistDrawerView: View {
             headerBar
 
             Divider()
-                .opacity(0.18)
+                .opacity(isLight ? 0.35 : 0.18)
 
             // Playlist Body
             if playlist.isEmpty {
@@ -60,30 +71,38 @@ public struct SilkPlaylistDrawerView: View {
         .frame(maxHeight: .infinity)
         .background(
             ZStack {
-                Color.black.opacity(0.76)
-                VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
-                Rectangle().fill(.ultraThinMaterial)
+                if isLight {
+                    theme.backgroundBase.opacity(0.96)
+                    VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                    Rectangle().fill(.ultraThinMaterial)
+                } else {
+                    Color.black.opacity(0.76)
+                    VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                    Rectangle().fill(.ultraThinMaterial)
+                }
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.32),
-                            Color.white.opacity(0.12),
-                            Color.white.opacity(0.06),
-                            Color.white.opacity(0.18)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
+                    isLight
+                        ? AnyShapeStyle(theme.borderColor.opacity(0.85))
+                        : AnyShapeStyle(LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.32),
+                                Color.white.opacity(0.12),
+                                Color.white.opacity(0.06),
+                                Color.white.opacity(0.18)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )),
                     lineWidth: 0.8
                 )
         )
-        .shadow(color: Color.black.opacity(0.45), radius: 24, x: -6, y: 4)
-        .shadow(color: Color.black.opacity(0.20), radius: 6, x: -2, y: 2)
+        .shadow(color: isLight ? Color.black.opacity(0.12) : Color.black.opacity(0.45), radius: 24, x: -6, y: 4)
+        .shadow(color: isLight ? Color.black.opacity(0.06) : Color.black.opacity(0.20), radius: 6, x: -2, y: 2)
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers: providers)
         }
@@ -101,18 +120,18 @@ public struct SilkPlaylistDrawerView: View {
                 HStack(alignment: .center, spacing: 6) {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.70))
+                        .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.70))
                     Text(L10n.tr("Playlist", "播放列表"))
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.90))
+                        .foregroundColor(isLight ? theme.primaryText : .white.opacity(0.90))
                     if playlist.count > 0 {
                         Text("\(playlist.count)")
                             .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                             .monospacedDigit()
-                            .foregroundColor(.cyan)
+                            .foregroundColor(isLight ? theme.accentColor : .cyan)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1.5)
-                            .background(Capsule().fill(Color.cyan.opacity(0.18)))
+                            .background(Capsule().fill(isLight ? theme.accentColor.opacity(0.18) : Color.cyan.opacity(0.18)))
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 28)
@@ -139,18 +158,18 @@ public struct SilkPlaylistDrawerView: View {
                     Text("\(count)")
                         .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                         .monospacedDigit()
-                        .foregroundColor(isSelected ? .cyan : .white.opacity(0.40))
+                        .foregroundColor(isSelected ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.secondaryText.opacity(0.7) : .white.opacity(0.40)))
                         .padding(.horizontal, 4.5)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(isSelected ? Color.cyan.opacity(0.20) : Color.white.opacity(0.08)))
+                        .background(Capsule().fill(isSelected ? (isLight ? theme.accentColor.opacity(0.18) : Color.cyan.opacity(0.20)) : (isLight ? theme.pillSurface : Color.white.opacity(0.08))))
                 }
             }
-            .foregroundColor(isSelected ? .cyan : .white.opacity(0.65))
+            .foregroundColor(isSelected ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.secondaryText : .white.opacity(0.65)))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.12) : Color.clear)
+                    .fill(isSelected ? (isLight ? theme.pillSurface : Color.white.opacity(0.12)) : Color.clear)
             )
             .contentShape(Rectangle())
         }
@@ -164,18 +183,18 @@ public struct SilkPlaylistDrawerView: View {
             Spacer(minLength: 8)
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.05))
+                    .fill(isLight ? theme.pillSurface : Color.white.opacity(0.05))
                     .frame(width: 52, height: 52)
                 Image(systemName: settings.dualPlaylistMode ? (playlist.activeCategory == .video ? "film.stack" : "music.note.list") : "list.bullet.rectangle")
                     .font(.system(size: 22))
-                    .foregroundColor(.white.opacity(0.35))
+                    .foregroundColor(isLight ? theme.secondaryText.opacity(0.60) : .white.opacity(0.35))
             }
             Text(settings.dualPlaylistMode ? (playlist.activeCategory == .video ? L10n.tr("Video Playlist Empty", "视频列表为空") : L10n.tr("Music Playlist Empty", "音乐列表为空")) : L10n.tr("Playlist is Empty", "播放列表为空"))
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.75))
+                .foregroundColor(isLight ? theme.primaryText : .white.opacity(0.75))
             Text(settings.dualPlaylistMode ? (playlist.activeCategory == .video ? L10n.tr("Drop video files or folders here to add", "拖拽视频文件或文件夹至此处即可添加") : L10n.tr("Drop audio files or folders here to add", "拖拽音频文件或文件夹至此处即可添加")) : L10n.tr("Drop media files or folders here to add", "拖拽媒体文件或文件夹至此处即可添加"))
                 .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.40))
+                .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.40))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
 
@@ -226,10 +245,10 @@ public struct SilkPlaylistDrawerView: View {
                         Spacer(minLength: 24)
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 20))
-                            .foregroundColor(.white.opacity(0.35))
+                            .foregroundColor(isLight ? theme.secondaryText.opacity(0.60) : .white.opacity(0.35))
                         Text(L10n.tr("No matching items", "无匹配项目"))
                             .font(.system(size: 11.5, weight: .medium))
-                            .foregroundColor(.white.opacity(0.60))
+                            .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.60))
                         Spacer(minLength: 24)
                     }
                     .frame(maxWidth: .infinity)
@@ -239,9 +258,10 @@ public struct SilkPlaylistDrawerView: View {
                             PlaylistItemRowView(
                                 index: index,
                                 item: item,
-                                isCurrent: index == playlist.currentIndex,
-                                isPlaying: player.isPlaying,
+                                isCurrent: (item.path == player.currentFilePath) || (player.currentFilePath == nil && index == playlist.currentIndex),
+                                isPlaying: player.isPlaying && (item.path == player.currentFilePath),
                                 isHovered: hoveredIndex == index,
+                                theme: theme,
                                 onSelect: {
                                     onSelectPlaylistItem(item)
                                 },
@@ -283,16 +303,16 @@ public struct SilkPlaylistDrawerView: View {
     // MARK: - Footer Toolbar
     private var playlistFooterToolbar: some View {
         VStack(spacing: 0) {
-            Divider().opacity(0.15)
+            Divider().opacity(isLight ? 0.30 : 0.15)
             if isSearchExpanded {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.60))
+                        .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.60))
                     TextField(L10n.tr("Search playlist or initials...", "搜索片名、拼音简拼…"), text: $searchText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 11))
-                        .foregroundColor(.white)
+                        .foregroundColor(isLight ? theme.primaryText : .white)
                         .focused($isSearchFocused)
                         .onExitCommand {
                             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -310,7 +330,7 @@ public struct SilkPlaylistDrawerView: View {
                         }) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 10.5))
-                                .foregroundColor(.white.opacity(0.55))
+                                .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.55))
                         }
                         .buttonStyle(.plain)
                     }
@@ -323,14 +343,14 @@ public struct SilkPlaylistDrawerView: View {
                     }) {
                         Image(systemName: "chevron.right.circle.fill")
                             .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.65))
+                            .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.65))
                     }
                     .buttonStyle(.plain)
                     .help(L10n.tr("Close search (Esc)", "关闭搜索 (Esc)"))
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(isLight ? theme.pillSurface : Color.white.opacity(0.08)))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
             } else {
@@ -346,10 +366,10 @@ public struct SilkPlaylistDrawerView: View {
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundColor(isLight ? theme.primaryText : .white.opacity(0.85))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4.5)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+                        .background(RoundedRectangle(cornerRadius: 6).fill(isLight ? theme.pillSurface : Color.white.opacity(0.08)))
                     }
                     .buttonStyle(.plain)
                     .focusable(false)
@@ -366,9 +386,9 @@ public struct SilkPlaylistDrawerView: View {
                     }) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 10.5, weight: .medium))
-                            .foregroundColor(.white.opacity(0.70))
+                            .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.70))
                             .frame(width: 24, height: 24)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
+                            .background(RoundedRectangle(cornerRadius: 6).fill(isLight ? theme.pillSurface : Color.white.opacity(0.06)))
                     }
                     .buttonStyle(.plain)
                     .focusable(false)
@@ -405,12 +425,12 @@ public struct SilkPlaylistDrawerView: View {
                                     .lineLimit(1)
                                     .fixedSize(horizontal: true, vertical: false)
                             }
-                            .foregroundColor(isAwaitingClearConfirm ? Color(nsColor: .systemRed) : (isFooterClearHovered ? Color(nsColor: .systemRed) : .white.opacity(0.65)))
+                            .foregroundColor(isAwaitingClearConfirm ? Color(nsColor: .systemRed) : (isFooterClearHovered ? Color(nsColor: .systemRed) : (isLight ? theme.secondaryText : .white.opacity(0.65))))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4.5)
                             .background(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(isAwaitingClearConfirm ? Color.red.opacity(0.24) : (isFooterClearHovered ? Color.red.opacity(0.14) : Color.white.opacity(0.06)))
+                                    .fill(isAwaitingClearConfirm ? Color.red.opacity(0.24) : (isFooterClearHovered ? Color.red.opacity(0.14) : (isLight ? theme.pillSurface : Color.white.opacity(0.06))))
                             )
                         }
                         .buttonStyle(.plain)
@@ -860,18 +880,19 @@ public struct SilkMediaInspectorView: View {
     }
 }
 
-/// Mini 3-bar animated audio equalizer waveform for active playback in drawer.
-private struct DrawerEqualizerWaveform: View {
+/// Mini 3-bar subtle playing equalizer indicator located at the trailing edge of the active item card.
+private struct DrawerPlayingEqualizer: View {
     let isPlaying: Bool
+    let accentColor: Color
     @State private var animating: Bool = false
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 2) {
-            bar(minHeight: 4, maxHeight: 11, duration: 0.55)
-            bar(minHeight: 8, maxHeight: 15, duration: 0.40)
-            bar(minHeight: 5, maxHeight: 12, duration: 0.50)
+        HStack(alignment: .bottom, spacing: 1.8) {
+            bar(minH: 3.5, maxH: 10.5, dur: 0.52)
+            bar(minH: 6.0, maxH: 13.5, dur: 0.38)
+            bar(minH: 4.0, maxH: 11.5, dur: 0.46)
         }
-        .frame(width: 14, height: 16)
+        .frame(width: 11, height: 14)
         .onAppear {
             if isPlaying { animating = true }
         }
@@ -880,12 +901,12 @@ private struct DrawerEqualizerWaveform: View {
         }
     }
 
-    private func bar(minHeight: CGFloat, maxHeight: CGFloat, duration: Double) -> some View {
-        RoundedRectangle(cornerRadius: 1, style: .continuous)
-            .fill(Color.cyan)
-            .frame(width: 2.2, height: (isPlaying && animating) ? maxHeight : minHeight)
+    private func bar(minH: CGFloat, maxH: CGFloat, dur: Double) -> some View {
+        RoundedRectangle(cornerRadius: 0.8, style: .continuous)
+            .fill(accentColor)
+            .frame(width: 2.0, height: (isPlaying && animating) ? maxH : minH)
             .animation(
-                isPlaying ? .easeInOut(duration: duration).repeatForever(autoreverses: true) : .easeOut(duration: 0.2),
+                isPlaying ? .easeInOut(duration: dur).repeatForever(autoreverses: true) : .easeOut(duration: 0.2),
                 value: animating
             )
     }
@@ -898,10 +919,15 @@ private struct PlaylistItemRowView: View {
     let isCurrent: Bool
     let isPlaying: Bool
     let isHovered: Bool
+    var theme: SilkLibraryTheme = .shenghui
     let onSelect: () -> Void
     let onReveal: () -> Void
     let onDelete: () -> Void
     let onHoverChange: (Bool) -> Void
+
+    private var isLight: Bool {
+        theme.isLight
+    }
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -910,7 +936,10 @@ private struct PlaylistItemRowView: View {
                 HStack(spacing: 8) {
                     leadingIndicator
                     titleAndMeta
-                    Spacer(minLength: 0)
+                    Spacer(minLength: 8)
+                    if isCurrent {
+                        playingIndicator
+                    }
                 }
                 .padding(.leading, 8)
                 .padding(.trailing, 50)
@@ -935,6 +964,15 @@ private struct PlaylistItemRowView: View {
         .onHover { onHoverChange($0) }
     }
 
+    private var playingIndicator: some View {
+        DrawerPlayingEqualizer(
+            isPlaying: isPlaying,
+            accentColor: isLight ? theme.accentColor : .cyan
+        )
+        .opacity(isHovered ? 0.0 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+    }
+
     private var rawFileName: String {
         let fn = (item.path as NSString).lastPathComponent
         return fn.isEmpty ? item.title : fn
@@ -945,48 +983,38 @@ private struct PlaylistItemRowView: View {
     }
 
     private var leadingIndicator: some View {
-        HStack(spacing: 3) {
-            if isCurrent {
-                if isPlaying {
-                    DrawerEqualizerWaveform(isPlaying: true)
-                } else {
-                    Image(systemName: "pause.fill")
-                        .font(.system(size: 8.5, weight: .bold))
-                        .foregroundColor(.cyan)
-                }
-            }
-
+        Group {
             if let badge = sanitizedTitle.episodeBadge {
                 Text(badge)
                     .font(.system(size: 9.5, weight: isCurrent ? .bold : .semibold, design: .monospaced))
                     .monospacedDigit()
-                    .foregroundColor(isCurrent ? .cyan : .cyan.opacity(0.88))
+                    .foregroundColor(isCurrent ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.accentColor.opacity(0.85) : .cyan.opacity(0.80)))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
-            } else if !isCurrent {
+            } else {
                 Text(String(format: "%02d", index + 1))
-                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10.5, weight: isCurrent ? .bold : .medium, design: .monospaced))
                     .monospacedDigit()
-                    .foregroundColor(.white.opacity(0.38))
+                    .foregroundColor(isCurrent ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.secondaryText.opacity(0.70) : .white.opacity(0.38)))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
         }
-        .frame(minWidth: sanitizedTitle.episodeBadge != nil ? (isCurrent ? 58 : 46) : 20, alignment: .leading)
+        .frame(minWidth: sanitizedTitle.episodeBadge != nil ? 46 : 22, alignment: .leading)
     }
 
     private var titleAndMeta: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(sanitizedTitle.displayTitle)
                 .font(.system(size: 11.5, weight: isCurrent ? .semibold : .regular))
-                .foregroundColor(isCurrent ? .cyan : .white.opacity(0.90))
+                .foregroundColor(isCurrent ? (isLight ? theme.accentColor : .cyan) : (isLight ? theme.primaryText : .white.opacity(0.90)))
                 .lineLimit(1)
                 .truncationMode(.tail)
 
             if item.duration > 0 {
                 Text(formatPlaybackTime(item.duration))
                     .font(.system(size: 9.5, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.40))
+                    .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.40))
             }
         }
     }
@@ -996,9 +1024,9 @@ private struct PlaylistItemRowView: View {
             Button(action: onReveal) {
                 Image(systemName: "folder")
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.70))
+                    .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.70))
                     .frame(width: 20, height: 20)
-                    .background(Circle().fill(Color.white.opacity(0.12)))
+                    .background(Circle().fill(isLight ? theme.pillSurface : Color.white.opacity(0.12)))
             }
             .buttonStyle(.plain)
             .help(L10n.showInFinder)
@@ -1006,9 +1034,9 @@ private struct PlaylistItemRowView: View {
             Button(action: onDelete) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.70))
+                    .foregroundColor(isLight ? theme.secondaryText : .white.opacity(0.70))
                     .frame(width: 20, height: 20)
-                    .background(Circle().fill(Color.white.opacity(0.12)))
+                    .background(Circle().fill(isLight ? theme.pillSurface : Color.white.opacity(0.12)))
             }
             .buttonStyle(.plain)
             .help(L10n.tr("Remove from Playlist", "从列表中移除"))
@@ -1020,8 +1048,8 @@ private struct PlaylistItemRowView: View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(
                 isCurrent
-                    ? Color.cyan.opacity(0.16)
-                    : (isHovered ? Color.white.opacity(0.07) : Color.white.opacity(0.015))
+                    ? (isLight ? theme.accentColor.opacity(0.14) : Color.cyan.opacity(0.16))
+                    : (isHovered ? (isLight ? theme.pillSurface : Color.white.opacity(0.07)) : (isLight ? Color.clear : Color.white.opacity(0.015)))
             )
     }
 
@@ -1029,8 +1057,8 @@ private struct PlaylistItemRowView: View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
             .strokeBorder(
                 isCurrent
-                    ? Color.cyan.opacity(0.38)
-                    : (isHovered ? Color.white.opacity(0.12) : Color.clear),
+                    ? (isLight ? theme.accentColor.opacity(0.45) : Color.cyan.opacity(0.38))
+                    : (isHovered ? (isLight ? theme.borderColor.opacity(0.65) : Color.white.opacity(0.12)) : Color.clear),
                 lineWidth: 0.75
             )
     }
@@ -1098,6 +1126,12 @@ public struct PlaylistDrawerHandleTab: View {
     public var onHoverChange: ((Bool) -> Void)? = nil
     public let action: () -> Void
 
+    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
+
+    private var theme: SilkLibraryTheme {
+        SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
+    }
+
     public init(
         isDrawerVisible: Bool,
         drawerWidth: CGFloat,
@@ -1116,6 +1150,9 @@ public struct PlaylistDrawerHandleTab: View {
                 .allowsHitTesting(false)
             SilkDrawerHandleRepresentable(
                 isDrawerVisible: isDrawerVisible,
+                customFillColor: theme.isLight ? NSColor(theme.backgroundBase) : nil,
+                customStrokeColor: theme.isLight ? NSColor(theme.borderColor) : nil,
+                customArrowColor: theme.isLight ? NSColor(theme.accentColor) : nil,
                 onHoverChange: onHoverChange,
                 action: action
             )
@@ -1129,12 +1166,42 @@ public struct PlaylistDrawerHandleTab: View {
 
 public struct SilkDrawerHandleRepresentable: NSViewRepresentable {
     public let isDrawerVisible: Bool
+    public var isLeadingEdge: Bool = false
+    public var customHandleWidth: CGFloat? = nil
+    public var customFillColor: NSColor? = nil
+    public var customStrokeColor: NSColor? = nil
+    public var customArrowColor: NSColor? = nil
     public var onHoverChange: ((Bool) -> Void)?
     public let action: () -> Void
+
+    public init(
+        isDrawerVisible: Bool,
+        isLeadingEdge: Bool = false,
+        customHandleWidth: CGFloat? = nil,
+        customFillColor: NSColor? = nil,
+        customStrokeColor: NSColor? = nil,
+        customArrowColor: NSColor? = nil,
+        onHoverChange: ((Bool) -> Void)? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.isDrawerVisible = isDrawerVisible
+        self.isLeadingEdge = isLeadingEdge
+        self.customHandleWidth = customHandleWidth
+        self.customFillColor = customFillColor
+        self.customStrokeColor = customStrokeColor
+        self.customArrowColor = customArrowColor
+        self.onHoverChange = onHoverChange
+        self.action = action
+    }
 
     public func makeNSView(context: Context) -> SilkDrawerHandleNSView {
         let v = SilkDrawerHandleNSView()
         v.isDrawerVisible = isDrawerVisible
+        v.isLeadingEdge = isLeadingEdge
+        v.customHandleWidth = customHandleWidth
+        v.customFillColor = customFillColor
+        v.customStrokeColor = customStrokeColor
+        v.customArrowColor = customArrowColor
         v.onAction = action
         v.onHoverChange = onHoverChange
         return v
@@ -1142,6 +1209,11 @@ public struct SilkDrawerHandleRepresentable: NSViewRepresentable {
 
     public func updateNSView(_ nsView: SilkDrawerHandleNSView, context: Context) {
         nsView.isDrawerVisible = isDrawerVisible
+        nsView.isLeadingEdge = isLeadingEdge
+        nsView.customHandleWidth = customHandleWidth
+        nsView.customFillColor = customFillColor
+        nsView.customStrokeColor = customStrokeColor
+        nsView.customArrowColor = customArrowColor
         nsView.onAction = action
         nsView.onHoverChange = onHoverChange
     }
@@ -1153,6 +1225,23 @@ public final class SilkDrawerHandleNSView: NSView {
             needsDisplay = true
             window?.invalidateCursorRects(for: self)
         }
+    }
+    public var isLeadingEdge: Bool = false {
+        didSet {
+            needsDisplay = true
+        }
+    }
+    public var customHandleWidth: CGFloat? {
+        didSet { needsDisplay = true }
+    }
+    public var customFillColor: NSColor? {
+        didSet { needsDisplay = true }
+    }
+    public var customStrokeColor: NSColor? {
+        didSet { needsDisplay = true }
+    }
+    public var customArrowColor: NSColor? {
+        didSet { needsDisplay = true }
     }
     public var onAction: (() -> Void)?
     public var onHoverChange: ((Bool) -> Void)?
@@ -1270,40 +1359,73 @@ public final class SilkDrawerHandleNSView: NSView {
 
         let b = bounds
         let handleH: CGFloat = 112.0
-        let handleW: CGFloat = 5.0
+        let handleW: CGFloat = customHandleWidth ?? 5.0
         let handleY = (b.height - handleH) * 0.5
-        let handleX = b.width - handleW
+        let r: CGFloat = customHandleWidth != nil ? 4.0 : 3.0
 
-        // 3-sided border path (top, left, bottom, right open)
         let borderPath = CGMutablePath()
-        let r: CGFloat = 3.0
-        borderPath.move(to: CGPoint(x: b.width, y: handleY))
-        borderPath.addLine(to: CGPoint(x: handleX + r, y: handleY))
-        borderPath.addArc(tangent1End: CGPoint(x: handleX, y: handleY), tangent2End: CGPoint(x: handleX, y: handleY + r), radius: r)
-        borderPath.addLine(to: CGPoint(x: handleX, y: handleY + handleH - r))
-        borderPath.addArc(tangent1End: CGPoint(x: handleX, y: handleY + handleH), tangent2End: CGPoint(x: handleX + r, y: handleY + handleH), radius: r)
-        borderPath.addLine(to: CGPoint(x: b.width, y: handleY + handleH))
+        let triPath = CGMutablePath()
+        let triH: CGFloat = 9.5
+        let triW: CGFloat = customHandleWidth != nil ? 3.0 : 2.0
+        let triY = (b.height - triH) * 0.5
 
-        // Draw shadow & stroke
-        ctx.setShadow(offset: CGSize(width: -0.5, height: 0), blur: 0.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
-        ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.75).cgColor)
-        ctx.setLineWidth(1.0)
+        if isLeadingEdge {
+            // 3-sided border path (top, right, bottom, left open)
+            borderPath.move(to: CGPoint(x: 0, y: handleY))
+            borderPath.addLine(to: CGPoint(x: handleW - r, y: handleY))
+            borderPath.addArc(tangent1End: CGPoint(x: handleW, y: handleY), tangent2End: CGPoint(x: handleW, y: handleY + r), radius: r)
+            borderPath.addLine(to: CGPoint(x: handleW, y: handleY + handleH - r))
+            borderPath.addArc(tangent1End: CGPoint(x: handleW, y: handleY + handleH), tangent2End: CGPoint(x: handleW - r, y: handleY + handleH), radius: r)
+            borderPath.addLine(to: CGPoint(x: 0, y: handleY + handleH))
+
+            if customFillColor == nil {
+                ctx.setShadow(offset: CGSize(width: 0.5, height: 0), blur: 0.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
+            } else {
+                ctx.setShadow(offset: CGSize(width: 0.5, height: 0), blur: 1.5, color: NSColor(calibratedRed: 0.17, green: 0.12, blue: 0.07, alpha: 0.14).cgColor)
+            }
+
+            // Flattened indicator triangle pointing right
+            let triX: CGFloat = max(1.5, (handleW - triW) * 0.5)
+            triPath.move(to: CGPoint(x: triX + triW, y: triY + triH * 0.5)) // Right tip
+            triPath.addLine(to: CGPoint(x: triX, y: triY)) // Top left
+            triPath.addLine(to: CGPoint(x: triX, y: triY + triH)) // Bottom left
+            triPath.closeSubpath()
+        } else {
+            let handleX = b.width - handleW
+            // 3-sided border path (top, left, bottom, right open)
+            borderPath.move(to: CGPoint(x: b.width, y: handleY))
+            borderPath.addLine(to: CGPoint(x: handleX + r, y: handleY))
+            borderPath.addArc(tangent1End: CGPoint(x: handleX, y: handleY), tangent2End: CGPoint(x: handleX, y: handleY + r), radius: r)
+            borderPath.addLine(to: CGPoint(x: handleX, y: handleY + handleH - r))
+            borderPath.addArc(tangent1End: CGPoint(x: handleX, y: handleY + handleH), tangent2End: CGPoint(x: handleX + r, y: handleY + handleH), radius: r)
+            borderPath.addLine(to: CGPoint(x: b.width, y: handleY + handleH))
+
+            ctx.setShadow(offset: CGSize(width: -0.5, height: 0), blur: 0.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
+
+            // Flattened indicator triangle pointing left (height: 9.5, width: 2.0)
+            let triX = b.width - max(1.5, (handleW - triW) * 0.5) - triW
+            triPath.move(to: CGPoint(x: triX, y: triY + triH * 0.5)) // Left tip
+            triPath.addLine(to: CGPoint(x: triX + triW, y: triY)) // Top right
+            triPath.addLine(to: CGPoint(x: triX + triW, y: triY + triH)) // Bottom right
+            triPath.closeSubpath()
+        }
+
+        if let customFillColor {
+            ctx.setFillColor(customFillColor.cgColor)
+            ctx.addPath(borderPath)
+            ctx.closePath()
+            ctx.fillPath()
+        }
+
+        // Stroke 3-sided border
+        let strokeColor = customStrokeColor ?? NSColor.white.withAlphaComponent(0.75)
+        ctx.setStrokeColor(strokeColor.cgColor)
+        ctx.setLineWidth(customFillColor != nil ? 1.2 : 1.0)
         ctx.addPath(borderPath)
         ctx.strokePath()
 
-        // Flattened indicator triangle pointing left (height: 9.5, width: 2.0)
-        let triH: CGFloat = 9.5
-        let triW: CGFloat = 2.0
-        let triY = (b.height - triH) * 0.5
-        let triX = b.width - 1.5 - triW
-
-        let triPath = CGMutablePath()
-        triPath.move(to: CGPoint(x: triX, y: triY + triH * 0.5)) // Left tip
-        triPath.addLine(to: CGPoint(x: triX + triW, y: triY)) // Top right
-        triPath.addLine(to: CGPoint(x: triX + triW, y: triY + triH)) // Bottom right
-        triPath.closeSubpath()
-
-        ctx.setFillColor(NSColor.white.withAlphaComponent(0.85).cgColor)
+        let arrowColor = customArrowColor ?? NSColor.white.withAlphaComponent(0.85)
+        ctx.setFillColor(arrowColor.cgColor)
         ctx.addPath(triPath)
         ctx.fillPath()
 

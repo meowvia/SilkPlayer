@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SilkCoreKit
 
 public struct ShortcutRowItem: Identifiable {
     public let id = UUID()
@@ -39,6 +40,11 @@ public enum ShortcutCategory: String, CaseIterable, Identifiable {
 public struct ShortcutsCheatsheetView: View {
     @State private var selectedCategory: ShortcutCategory = .all
     @State private var searchText: String = ""
+    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
+
+    private var activeTheme: SilkLibraryTheme {
+        SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
+    }
 
     public init() {}
 
@@ -76,6 +82,7 @@ public struct ShortcutsCheatsheetView: View {
             // Window & App
             ShortcutRowItem(title: L10n.mediaInspectorTitle, keys: ["⌘", "I"], category: .window),
             ShortcutRowItem(title: L10n.playlist, keys: ["⌘", "P"], category: .window),
+            ShortcutRowItem(title: L10n.tr("Collapse / Expand Music Queue", "收起 / 展开音乐列表"), keys: ["⌘", "L"], category: .window),
             ShortcutRowItem(title: L10n.openFile, keys: ["⌘", "O"], category: .window),
             ShortcutRowItem(title: L10n.settings, keys: ["⌘", ","], category: .window),
             ShortcutRowItem(title: L10n.keyboardShortcuts, keys: ["⌘", "/"], category: .window)
@@ -99,9 +106,9 @@ public struct ShortcutsCheatsheetView: View {
             HStack(spacing: 12) {
                 Image(systemName: "command")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(activeTheme.accentColor)
                     .frame(width: 28, height: 28)
-                    .background(Color.accentColor.opacity(0.15))
+                    .background(activeTheme.accentColor.opacity(0.15))
                     .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -151,12 +158,12 @@ public struct ShortcutsCheatsheetView: View {
                                 .font(.system(size: 11, weight: selectedCategory == cat ? .medium : .regular))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
-                                .background(selectedCategory == cat ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.04))
-                                .foregroundColor(selectedCategory == cat ? .accentColor : .secondary)
+                                .background(selectedCategory == cat ? activeTheme.accentColor.opacity(0.2) : Color.primary.opacity(0.04))
+                                .foregroundColor(selectedCategory == cat ? activeTheme.accentColor : .secondary)
                                 .clipShape(Capsule())
                                 .overlay(
                                     Capsule()
-                                        .stroke(selectedCategory == cat ? Color.accentColor.opacity(0.4) : Color.primary.opacity(0.06), lineWidth: 0.5)
+                                        .stroke(selectedCategory == cat ? activeTheme.accentColor.opacity(0.4) : Color.primary.opacity(0.06), lineWidth: 0.5)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -214,6 +221,9 @@ public struct ShortcutsCheatsheetView: View {
         }
         .frame(width: 580, height: 440)
         .background(VisualEffectView(material: .sidebar, blendingMode: .behindWindow))
+        .preferredColorScheme(AppSettings.shared.effectiveColorScheme)
+        .tint(activeTheme.accentColor)
+        .focusEffectDisabled()
     }
 }
 
@@ -226,6 +236,7 @@ public final class ShortcutsCheatsheetManager {
 
     public func show() {
         if let controller = windowController {
+            controller.window?.appearance = AppSettings.shared.effectiveNSAppearance
             controller.window?.makeKeyAndOrderFront(nil)
             NSApp?.activate(ignoringOtherApps: true)
             return
@@ -244,6 +255,7 @@ public final class ShortcutsCheatsheetManager {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.contentView = hostingView
+        window.appearance = AppSettings.shared.effectiveNSAppearance
         window.isReleasedWhenClosed = false
 
         let controller = NSWindowController(window: window)

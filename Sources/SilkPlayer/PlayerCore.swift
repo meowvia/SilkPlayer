@@ -19,6 +19,14 @@ import SilkCoreKit
     public init() {}
 }
 
+// MARK: - Decoupled Audio Rhythm Metering
+@MainActor
+@Observable public final class PlayerAudioRhythm {
+    public var levels: [CGFloat] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    public init() {}
+}
+
 @MainActor
 public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, SilkPlayerLayerDelegate {
     // MARK: - Singleton & Key Bindings
@@ -43,15 +51,46 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         didSet { clock.duration = duration }
     }
     @Published public var cachedDuration: Double = 0.0
-    @Published public var isLoaded: Bool = false
-    @Published public var isPlaying: Bool = false
+    @Published public var isLoaded: Bool = false {
+        didSet {
+            if isLoaded != oldValue {
+                PlayerWindowManager.shared.syncCommandState()
+            }
+        }
+    }
+    @Published public var isPlaying: Bool = false {
+        didSet {
+            if isPlaying != oldValue {
+                PlayerWindowManager.shared.syncCommandState()
+            }
+        }
+    }
     @Published public var playbackState: PlaybackState = .idle
     @Published public var mediaTitle: String = ""
     @Published public var currentFilePath: String? = nil
     private var pendingResumeTime: Double? = nil
+    private var lastClockPublishTime: CFAbsoluteTime = 0.0
 
     // MARK: - Audio Only & Artwork Metadata
-    @Published public var isAudioOnly: Bool = false
+    @Published public var isAudioOnly: Bool = false {
+        didSet {
+            if isAudioOnly != oldValue {
+                PlayerWindowManager.shared.syncCommandState()
+            }
+        }
+    }
+    public var presentationMode: PlaybackPresentationMode {
+        guard isAudioOnly || isLoaded || playbackState == .loading || isPlaying else { return .idle }
+        if !isAudioOnly { return .video }
+        if SilkProLicenseEngine.shared.isProActive || PlayerWindowManager.isRunningTests {
+            return .proMusic
+        } else {
+            return .standardAudio
+        }
+    }
+    public var isProMusicModeActive: Bool {
+        presentationMode == .proMusic
+    }
     @Published public var artworkImage: NSImage? = nil
 
     // MARK: - Video & Codec Metadata
@@ -101,10 +140,25 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var isScrubbing: Bool = false
     @Published public var scrubTime: Double = 0.0
     private var wasPlayingBeforeScrub: Bool = false
-    @Published public var isInspectorVisible: Bool = false
-    @Published public var isPlaylistDrawerVisible: Bool = false
+    @Published public var isInspectorVisible: Bool = false {
+        didSet {
+            if isInspectorVisible != oldValue {
+                PlayerWindowManager.shared.syncCommandState()
+            }
+        }
+    }
+    @Published public var isPlaylistDrawerVisible: Bool = false {
+        didSet {
+            if isPlaylistDrawerVisible != oldValue {
+                PlayerWindowManager.shared.syncCommandState()
+            }
+        }
+    }
     @Published public var activeOSD: OSDNotification? = nil
     public var hasAppliedInitialWindowSize: Bool = false
+    public var pendingAudioGeometryAfterExitFullScreen: Bool = false
+    public var isApplyingAudioWindowGeometry: Bool = false
+    public static let musicModeHeightDefaultsKey = "SilkPlayer.MusicMode.WindowHeight"
 
     // MARK: - Live Resize Precision HUD
     @Published public var isLiveResizing: Bool = false
@@ -116,6 +170,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @Published public var subtitleTracks: [TrackItem] = []
     @Published public var selectedAudioTrackId: Int = 1
     @Published public var selectedSubtitleTrackId: Int = 0
+    public private(set) var isSubtitleDisabledByUser: Bool = false
     @Published public var chapters: [ChapterItem] = []
 
     // MARK: - HDR, Color & Picture Controls
@@ -165,8 +220,16 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     private var hasHandledNaturalEOF: Bool = false
     private var shouldAutoPlayOnReady: Bool = true
 
-    // MARK: - Real-time Audio Rhythm Metering
-    @Published public var audioRhythmLevels: [CGFloat] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    // MARK: - Decoupled Real-time Audio Rhythm Metering
+    public let audioRhythm = PlayerAudioRhythm()
+    public var audioRhythmLevels: [CGFloat] {
+        get { audioRhythm.levels }
+        set {
+            if audioRhythm.levels != newValue {
+                audioRhythm.levels = newValue
+            }
+        }
+    }
     private var audioRhythmTimer: Timer?
 
     // MARK: - Power Assertion & Sleep Management
@@ -328,7 +391,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         if shouldCrossfade {
             fadeTask = Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                await self.performFadeOut(duration: 0.28)
+                await self.performFadeOut(duration: 0.08)
                 guard !Task.isCancelled else { return }
                 self.loadFile(path: path, startTime: startTime, autoPlay: autoPlay, fadeInOnStart: true)
             }
@@ -347,7 +410,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         }
 
         let isIncomingAudio = MediaFileClassifier.classify(url: resolvedURL) == .audio
-        stop(resetUI: false)
+        stop(resetUI: false, preserveAudioMode: isIncomingAudio)
 
         self.currentFilePath = path
         SilkThumbnailEngine.shared.prepare(for: path)
@@ -363,6 +426,16 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         self.isAudioOnly = isIncomingAudio
         if !isIncomingAudio {
             self.artworkImage = nil
+            if let window = self.hostWindow ?? NSApp.keyWindow {
+                restoreStandardWindowChrome(on: window)
+                if let sf = (window.screen ?? NSScreen.main)?.visibleFrame {
+                    window.maxSize = sf.size
+                    window.contentMaxSize = sf.size
+                }
+            }
+        } else {
+            self.isPlaylistDrawerVisible = false
+            applyAudioWindowGeometry(animated: true)
         }
 
         options.startPlayTime = startTime
@@ -406,7 +479,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 self.isPlaying = true
                 self.playbackState = .playing
                 if fadeInOnStart {
-                    self.performFadeIn(targetVolume: targetVolume, duration: 0.38)
+                    self.performFadeIn(targetVolume: targetVolume, duration: 0.22)
                 }
 
                 // Format association prompt (first time opening this format, video only, once per format)
@@ -475,7 +548,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         stop(resetUI: true)
     }
 
-    public func stop(resetUI: Bool) {
+    public func stop(resetUI: Bool, preserveAudioMode: Bool = false) {
         releasePlaybackActivity()
         stopAudioRhythmMonitoring()
         if let path = currentFilePath, currentTime > 0 {
@@ -497,7 +570,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         isPlaying = false
         isLoaded = false
         playbackState = .idle
-        isAudioOnly = false
+        if !preserveAudioMode {
+            isAudioOnly = false
+        }
         artworkImage = nil
         mediaTitle = ""
         audioRhythmLevels = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -506,6 +581,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         cachedDuration = 0.0
         subtitleModel.url = nil
         subtitleModel.selectedSubtitleInfo = nil
+        subtitleModel.parts.removeAll()
+        isSubtitleDisabledByUser = false
         audioTracks.removeAll()
         subtitleTracks.removeAll()
         chapters.removeAll()
@@ -538,8 +615,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             PlayerCore.trimMemoryFootprint()
         }
 
-        if resetUI, let window = hostWindow ?? NSApp.keyWindow {
+        if resetUI, let window = hostWindow ?? NSApp?.keyWindow {
             window.title = "SilkPlayer"
+            restoreStandardWindowChrome(on: window)
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
             window.resizeIncrements = NSSize(width: 1, height: 1)
@@ -547,6 +625,9 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             let emptyMin = NSSize(width: 640, height: 360)
             window.minSize = emptyMin
             window.contentMinSize = emptyMin
+            let screenSize = (window.screen ?? NSScreen.main)?.visibleFrame.size ?? NSSize(width: 1920, height: 1080)
+            window.maxSize = screenSize
+            window.contentMaxSize = screenSize
         }
     }
 
@@ -737,12 +818,14 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func setSubtitleTrack(id: Int, notifyOSD: Bool = false) {
-        guard let player = playerLayer?.player else { return }
-        let tracks = player.tracks(mediaType: .subtitle)
+        let player = playerLayer?.player
+        let tracks = player?.tracks(mediaType: .subtitle) ?? []
         if id == 0 {
             // Disable subtitles
+            isSubtitleDisabledByUser = true
             subtitleModel.selectedSubtitleInfo = nil
-            player.deselectTrack(mediaType: .subtitle)
+            subtitleModel.parts.removeAll()
+            player?.deselectTrack(mediaType: .subtitle)
             for track in tracks {
                 track.isEnabled = false
             }
@@ -754,18 +837,19 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             return
         }
 
+        isSubtitleDisabledByUser = false
         if !subtitleModel.subtitleInfos.isEmpty {
             let targetIdx = id - 1
             guard targetIdx >= 0 && targetIdx < subtitleModel.subtitleInfos.count else { return }
             let targetInfo = subtitleModel.subtitleInfos[targetIdx]
             subtitleModel.selectedSubtitleInfo = targetInfo
             if let mediaTrack = targetInfo as? (any MediaPlayerTrack) {
-                player.select(track: mediaTrack) { [weak self] in
+                player?.select(track: mediaTrack) { [weak self] in
                     self?.subtitleModel.objectWillChange.send()
                     self?.subtitleModel.updateActiveSubtitles()
                 }
             } else if let matched = tracks.first(where: { String($0.trackID) == targetInfo.subtitleID }) {
-                player.select(track: matched)
+                player?.select(track: matched)
             }
             selectedSubtitleTrackId = id
             refreshTracks()
@@ -775,7 +859,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             }
         } else {
             if let target = tracks.first(where: { $0.trackID == Int32(id) }) {
-                player.select(track: target)
+                player?.select(track: target)
                 selectedSubtitleTrackId = id
                 refreshTracks()
                 if notifyOSD {
@@ -793,6 +877,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func addSubtitle(path: String) {
+        isSubtitleDisabledByUser = false
         let subURL = URL(fileURLWithPath: path)
         let info = URLSubtitleInfo(url: subURL)
         subtitleModel.addSubtitle(info: info)
@@ -817,27 +902,51 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func refreshTracks() {
-        guard let player = playerLayer?.player else { return }
-        let aTracks = player.tracks(mediaType: .audio)
-        self.audioTracks = aTracks.map { track in
-            let codec = track.codecName
-            return TrackItem(
-                id: Int(track.trackID),
-                type: "audio",
-                title: track.name,
-                lang: track.languageCode ?? "",
-                codec: codec,
-                isExternal: false,
-                isSelected: track.isEnabled
-            )
-        }
-        if let selectedA = aTracks.first(where: { $0.isEnabled }) {
-            self.selectedAudioTrackId = Int(selectedA.trackID)
+        let player = playerLayer?.player
+        if let player = player {
+            let aTracks = player.tracks(mediaType: .audio)
+            self.audioTracks = aTracks.map { track in
+                let codec = track.codecName
+                return TrackItem(
+                    id: Int(track.trackID),
+                    type: "audio",
+                    title: track.name,
+                    lang: track.languageCode ?? "",
+                    codec: codec,
+                    isExternal: false,
+                    isSelected: track.isEnabled
+                )
+            }
+            if let selectedA = aTracks.first(where: { $0.isEnabled }) ?? aTracks.first {
+                self.selectedAudioTrackId = Int(selectedA.trackID)
+                if self.isAudioOnly, let path = self.currentFilePath {
+                    var detectedSampleRate: Double? = nil
+                    var detectedBitDepth: Int? = nil
+                    if let desc = selectedA.formatDescription,
+                       let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(desc)?.pointee {
+                        if asbd.mSampleRate > 0 {
+                            detectedSampleRate = asbd.mSampleRate
+                        }
+                        if (detectedBitDepth ?? 0) <= 0 && asbd.mBitsPerChannel > 0 {
+                            detectedBitDepth = Int(asbd.mBitsPerChannel)
+                        }
+                    }
+                    AudioTrackMetadataService.shared.mergeLiveStreamInfo(
+                        path: path,
+                        rawTitle: self.mediaTitle,
+                        codec: selectedA.codecName,
+                        sampleRateHz: detectedSampleRate,
+                        bitDepth: detectedBitDepth,
+                        duration: self.duration > 0 ? self.duration : nil,
+                        tags: player.dynamicInfo?.metadata
+                    )
+                }
+            }
         }
 
         if !subtitleModel.subtitleInfos.isEmpty {
-            // Auto-select subtitle based on user's preferred language if none selected yet
-            if subtitleModel.selectedSubtitleInfo == nil && options.autoSelectEmbedSubtitle {
+            // Auto-select subtitle based on user's preferred language if none selected yet AND not explicitly disabled by user
+            if !isSubtitleDisabledByUser && subtitleModel.selectedSubtitleInfo == nil && options.autoSelectEmbedSubtitle {
                 let preferred = AppSettings.shared.preferredSubtitleLang.lowercased()
                 var matched: SubtitleInfo? = nil
                 if preferred != "auto" {
@@ -869,8 +978,8 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             }
 
             // Guarantee the underlying engine selects and decodes the chosen subtitle track
-            if let active = subtitleModel.selectedSubtitleInfo, let mediaTrack = active as? (any MediaPlayerTrack) {
-                player.select(track: mediaTrack) { [weak self] in
+            if !isSubtitleDisabledByUser, let active = subtitleModel.selectedSubtitleInfo, let mediaTrack = active as? (any MediaPlayerTrack) {
+                player?.select(track: mediaTrack) { [weak self] in
                     self?.subtitleModel.objectWillChange.send()
                     self?.subtitleModel.updateActiveSubtitles()
                 }
@@ -894,16 +1003,16 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                     lang: lang,
                     codec: codec,
                     isExternal: subInfo is URLSubtitleInfo,
-                    isSelected: subInfo === subtitleModel.selectedSubtitleInfo
+                    isSelected: !isSubtitleDisabledByUser && subInfo === subtitleModel.selectedSubtitleInfo
                 )
             }
-            if let selected = subtitleModel.selectedSubtitleInfo,
+            if !isSubtitleDisabledByUser, let selected = subtitleModel.selectedSubtitleInfo,
                let selIdx = subtitleModel.subtitleInfos.firstIndex(where: { $0 === selected }) {
                 self.selectedSubtitleTrackId = selIdx + 1
             } else {
                 self.selectedSubtitleTrackId = 0
             }
-        } else {
+        } else if let player = player {
             let sTracks = player.tracks(mediaType: .subtitle)
             self.subtitleTracks = sTracks.map { track in
                 let codec = track.codecName
@@ -914,12 +1023,17 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                     lang: track.languageCode ?? "",
                     codec: codec,
                     isExternal: false,
-                    isSelected: track.isEnabled
+                    isSelected: !isSubtitleDisabledByUser && track.isEnabled
                 )
             }
-            if let selectedS = sTracks.first(where: { $0.isEnabled }) {
+            if !isSubtitleDisabledByUser, let selectedS = sTracks.first(where: { $0.isEnabled }) {
                 self.selectedSubtitleTrackId = Int(selectedS.trackID)
+            } else {
+                self.selectedSubtitleTrackId = 0
             }
+        } else {
+            self.subtitleTracks = []
+            self.selectedSubtitleTrackId = 0
         }
     }
 
@@ -1213,6 +1327,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         guard let window = hostWindow ?? NSApp.keyWindow else { return }
         guard !isFullscreenTransitioning else { return }
 
+        // Music Mode disables fullscreen transitions (zoom & Space fullscreen stay locked)
+        if isAudioOnly && !isFullscreen && !window.styleMask.contains(.fullScreen) {
+            return
+        }
+
         // 置顶状态下禁止切入全屏，弹出 OSD 明确提醒用户
         if AppSettings.shared.keepWindowOnTop && !isFullscreen {
             showOSD(.pictureAdjustment(
@@ -1229,10 +1348,6 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         if !window.styleMask.contains(.fullScreen) {
             window.collectionBehavior.remove([.fullScreenAuxiliary, .fullScreenNone])
             window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
-            let refreshSel = NSSelectorFromString("_doUpdateTilingConstraintsImmediately")
-            if window.responds(to: refreshSel) {
-                _ = window.perform(refreshSel)
-            }
         }
         if !PlayerWindowManager.isRunningTests && !window.isKeyWindow {
             window.makeKeyAndOrderFront(nil)
@@ -1286,6 +1401,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func togglePlaylistDrawer() {
+        guard !isProMusicModeActive else { return }
         isPlaylistDrawerVisible.toggle()
         if isPlaylistDrawerVisible {
             isInspectorVisible = false
@@ -1343,7 +1459,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     public func startAudioRhythmMonitoring() {
         guard isAudioOnly && isPlaying else { return }
         guard audioRhythmTimer == nil else { return }
-        audioRhythmTimer = Timer.scheduledTimer(withTimeInterval: 0.050, repeats: true) { [weak self] _ in
+        audioRhythmTimer = Timer.scheduledTimer(withTimeInterval: 0.10, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, self.isPlaying, self.isAudioOnly else {
                     self?.stopAudioRhythmMonitoring()
@@ -1351,15 +1467,16 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
                 }
                 if let bands = self.playerLayer?.audioRhythmBands, bands.count == 7 {
                     let mapped = bands.map { CGFloat($0) }
+                    let current = self.audioRhythm.levels
                     var changed = false
                     for (i, val) in mapped.enumerated() {
-                        if abs(val - self.audioRhythmLevels[i]) > 0.03 {
+                        if abs(val - current[i]) > 0.035 {
                             changed = true
                             break
                         }
                     }
                     if changed {
-                        self.audioRhythmLevels = mapped
+                        self.audioRhythm.levels = mapped
                     }
                 }
             }
@@ -1402,6 +1519,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     @MainActor
     public func triggerVolumeHUD() {
+        guard !isAudioOnly else {
+            volumeHideTask?.cancel()
+            if isVolumeHUDVisible { isVolumeHUDVisible = false }
+            return
+        }
         withAnimation(SilkAnimation.snappy) {
             isVolumeHUDVisible = true
         }
@@ -1417,6 +1539,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
 
     @MainActor
     public func keepVolumeHUDAlive() {
+        guard !isAudioOnly else {
+            volumeHideTask?.cancel()
+            if isVolumeHUDVisible { isVolumeHUDVisible = false }
+            return
+        }
         volumeHideTask?.cancel()
         if !isVolumeHUDVisible {
             withAnimation(SilkAnimation.snappy) {
@@ -1428,6 +1555,10 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     @MainActor
     public func scheduleVolumeHUDDismiss() {
         volumeHideTask?.cancel()
+        guard !isAudioOnly else {
+            if isVolumeHUDVisible { isVolumeHUDVisible = false }
+            return
+        }
         volumeHideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_200_000_000)
             guard !Task.isCancelled else { return }
@@ -1438,6 +1569,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func showVolumeOSD() {
+        guard !isAudioOnly else { return }
         triggerVolumeHUD()
     }
 
@@ -1653,15 +1785,44 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             if let pending = self.pendingSeekTarget {
                 if abs(currentTime - pending) <= 0.6 {
                     self.pendingSeekTarget = nil
+                    self.lastClockPublishTime = CFAbsoluteTimeGetCurrent()
                     self.currentTime = currentTime
                 }
             } else {
-                self.currentTime = currentTime
+                let now = CFAbsoluteTimeGetCurrent()
+                let cadence: CFTimeInterval = self.isAudioOnly ? 0.20 : 0.08
+                let delta = abs(currentTime - self.clock.currentTime)
+                let crossedRewind = (currentTime > 3.0) != self.canRewindToStart
+                if delta >= 0.45 || crossedRewind || (now - self.lastClockPublishTime) >= cadence {
+                    self.lastClockPublishTime = now
+                    self.currentTime = currentTime
+                }
             }
         }
-        self.duration = totalTime
-        self.cachedDuration = totalTime
-        _ = self.subtitleModel.subtitle(currentTime: currentTime)
+        let becameValidDuration = (self.duration <= 0 && totalTime > 0)
+        if totalTime.isFinite && abs(self.duration - totalTime) > 0.001 {
+            self.duration = totalTime
+        }
+        if totalTime.isFinite && abs(self.cachedDuration - totalTime) > 0.001 {
+            self.cachedDuration = totalTime
+        }
+        if totalTime.isFinite && totalTime > 0, let p = self.currentFilePath {
+            PlaylistManager.shared.updateDuration(forPath: p, duration: totalTime)
+        }
+        if becameValidDuration, self.isAudioOnly, let path = self.currentFilePath {
+            AudioTrackMetadataService.shared.mergeLiveStreamInfo(
+                path: path,
+                rawTitle: self.mediaTitle,
+                codec: nil,
+                sampleRateHz: nil,
+                bitDepth: nil,
+                duration: totalTime,
+                tags: nil
+            )
+        }
+        if !self.isAudioOnly {
+            _ = self.subtitleModel.subtitle(currentTime: currentTime)
+        }
         self.onProgressUpdate?(self.currentFilePath ?? "", currentTime, totalTime)
     }
 
@@ -1706,6 +1867,19 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             self.videoCodec = "Audio Stream"
             self.hwdecCurrent = "CoreAudio (Hardware Master Clock)"
             self.isHUDVisible = true
+            self.volumeHideTask?.cancel()
+            self.isVolumeHUDVisible = false
+            if let path = self.currentFilePath {
+                AudioTrackMetadataService.shared.mergeLiveStreamInfo(
+                    path: path,
+                    rawTitle: self.mediaTitle,
+                    codec: nil,
+                    sampleRateHz: nil,
+                    bitDepth: nil,
+                    duration: self.duration > 0 ? self.duration : nil,
+                    tags: player.dynamicInfo?.metadata
+                )
+            }
             if isPlaying {
                 startAudioRhythmMonitoring()
             }

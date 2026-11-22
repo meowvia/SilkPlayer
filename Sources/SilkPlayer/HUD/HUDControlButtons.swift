@@ -1,15 +1,28 @@
 import SwiftUI
 import AppKit
+import SilkCoreKit
 
 // MARK: - Instant Responsive Micro-Tooltip Modifier
 @MainActor
 public struct HUDMicroTooltipModifier: ViewModifier {
     let text: String
     var edge: VerticalEdge = .top
+    var horizontalAlignment: HorizontalAlignment = .center
 
     @State private var isHovered: Bool = false
     @State private var isVisible: Bool = false
     @State private var timerTask: Task<Void, Never>? = nil
+
+    private var resolvedAlignment: Alignment {
+        switch (edge, horizontalAlignment) {
+        case (.top, .leading): return .topLeading
+        case (.top, .trailing): return .topTrailing
+        case (.top, _): return .top
+        case (.bottom, .leading): return .bottomLeading
+        case (.bottom, .trailing): return .bottomTrailing
+        case (.bottom, _): return .bottom
+        }
+    }
 
     public func body(content: Content) -> some View {
         content
@@ -33,7 +46,7 @@ public struct HUDMicroTooltipModifier: ViewModifier {
                     }
                 }
             }
-            .overlay(alignment: edge == .top ? .top : .bottom) {
+            .overlay(alignment: resolvedAlignment) {
                 if isVisible && !text.isEmpty {
                     Text(text)
                         .font(.system(size: 10.5, weight: .medium))
@@ -69,8 +82,36 @@ public struct HUDMicroTooltipModifier: ViewModifier {
 
 extension View {
     @MainActor
-    public func hudTooltip(_ text: String, edge: VerticalEdge = .top) -> some View {
-        self.modifier(HUDMicroTooltipModifier(text: text, edge: edge))
+    public func hudTooltip(
+        _ text: String,
+        edge: VerticalEdge = .top,
+        horizontalAlignment: HorizontalAlignment = .center
+    ) -> some View {
+        self.modifier(
+            HUDMicroTooltipModifier(
+                text: text,
+                edge: edge,
+                horizontalAlignment: horizontalAlignment
+            )
+        )
+    }
+}
+
+@MainActor
+public struct SilkFluidSpringButtonStyle: ButtonStyle {
+    var pressedScale: CGFloat = 0.94
+    var pressedOpacity: CGFloat = 0.88
+
+    public init(pressedScale: CGFloat = 0.94, pressedOpacity: CGFloat = 0.88) {
+        self.pressedScale = pressedScale
+        self.pressedOpacity = pressedOpacity
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? pressedScale : 1.0)
+            .opacity(configuration.isPressed ? pressedOpacity : 1.0)
+            .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.68), value: configuration.isPressed)
     }
 }
 
@@ -82,6 +123,7 @@ struct HUDTransportButton: View {
     var color: Color = .white
     var disabled: Bool = false
     var helpText: String = ""
+    var tooltipHorizontalAlignment: HorizontalAlignment = .center
     var action: () -> Void
 
     @State private var isHovered = false
@@ -98,7 +140,7 @@ struct HUDTransportButton: View {
                 )
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SilkFluidSpringButtonStyle(pressedScale: 0.93, pressedOpacity: 0.86))
         .frame(width: 28, height: 28)
         .disabled(disabled)
         .opacity(disabled ? 0.35 : (isHovered ? 1.0 : 0.88))
@@ -107,7 +149,7 @@ struct HUDTransportButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .hudTooltip(helpText, edge: .top)
+        .hudTooltip(helpText, edge: .top, horizontalAlignment: tooltipHorizontalAlignment)
         .help(helpText)
     }
 }
@@ -120,6 +162,7 @@ struct HUDMenuButton<Content: View>: View {
     var color: Color = .white
     var isActive: Bool = false
     var helpText: String = ""
+    var tooltipHorizontalAlignment: HorizontalAlignment = .center
     @ViewBuilder let content: () -> Content
 
     @State private var isHovered = false
@@ -148,7 +191,7 @@ struct HUDMenuButton<Content: View>: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .hudTooltip(helpText, edge: .top)
+        .hudTooltip(helpText, edge: .top, horizontalAlignment: tooltipHorizontalAlignment)
         .help(helpText)
     }
 }
@@ -191,6 +234,15 @@ struct HUDMoreMenuButton<Content: View>: View {
 struct HUDSpeedMenuButton: View {
     @ObservedObject var player: PlayerCore
     @State private var isHovered = false
+    @AppStorage(SilkLibraryTheme.userDefaultsKey) private var selectedThemeRaw: String = SilkLibraryTheme.shenghui.rawValue
+
+    private var currentTheme: SilkLibraryTheme {
+        SilkLibraryTheme(rawValue: selectedThemeRaw) ?? .shenghui
+    }
+
+    private var isMusicMode: Bool {
+        player.isAudioOnly
+    }
 
     var body: some View {
         Menu {
@@ -203,17 +255,30 @@ struct HUDSpeedMenuButton: View {
             Text(speedPillText)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .foregroundColor(player.speed != 1.0 ? .cyan : .white.opacity(0.88))
+                .foregroundColor(
+                    player.speed != 1.0
+                        ? (isMusicMode ? currentTheme.accentColor : .cyan)
+                        : (isMusicMode ? currentTheme.primaryText : .white.opacity(0.88))
+                )
                 .frame(minWidth: 32)
                 .frame(height: 26)
                 .padding(.horizontal, 4)
                 .background(
                     Capsule()
-                        .fill(Color.white.opacity(isHovered ? 0.14 : (player.speed != 1.0 ? 0.12 : 0.06)))
+                        .fill(
+                            isMusicMode
+                                ? (player.speed != 1.0 ? currentTheme.accentColor.opacity(0.18) : (isHovered ? currentTheme.pillSurface : Color.clear))
+                                : Color.white.opacity(isHovered ? 0.14 : (player.speed != 1.0 ? 0.12 : 0.06))
+                        )
                 )
                 .overlay(
                     Capsule()
-                        .strokeBorder(player.speed != 1.0 ? Color.cyan.opacity(0.4) : Color.white.opacity(0.15), lineWidth: 0.6)
+                        .strokeBorder(
+                            isMusicMode
+                                ? (player.speed != 1.0 ? currentTheme.accentColor.opacity(0.4) : currentTheme.borderColor)
+                                : (player.speed != 1.0 ? Color.cyan.opacity(0.4) : Color.white.opacity(0.15)),
+                            lineWidth: 0.6
+                        )
                 )
         }
         .menuStyle(.borderlessButton)
@@ -224,7 +289,7 @@ struct HUDSpeedMenuButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .hudTooltip(L10n.tr("Playback Speed (Click to choose)", "倍速播放 (点击选择常规倍速)"), edge: .top)
+        .hudTooltip(player.isAudioOnly ? "" : L10n.tr("Playback Speed (Click to choose)", "倍速播放 (点击选择常规倍速)"), edge: .top)
         .help(L10n.tr("Playback Speed: \(String(format: "%.2fx", player.speed)) (Click to choose)", "倍速播放: \(String(format: "%.2fx", player.speed)) (点击选择常规倍速)"))
     }
 
@@ -244,6 +309,7 @@ struct HUDCircleButton: View {
     let icon: String
     var isActive: Bool = false
     var helpText: String = ""
+    var tooltipHorizontalAlignment: HorizontalAlignment = .center
     var action: () -> Void
 
     @State private var isHovered = false
@@ -280,11 +346,56 @@ struct HUDCircleButton: View {
                 .scaleEffect(isHovered ? 1.06 : 1.0)
                 .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isHovered)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SilkFluidSpringButtonStyle(pressedScale: 0.93, pressedOpacity: 0.88))
         .onHover { hovering in
             isHovered = hovering
         }
-        .hudTooltip(helpText, edge: .bottom)
+        .hudTooltip(helpText, edge: .bottom, horizontalAlignment: tooltipHorizontalAlignment)
         .help(helpText)
+    }
+}
+
+@MainActor
+struct HUDReturnCapsuleButton: View {
+    var helpText: String = ""
+    var action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 11, weight: .bold))
+                Text(L10n.tr("Back", "返回"))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+            }
+            .foregroundColor(.white.opacity(isHovered ? 1.0 : 0.90))
+            .padding(.horizontal, 11)
+            .frame(height: 30)
+            .background(
+                ZStack {
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                    Capsule()
+                        .fill(Color.black.opacity(isHovered ? 0.35 : 0.22))
+                }
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        Color.white.opacity(isHovered ? 0.38 : 0.18),
+                        lineWidth: 0.75
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 2)
+            .scaleEffect(isHovered ? 1.04 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isHovered)
+        }
+        .buttonStyle(SilkFluidSpringButtonStyle(pressedScale: 0.94, pressedOpacity: 0.88))
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .help(helpText.isEmpty ? L10n.tr("Return (Esc / Cmd+W)", "返回 (Esc / Cmd+W)") : helpText)
     }
 }

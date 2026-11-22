@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SilkCoreKit
 
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -7,11 +8,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp?.setActivationPolicy(.regular)
-        if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-           let iconImg = NSImage(contentsOf: iconURL) {
-            NSApp?.applicationIconImage = iconImg
-        }
+        UserDefaults.standard.removeObject(forKey: "SilkEpisodeSkipMemory")
+        UserDefaults.standard.removeObject(forKey: "SilkAudioIntroCache")
+        UserDefaults.standard.removeObject(forKey: "SilkGoldenIntroTemplates")
+        SilkProIconManager.syncApplicationIcon(isProActive: SilkProLicenseEngine.shared.isProActive)
         NSApp?.activate(ignoringOtherApps: true)
+        Task { @MainActor in
+            await SilkUsageAnalytics.shared.recordLaunchIfEnabled()
+        }
         let args = CommandLine.arguments.dropFirst()
         var validFiles: [String] = []
         for arg in args where !arg.hasPrefix("-") {
@@ -50,10 +54,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        if SilkStatusBarManager.shared.isBackgroundPlaybackActive {
+            return false
+        }
         return true
     }
 
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if SilkStatusBarManager.shared.isBackgroundPlaybackActive {
+            SilkStatusBarManager.shared.exitBackgroundMode()
+            return true
+        }
         if !flag {
             PlayerWindowManager.shared.openNewWindow()
             return true
@@ -70,28 +81,32 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    private func persistActiveSessionsBeforeExit() {
+        var didSaveSessionPlaylist = false
         for session in PlayerWindowManager.shared.sessions {
             if let player = session.player as? PlayerCore {
                 if let path = player.currentFilePath, player.currentTime > 0 {
                     AppSettings.shared.savePosition(for: path, position: player.currentTime, duration: player.duration)
                 }
-                player.stop()
+                player.stop(resetUI: false, preserveAudioMode: true)
+            }
+            if let playlist = session.playlist {
+                playlist.saveToStorage()
+                didSaveSessionPlaylist = true
             }
         }
-        PlaylistManager.shared.saveToStorage()
+        if !didSaveSessionPlaylist {
+            PlaylistManager.shared.saveToStorage()
+        }
+        SilkPlayerApp.purgeSavedWindowFrameAutosave()
+    }
+
+    public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        persistActiveSessionsBeforeExit()
         return .terminateNow
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
-        for session in PlayerWindowManager.shared.sessions {
-            if let player = session.player as? PlayerCore {
-                if let path = player.currentFilePath, player.currentTime > 0 {
-                    AppSettings.shared.savePosition(for: path, position: player.currentTime, duration: player.duration)
-                }
-                player.stop()
-            }
-        }
-        PlaylistManager.shared.saveToStorage()
+        persistActiveSessionsBeforeExit()
     }
 }

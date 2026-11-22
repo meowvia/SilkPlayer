@@ -22,7 +22,7 @@
 | 提案 008 | 外挂字幕自动检索与同名关联推荐 (External Subtitle Auto-Search) | 基础已实装 80% (待补齐 Subs 子目录递归) | **1.7.0 核心排期** |
 | 提案 010 | 私有自用增强分支与端侧离线听译/网络流沙盒 (Personal Edition) | 搁置封存 (个人私享版本，主线不排期) | 独立私有分支 (自用测试) |
 | ~~提案 011~~ | ~~非原生预览格式文稿图标与品牌 Logo 占位替换 (Document Types Iconography & Fallback Branding)~~ | ~~正式立项 (下个版本解决)~~ **已落地销项** | **1.4.0** |
-| 提案 012 | 剧集片头/前情黑场转场探测与快进键情境智能跃迁管线 (Pre-Show Transition Anchors & Contextual Skip) | 需求定稿 (技术方案定稿) | **1.7.0 核心排期** |
+| 提案 012 | 剧集片头探测与智能跳过 (Smart Intro Skip) | 远期技术储备 (无版本 · 不带时间表) | **无排期（待网络云端协同成熟再行规划）** |
 | ~~提案 013~~ | ~~HDR10 与杜比视界动态 EDR 高光软滚降压制与色调映射 (Dynamic EDR Tone-Mapping & Highlight Roll-off)~~ | ~~需求定稿 (方案设计就绪)~~ **已落地销项** | **1.6.0** |
 | 提案 014 | 全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion) | 技术攻关立项 (算法探索) | **1.7.0 核心排期 (画质进阶候选)** |
 | ~~提案 015~~ | ~~播控栏交互式音量微调与起播防爆音安全锁 (Interactive Volume Popover & Pre-play Audio Safety Lock)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0** |
@@ -37,7 +37,7 @@
 | 提案 024 | 音乐模式可折叠两段式视图与磁吸切换机制 (Collapsible Two-Stage Music Mode & Magnetic Snap) | 预览实现 (待 2.0.0 评估收口) | **2.0.0 音乐模式规划** |
 | 提案 025 | 音乐模式状态栏常驻入口与轻量播控形态 (Music Mode Persistent Status Bar Entry) | 灵感归档 (待后续决策方案) | **2.0.0 音乐模式规划** |
 | 提案 026 | 黑边动态高斯模糊环境光填充 (Dynamic Ambient Letterbox Blur Fill) | 需求定稿 (方案就绪 · 规划归属 2.0.0) | **2.0.0 视觉体验规划** |
-| ~~提案 027~~ | ~~右键菜单窗口比例适配入口 (Context Menu Window Size Presets · GitHub Issue #6)~~ | ~~决策定稿~~ **已落地销项** | **1.6.0** |
+| 提案 027 | 右键菜单窗口倍率缩放入口 (Context Menu Window Scale Presets · GitHub Issue #6) | 决策定稿 (不改默认自适应策略 · 仅在右键增加倍率缩放) | **1.7.0 候选排期** |
 
 
 ---
@@ -340,7 +340,18 @@
 ## 提案 012: 剧集片头/前情黑场转场探测与快进键情境智能跃迁管线 (Pre-Show Transition Anchors & Contextual Fast-Forward Skip Pipeline)
 
 ### 1. 提案背景与设计哲学
-- **排期规划**: **1.7.0 核心排期（重点探索项目）**；
+- **排期规划**: **远期技术储备（无版本、不带时间表，主线坚决不排期）**；
+- **技术复盘与架构归档 (2026-11 实测结论)**:
+  - 在 2.0.0-pro 阶段完成了端侧音频指纹与波形卷积的深度攻关与实测（覆盖真实 4K AV1/HEVC 与机械盘/SMB 网络存储）。
+  - **客观事实证实**:
+    1. 在本地播放器端进行运行时 4K/局域网大文件解复用提取音频，必然引发高额 I/O 穿透、磁头震荡寻道与内存膨胀（峰值超过 1GB）；
+    2. 运行时计算存在严重的“时间差赛跑”——由于单线程顺序读取需数十秒，在冷开场短、网络带宽或老旧机型环境下，片头往往已经播完算法才刚算完，完全失去了自动跳过的实用价值。
+  - **当前主线落地基准**:
+    - 坚决杜绝任何端侧重型后台音频读盘计算，保障 SilkPlayer 恒定维持 70MB 内存、0.0% CPU 的绝对纯净与机械设备零磨损；
+    - 播放器内置保留 **0 开销的容器原生章节瞬时解析（Chapter Explicit + Heuristic，耗时 < 0.001s）** 与 **全季偏好记忆继承**；
+  - **远期规划路线**:
+    - 本项技术转为长期技术储备，无特定发版版本，不设时间表；
+    - 后续仅在探索轻量化网络/云端协同方案（如基于哈希匹配公共片头库、轻量 HTTP GET 毫秒级获取时间戳）等真正零 I/O 零计算开销的技术成熟后，再行评估启动，主线客户端坚决不搞端侧重型扫盘。
 - **真实行业场景痛点**:
   1. **国产剧标准片头**: 起播即片头曲（00:00 - 01:30）直入正片；
   2. **国产剧带赞助中插**: 起播片头曲 $\rightarrow$ 15～30 秒赞助商广告/鸣谢 $\rightarrow$ 正片；
@@ -962,28 +973,108 @@
 
 ---
 
-## 提案 027: 右键菜单窗口比例适配入口 (Context Menu Window Size Presets · GitHub Issue #6)
+## 提案 027: 右键菜单窗口倍率缩放入口 (Context Menu Window Scale Presets · GitHub Issue #6)
 
 ### 1. 来源与明确决策口径
-对应 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6) 的 4 项建议，经实测评估后最终定调并在 `1.6.0` 提前并入交付（已从 `1.7.0` 候选排期核销）：
-1. **打开视频默认原始尺寸**：**不采纳**。保持当前基于视频比例与桌面安全可用区（`minimumContentSize` / `maximizedContentSize`）的自适应开窗策略，避免高分片源超出桌面可用区或低分片源挤压底栏控件。
-2. **新增窗口快捷缩放档位 & 3. 竖屏视频快速调大**：**合并以右键菜单百分比比例方案解决**。放弃与片源物理像素耦合的固定倍率（在 1080p/4K 片源下极易与桌面可见区上限冲突），改为在视频画面右键菜单提供基于当前影片长宽比与桌面可见区的 `50%`、`75%`、`100%` 三档无裁切适配及「恢复默认」入口。`100%` 严格贴合桌面可用区最大外接包络（无黑边撑满且不裁切画面与字幕），已达或越界方向自动置灰禁用。
-4. **上方标题显示时长（1~2 秒隐藏）**：**保持现状不变**。空闲自动隐藏默认保持 `1.8` 秒，仅在鼠标停留在控制区保护带、暂停或窗口失焦时保持显示。
+对应 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6) 的 4 项建议，经实机评估后最终定调如下：
+1. **打开视频默认原始尺寸**：**不采纳**。保持当前基于视频比例与桌面安全可用区（`minimumContentSize` / `maximumSafeContentSize`）的自适应开窗策略，避免高分片源在常见笔记本屏上撑出可用区，或低分片源挤压底栏控件。
+2. **新增 `0.5x / 1x / 1.5x / 2x` 倍率快捷调整 & 3. 竖屏视频快速调大**：**合并以右键菜单方案解决**。为保持播控界面极简，不在视频 HUD 上增加实体按键，也不一刀切放大竖屏默认比例（大屏/40 寸带鱼屏下现有 `screenFrame.height * 0.60` 比例已适中）；统一在视频画面右键菜单中提供窗口倍率切换入口，由用户按需一键缩放。
+4. **上方标题显示时长（1~2 秒隐藏）**：**保持现状不变**。当前空闲自动隐藏默认即为 `1.8` 秒，仅在鼠标停留在控制区保护带、暂停或窗口失焦时保持显示。
 
-### 2. 已落地实现路径 (`1.6.0`)
-1. **右键菜单扩充百分比档位与边界门控 (`VideoView.swift` / `L10n.swift`)**：
-   - 在 `MetalPlayerContainerView.buildContextMenu(for:)` 新增「窗口大小 / Window Size」子菜单，提供 `50%`、`75%`、`100%` 与「恢复默认 (`resetWindowSize()`)」菜单项（对应 `L10n.windowSizeMenu` / `windowSizeReset`）；在全屏模式、纯音频（`!player.isAudioOnly`）或无已加载媒体时禁用缩放，并根据当前窗口尺寸与可用区边界动态控制各项 `.isEnabled` 与 `.state` 勾选状态。
-2. **窗口几何与比例包络计算重构 (`PlayerModels.swift` / `PlayerCore+WindowGeometry.swift` / `PlayerWindowManager.swift`)**：
-   - 在 `PlayerGeometry` 新增 `adaptiveVideoContentSize(...)`（对 55% 宽度上限取整避免亚像素错位）、`windowPresetContentSize(fraction:aspect:screenVisibleSize:)`（在 `[minimumContentSize, maximizedContentSize]` 间保持原片比例，禁止裁切画面）及 `windowPresetMenuState(...)`（输出 `WindowScalePresetState` 边界状态）；
-   - 提取共享辅助方法 `applyVideoWindowContentSize(...)` 统一承载 `applyRotationWindowAdaptation`、`applyAdaptiveWindowGeometry`、`fitWindow(scale:)` 与 `resetWindowSize()`；
-   - 为 `fitWindow(scale:)` 与 `resetWindowSize()` 补全全屏/纯音频拦截、`.maximized` 状态经 `PlayerWindowDelegate.resetInteractiveModeToNormal()` 复位、设帧前临时放宽并恢复 `window.minSize`，以及百分比 / 默认大小 OSD 反馈。
-3. **顶栏冗余入口同步清理 (`ISSUE-020`)**：
-   - 顶栏「窗口 -> 贴合画面尺寸 (`100% / 200%`)」已在 `1.6.0` 从 `PlayerCommands.swift` 移除，窗口比例调节统一收拢至视频画布右键菜单。
-4. **单元测试覆盖 (`GeometryAndTransformTests.swift`)**：
-   - 新增 `testWindowPresetContentSizeAndBoundaryMenuGating` 与 `testFitWindowPercentageAndContextMenuStateGating`，覆盖 16:9 / 21:9 / 竖屏画幅百分比包络计算、越界/当前档位菜单禁用与勾选态、以及全屏/纯音频门控。
+### 2. 技术落地路径
+1. **仅通过右键菜单扩充倍率入口 (`VideoView.swift`)**：
+   - 在 [`MetalPlayerContainerView.menu(for:)`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/VideoView.swift#L440-L489) 新增「窗口尺寸 / 缩放倍率」子菜单，提供 `0.5x`、`1x`、`1.5x`、`2x` 及「恢复默认自适应大小」选项，不在 HUD 与顶栏左侧菜单铺设冗余入口；
+   - 修复 [`PlayerCore.fitWindow(scale:)`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/PlayerCore.swift#L1374-L1415) 中设帧前未临时放宽 `window.minSize`、缺少全屏拦截（`!isFullscreen && !window.styleMask.contains(.fullScreen)`）与缺失 OSD 提示的问题，且在全屏模式下禁用右键倍率菜单项。
+2. **顶栏冗余入口清理归口 (`ISSUE-020`)**：
+   - 顶栏原有未闭环可用且少人使用的「窗口 -> 贴合画面尺寸 (`100% / 200%`)」按 `ISSUE-020` 在 `1.6.0` 清理移除，后续倍率功能全部聚焦视频画布右键菜单（可按需搭配快捷方式）。
 
 ### 3. 当前状态
-- **已落地销项 (`1.6.0`)**：已合入 `feature/v1.6.0` 主线版本，从 `1.7.0` 候选排期中核销，待 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6) 随 `1.6.0` 正式发版关闭。
+- 方案口径已拍板定稿并归档登记，暂不在当前冻结中的 `feature/music-mode-revamp` 预览分支改动视频菜单代码，后续随主线迭代评估合入。
+
+---
+
+## 提案 028: 全局强调色与高光蓝系统按钮质感重构 (Global Accent & Prominent Button Visual Refinement) [搁置待定]
+
+### 1. 现状与痛点
+- 当前播放器与 Pro 媒体库中多处主操作按钮（如「完成并收起」、「挂载」、「激活」、「重试」）使用系统默认 `.buttonStyle(.borderedProminent)`，在 macOS 下会渲染为高饱和度系统亮蓝（`#007AFF`）；
+- 「深灰」主题及部分媒体库子视图、设置页与播放器控件（如进度条/音量条青蓝渐变）仍残留偏高饱和的蓝色点缀，在深灰或暖白等低对比质感界面中较为突兀，与官网暖调极简风格不够统一。
+
+### 2. 待处理方向（后续出方案预览后拍板）
+- 提供多套渲染对照方案（如：官网同款暖铜 `#C8682E`、哑光象牙白/深炭中性主按钮、低饱和雾面钢蓝灰等）供实机视觉对比筛选；
+- 确定方案后，用自定义高质感主按钮样式与语义化强调色 Token 全局替代 `.borderedProminent` 及写死的 `.accentColor` / 亮蓝渐变，并同步覆盖所有 Modal Sheet 与弹窗控件。
+
+### 3. 当前状态
+- 暂不改动，已按用户要求登记搁置，留待后续专门安排视觉渲染对比后统一落地。
+
+---
+
+## 提案 029: SilkMediaEngineKit 本地嵌入式媒体库引擎架构收缩方案 (Local Embedded Media Engine Architecture) [归档备案]
+
+### 1. 核心定位与设计原则
+- **核心定位**: SilkPlayer 内部轻量本地媒体索引引擎，非重型影视管理器（Emby / Jellyfin）替代品；
+- **三大原则**: 本地优先（Local-First）、轻量嵌入（Phase 1 零网络依赖）、只读关联（不重命名、不写入用户源文件）；
+- **解耦边界**: 媒体库仅负责文件发现、元数据提取、旁轨关联与海报展示，向播放核心（`SilkCoreKit`）仅单向传递目标播放 URL 与断点时间戳，不介入音视频解码与渲染。
+
+### 2. 架构设计与复用准则
+- **复用现有资产**: 严禁重新建立平行识别系统，直接抽象复用现有 `MediaFilenameSanitizer.swift` 与 `SilkPosterCache`，保持标题清洗、SxxExx 提取与剧集自然排序规则全局唯一；
+- **过滤规则**: 废除机械的 50MB 体积截断，基于扩展名白名单（`.mkv`, `.mp4`, `.mov` 等）与系统隐藏文件（`._*`, `.DS_Store`）过滤，保护 MV、短视频与录像文件；
+- **旁轨关联**: 遵循同名旁轨优先（`Movie.mkv` -> `Movie.jpg/png/nfo/srt`）与目录级海报（`poster.jpg`/`folder.jpg`）级联识别，无海报时低优先级异步抓取视频首帧（QuickLook / AVAsset）；
+- **设备容错**: 采用 `Volume UUID + 相对路径` 作为媒体唯一身份，支持移动硬盘拔出挂载状态标记（Mounted / Unmounted），绝不因外设断开而级联删除数据库记录；
+- **卡片重构**: 废除 112pt 纯文字扁盒，重构为标准 2:3 纵向海报卡片（`SilkVerticalPosterCardView`），悬浮 4K/HDR 微胶囊与底缘细线进度条。
+
+### 3. 阶段切片规划
+- **Phase 1（纯本地引擎）**: 增量本地扫描、现有分词器抽象、旁轨资源软关联、极简 SQLite3 基础表与 2:3 海报墙视图（无网络请求，离线即用）；
+- **Phase 2（媒体体验深化）**: 手动修正识别匹配、复杂多版本关联优化、NAS 场景延迟优化；
+- **Phase 3（远端增强，可选）**: 以可插拔 `MetadataProvider` 方式按需支持 TMDB 在线刮削，保持断网可用底线。
+
+### 4. 当前状态
+- 方案已通过工程可行性与边界收缩评估，正式归档备案，留待后续按需启动。
+
+---
+
+## 提案 030: 媒体库影片分类体系与高效批量管理方案（本地虚拟标签 + 官方边缘稳定刮削双轨架构） [归档备忘]
+
+### 1. 核心问题与设计诉求
+- **现状痛点**: 当前媒体库主要以目录树和技术规格呈现，缺乏直观的影视题材分类（如科幻、动作、悬疑等），用户海量片库查找成本较高；
+- **离线技术本质**: 视频文件本身只包含分辨率、音频声道、色彩格式等物理参数，不包含剧情题材字段，纯离线状态下计算机无法直接获知影片的艺术题材分类；
+- **核心诉求**:
+  1. 探索绝对稳定、国内免梯子免改 hosts 的联网刮削基础设施，实现题材分类与高清海报一网打尽；
+  2. 设计高效、省力的本地兜底方案，支持卡片即时归类、Shift 连选批量管理与父级文件夹一键继承。
+
+### 2. 技术原理解析：分类信息与海报刮削的同构性
+- **同构事实**: 读取影片分类与刮削海报在技术底层**100% 属于同一件事、单次 API 请求即可全部获取**；
+- **接口机制**: 请求 TMDB 等影视元数据接口时，服务端下发的单份 JSON Payload 中同时封装了：
+  - `poster_path`: 高清海报资源相对路径；
+  - `genres`: 题材分类数组（如 `[{"id": 878, "name": "科幻"}, {"id": 12, "name": "冒险"}]`）；
+  - `overview` 与 `release_date`: 剧情简介与上映年份；
+- **架构结论**: 一旦连通元数据通道，分类信息与海报图片完全是同步到手、同步入库本地 SQLite，无需分开发起不同链路。
+
+### 3. 双轨落地架构设计
+
+#### 轨 A（在线增强）：官方 Cloudflare 边缘反代高可用刮削网关（绝对稳定）
+- **根因规避**: TMDB 官方域名（`api.themoviedb.org`）与图片 CDN 在中国大陆长期遭受 DNS 污染与 SNI 阻断，导致 Infuse 等工具经常刮削失败；
+- **边缘反代基础设施**:
+  - 复用产品专属域名 `1999909.xyz`，在 Cloudflare Pages / Workers 边缘设立轻量元数据中继网关（如 `/api/metadata`）；
+  - 客户端直接以纯 DNS 直连官方边缘，经由 Cloudflare 全球海外骨干节点代为向 TMDB 发起握手；
+  - 对题材元数据与海报图片实施 30 天边缘强缓存（Cache-Control: public, max-age=2592000）；
+  - **用户体验**: 中国大陆用户无需配置代理、无需修改 hosts，开箱即可实现毫秒级海报与题材秒刮入库。
+
+#### 轨 B（本地优先）：本地虚拟标签与高效批量归类（零网络隐私兜底）
+- **物理安全红线**: 仅在本地 SQLite（`collections` 与 `collection_items`）记录分类映射关系，绝不物理移动 NAS/磁盘上的文件，保护 PT/BT 持续做种，且完全兼容只读 SMB/NFS 挂载；
+- **利刃 1 - 物理目录自动继承**:
+  - 扫描时自动提取最底层父目录名称（如 `/NAS/电影/科幻/` 自动提取“科幻”），直接生成默认预设标签，有分类习惯的 NAS 用户 0 手动操作即可完成分类；
+- **利刃 2 - 单片随手卡片 `+` 号**:
+  - 鼠标悬停海报卡片浮现半透明 `+` 号按钮，点击就地呼出原生 Popover 菜单，勾选已有分类或输入新标签就地生成，即建即选、失焦即合；
+- **利刃 3 - 高效批量管理（Batch Action Bar）**:
+  - 支持 macOS 标准交互：`Cmd` 多选、`Shift` 首尾连选、搜索关键词后 `Cmd + A` 全选；
+  - 选定后底部浮现悬浮胶囊控制栏：显示“已选择 X 部影片”，支持一键批量「添加到分类」或「移除分类」；
+- **顶栏分类筛选（Filter Chips）**:
+  - 海报墙顶部提供横向滚动的原生质感筛选胶囊：`全部` · `科幻` · `经典港片` · `4K HDR`，点击毫秒级动态过滤海报墙。
+
+### 4. 当前状态
+- 已完成技术同构性分析与边缘高可用反代方案论证；
+- 架构设计已正式归档备忘至提案库，留待后续媒体库深度迭代时排期落地。
+
 
 
 

@@ -36,7 +36,12 @@ public enum HUDLayoutTier: Equatable {
 
     /// Whether the inline volume slider is shown on the bottom control bar.
     public func showsVolumeSlider(isAudioOnly: Bool) -> Bool {
-        !isAudioOnly && self != .minimal
+        isAudioOnly || self != .minimal
+    }
+
+    /// Whether the fullscreen toggle button is displayed on the bottom bar.
+    public func showsFullscreenButton(isAudioOnly: Bool) -> Bool {
+        !isAudioOnly
     }
 
     /// Whether the audio track selector menu is directly visible on the bottom bar.
@@ -125,6 +130,7 @@ public struct PlayerHUDView: View {
     var playlist: PlaylistManager
     public var onPlayNext: (() -> Void)?
     public var onPlayPrevious: (() -> Void)?
+    public var onSelectPlaylistItem: ((PlaylistItem) -> Void)?
     public var onClosePlayback: (() -> Void)?
 
     @State private var isControlsVisible: Bool = true
@@ -137,12 +143,14 @@ public struct PlayerHUDView: View {
         playlist: PlaylistManager = PlaylistManager.shared,
         onPlayNext: (() -> Void)? = nil,
         onPlayPrevious: (() -> Void)? = nil,
+        onSelectPlaylistItem: ((PlaylistItem) -> Void)? = nil,
         onClosePlayback: (() -> Void)? = nil
     ) {
         self.player = player
         self.playlist = playlist
         self.onPlayNext = onPlayNext
         self.onPlayPrevious = onPlayPrevious
+        self.onSelectPlaylistItem = onSelectPlaylistItem
         self.onClosePlayback = onClosePlayback
     }
 
@@ -176,6 +184,7 @@ public struct PlayerHUDView: View {
                         .allowsHitTesting(isHUDActive)
                     Spacer()
                         .allowsHitTesting(false)
+
                     bottomControls(tier: tier, width: availableWidth)
                         .opacity(isHUDActive ? 1.0 : 0.0)
                         .allowsHitTesting(isHUDActive)
@@ -273,11 +282,9 @@ public struct PlayerHUDView: View {
                             }
                         }
 
-                        // Close Current Media / Return to Empty Canvas
-                        HUDCircleButton(
-                            icon: "xmark",
-                            isActive: false,
-                            helpText: L10n.tr("Close Playback / Return Home (Esc / Cmd+W)", "退出播放 / 返回主页 (Esc / Cmd+W)")
+                        // Return / Exit Playback Capsule Button
+                        HUDReturnCapsuleButton(
+                            helpText: L10n.tr("Return (Esc / Cmd+W)", "返回 (Esc / Cmd+W)")
                         ) {
                             player.isPlaylistDrawerVisible = false
                             player.isInspectorVisible = false
@@ -289,7 +296,7 @@ public struct PlayerHUDView: View {
                 }
             }
 
-            // 2. Center Overlay: Active Media Title (Clean sanitized title, hover shows full raw filename)
+            // 2. Center Overlay: Active Media Title (Pure static capsule; episode navigation handled via right drawer)
             if !player.mediaTitle.isEmpty && !player.isAudioOnly {
                 let sanitized = MediaFilenameSanitizer.sanitize(player.mediaTitle)
                 Text(sanitized.headerTitle)
@@ -681,17 +688,19 @@ public struct PlayerHUDView: View {
                 .accessibilityLabel(L10n.settings)
             }
 
-            // 6. 全屏切换 (永远常驻最右侧，符合 macOS 原生操作直觉与肌肉记忆)
-            HUDTransportButton(
-                icon: player.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                size: 13.5,
-                weight: .medium,
-                color: .white.opacity(0.90),
-                helpText: L10n.tr("Toggle Fullscreen (F / Return)", "切换全屏 (F / 回车)")
-            ) {
-                player.toggleFullscreen()
+            // 6. 全屏切换 (音乐模式下隐藏，视频模式下常驻最右侧)
+            if tier.showsFullscreenButton(isAudioOnly: isAudio) {
+                HUDTransportButton(
+                    icon: player.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                    size: 13.5,
+                    weight: .medium,
+                    color: .white.opacity(0.90),
+                    helpText: L10n.tr("Toggle Fullscreen (F / Return)", "切换全屏 (F / 回车)")
+                ) {
+                    player.toggleFullscreen()
+                }
+                .accessibilityLabel(player.isFullscreen ? L10n.exitFullscreen : L10n.enterFullscreen)
             }
-            .accessibilityLabel(player.isFullscreen ? L10n.exitFullscreen : L10n.enterFullscreen)
         }
     }
 
@@ -972,9 +981,9 @@ struct HUDInteractiveButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.93 : 1.0)
+            .opacity(configuration.isPressed ? 0.86 : 1.0)
+            .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.68), value: configuration.isPressed)
     }
 }
 

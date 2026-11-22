@@ -1,6 +1,7 @@
 # SilkPlayer 工程移交接力规范与标准化模板 (Master AI Handoff Specification)
 
 > **Codex Review 标记**：2026-11-01 · v1.1 · 增强发布审计、双架构验证、资产一致性与异常处置边界。
+> **合规审计修订**：2026-11-12 · v1.2 · 补充商业化/Pro 发版开源合规审计闸门（GPLv3+LGPLv3 双文本、`libdav1d` 实测版本声明、FFmpeg 补丁源码公开、DMG 随附声明与 `SILKCOREKIT_LICENSE.md` 调试例外）。
 
 本文档为 SilkPlayer 项目所有 AI 会话窗口交接、任务移交、多 Agent 协同、构建测试与发布操作的**最高执行规范**。任何新会话或接手 Agent 必须遵循本文档；如源码、构建产物与文档不一致，以可复现的实际检查结果为准，并必须回写修正文档。
 
@@ -143,6 +144,7 @@ SilkPlayer 实行双架构发布与开源前端/闭源内核协同：
 - **内核与前端契约**:
   - SilkCoreKit 暴露接口版本号与引用保持一致
   - 闭源内核物理隔离，严禁源码泄露或推送到公开仓库
+  - 正式发版打包 DMG 前须核验第 7/10/11 节开源合规闸门（GPLv3+LGPLv3 双全文、`libdav1d` 1.1.0 BSD-2-Clause 声明、FFmpeg 本地修改补丁公开、About 页声明与 `SILKCOREKIT_LICENSE.md` 调试逆向例外）
 
 ## 4. 本次移交核心任务与定点实施方案
 - **核心目标**: <1~2 句话客观描述本次需要攻关的核心任务>
@@ -183,7 +185,12 @@ SilkPlayer 实行双架构发布与开源前端/闭源内核协同：
 - [ ] 本地 DMG 与线上下载资产 SHA-256 完全一致；
 - [ ] Release、README 和实际资产文件名一致；
 - [ ] 修复重传使用 `-fix` 或递增版本标识，并删除旧资产；
-- [ ] 发布记录包含版本号、架构、系统要求、SHA-256 和已知限制。
+- [ ] 发布记录包含版本号、架构、系统要求、SHA-256 和已知限制；
+- [ ] **开源合规（LGPL-3.0 §4(b)）**：`LICENSE`（LGPL-3.0）与 `COPYING.GPLv3`（GPL-3.0）两份协议全文已同时放入 `.app/Contents/Resources/` 与 DMG 根目录；
+- [ ] **第三方声明（BSD-2-Clause / LGPL）**：`Documentation/THIRD_PARTY.md` 与 DMG 内 `THIRD_PARTY_NOTICES.txt`（或 `NOTICE`）已完整列出 FFmpeg 6.1.2（LGPL-3.0）、静态编入 `Libavcodec` 的 `libdav1d`（经二进制 `strings` 核验为 `1.1.0-0-g9593e62`，BSD-2-Clause 原文）及系统库说明；
+- [ ] **修改披露与对应源码（LGPL-3.0 §2 / §4(d)）**：`SilkPlayer_LGPL_Build/src` 中所有对 FFmpeg 的修改（如 `libavcodec/videotoolbox.c` 的 `kCVPixelBufferMetalCompatibilityKey` 改动）已标注修改说明与日期，且等效补丁或修改后源码包及构建脚本已在公开位置提供获取方式；
+- [ ] **应用内运行期声明（LGPL-3.0 §4(c)）**：App“关于”界面（`SilkSettingsView.swift`）在展示自身版权声明的同时，已展示 FFmpeg 与 `libdav1d` 版权声明，并提供查阅随包 GPLv3 / LGPLv3 / 第三方声明文本的入口；
+- [ ] **闭源协议兼容性（LGPL-3.0 §4 前言）**：`SILKCOREKIT_LICENSE.md` 已明确保留“为调试对 LGPL 许可库所作修改所需的必要逆向工程例外条款”，且未限制用户替换 `Contents/Frameworks/Libav*.framework`。
 
 ## 8. 任务风险与变更控制
 
@@ -221,8 +228,10 @@ SilkPlayer 实行双架构发布与开源前端/闭源内核协同：
 ## 10. 依赖、许可证与供应链控制
 
 - 新增或升级第三方依赖前，必须记录来源、版本、许可证、架构支持、最低系统版本和是否包含预编译二进制；
-- 所有预编译二进制必须检查架构、安装名、`LC_RPATH`、最低系统版本和签名状态；
-- 闭源 `SilkCoreKit` 只能通过明确版本的 XCFramework 或受控构建流程接入，禁止从未记录的本地路径直接复制；
+- 所有预编译二进制必须检查架构、安装名、`LC_RPATH`、最低系统版本、实际嵌入版本号（如通过 `strings`/`otool` 实测，不得轻信 `.pc` 或 `Info.plist` 占位符）和签名状态；
+- **FFmpeg 与子依赖合规红线**：FFmpeg 必须保持 `--disable-gpl --enable-version3 --disable-nonfree --enable-shared --disable-static` 以独立动态 Framework 形式嵌入 `Contents/Frameworks/`，严禁误开启 GPL 或 nonfree 组件；任何静态编入 FFmpeg 的子依赖（当前为 `libdav1d 1.1.0`，BSD-2-Clause）必须在 `THIRD_PARTY.md` 与随包 `NOTICE` 中保留完整版权及免责声明；
+- **上游源码修改登记**：对 `SilkPlayer_LGPL_Build/src` 等 LGPL 上游源码的任何修改（例如 `libavcodec/videotoolbox.c`），必须在修改处与文档中记录修改者、日期与变更内容，并在正式发版时公开对应补丁/修改后源码归档；
+- 闭源 `SilkCoreKit` 只能通过明确版本的 XCFramework 或受控构建流程接入，禁止从未记录的本地路径直接复制；`SILKCOREKIT_LICENSE.md` 禁止条款必须保留 LGPL-3.0 第 4 条要求的调试逆向例外；
 - 许可证变化、闭源组件接口变化或第三方库重大升级必须登记到缺陷或变更记录中；
 - 依赖升级不得只在单一架构或单一 macOS 版本上验证。
 
@@ -238,7 +247,8 @@ SilkPlayer 实行双架构发布与开源前端/闭源内核协同：
 4. 动态依赖、签名、DMG 内部结构和安装流程通过；
 5. 本地与线上资产名称、大小和 SHA-256 一致；
 6. README、CHANGELOG、Release 说明和实际下载文件一致；
-7. 已知限制、最低系统版本和回滚方式已写明。
+7. 已知限制、最低系统版本和回滚方式已写明；
+8. 开源合规与商业发版审计（第 7 节补充清单与第 10 节供应链/协议约束）全部核验通过，DMG 与 `.app` 内均已附带 `LICENSE`、`COPYING.GPLv3`、`THIRD_PARTY_NOTICES`、`SILKCOREKIT_LICENSE.md` 及对应源码/补丁获取指引。
 
 任一闸门失败，状态只能是“待修复”或“待验证”，不得称为已发布完成。
 
@@ -264,3 +274,10 @@ SilkPlayer 实行双架构发布与开源前端/闭源内核协同：
 - 规则只在有明确目的、验证方式和责任边界时新增，避免无效的形式主义；
 - 每次规范修改必须记录版本号、日期、修改原因和影响范围；
 - 文档规则与实际脚本、README、Release 或测试结果冲突时，必须优先修正执行链路，而不是只修改文字掩盖冲突。
+
+### 修订记录
+
+| 版本 | 日期 | 修订摘要 | 影响范围 |
+| :--- | :--- | :--- | :--- |
+| v1.1 | 2026-11-01 | Codex Review 增强发布审计、双架构验证、资产一致性与异常处置边界 | 第 7–13 节 |
+| v1.2 | 2026-11-12 | 补充 Pro 商业化发版开源合规审计闸门（GPLv3+LGPLv3 双全文、`libdav1d 1.1.0` 二进制实测声明、FFmpeg `videotoolbox.c` 补丁源码公开、About 界面声明及 `SILKCOREKIT_LICENSE.md` 调试逆向例外） | 第 2/7/10/11/13 节 |
