@@ -40,7 +40,10 @@
 ## 2. 交付资产与校验和 (Delivery Assets & Checksums)
 
 - **应用版本**: `2.0.2`
-- **目标分支**: `release/2.0.0`
+- **目标分支**: `release/2.0.0`（与 `main` 主干保持严格同步）
+- **分支与代码基准**:
+  - 前端开源工程 (LGPL-3.0): `SilkPlayer/SilkPlayer` 分支 `release/2.0.0` (commit `28bf914`) / `main`
+  - 闭源内核工程 (Proprietary): `SilkPlayer/SilkCoreKit` 分支 `release/2.0.0` (commit `82e0442`)
 - **通用安装镜像**: `SilkPlayer-2.0.2-universal.dmg` (24,133,558 字节，约 23MB)
 - **SHA-256 校验和**:
   ```
