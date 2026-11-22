@@ -496,7 +496,16 @@ public enum SilkSubtitleParser {
     public static func parseVTT(_ text: String) -> [SubtitleCue] { [] }
     public static func parseASS(_ text: String) -> [SubtitleCue] { [] }
     public static func cleanSubtitleText(_ s: String) -> String { s }
-    public static func parseASSPosition(from text: String) -> TextPosition? { nil }
+    public static func parseASSPosition(from text: String) -> TextPosition? {
+        if text.contains("\\an7") || text.contains("\\an8") || text.contains("\\an9") {
+            return TextPosition(verticalAlign: .top)
+        } else if text.contains("\\an4") || text.contains("\\an5") || text.contains("\\an6") {
+            return TextPosition(verticalAlign: .center)
+        } else if text.contains("\\an1") || text.contains("\\an2") || text.contains("\\an3") {
+            return TextPosition(verticalAlign: .bottom)
+        }
+        return nil
+    }
     public static func makeCinemaAttributedText(_ text: String) -> NSAttributedString { NSAttributedString(string: text) }
 }
 
