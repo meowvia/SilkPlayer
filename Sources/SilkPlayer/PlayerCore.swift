@@ -741,11 +741,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     // MARK: - Volume & Audio
-    public func setVolume(_ val: Double, maxLimit: Double = 150.0, showOSD: Bool = true) {
+    public func setVolume(_ val: Double, maxLimit: Double = AppSettings.shared.maxVolumeLimit, showOSD: Bool = true) {
         let clamped = max(0.0, min(maxLimit, val))
         self.volume = clamped
         if AppSettings.shared.rememberVolume {
-            AppSettings.shared.savedVolume = clamped
+            AppSettings.shared.savedVolume = min(clamped, 100.0)
         }
         if isMuted && clamped > 0 {
             isMuted = false
@@ -759,7 +759,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func adjustVolume(by delta: Double = 10.0) {
-        setVolume(volume + delta, showOSD: true)
+        setVolume(volume + delta, maxLimit: AppSettings.shared.maxVolumeLimit, showOSD: true)
     }
 
     public func handleScrollWheelVolume(deltaY: Double) {
@@ -1321,11 +1321,18 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     // MARK: - Window & UI Navigation
-    public var isFullscreenTransitioning: Bool = false
+    public var isFullscreenTransitioning: Bool = false {
+        didSet {
+            (renderContainer?.metalRenderView ?? (playerLayer?.player.view as? SilkMetalRenderView))?.isFullscreenTransitioning = isFullscreenTransitioning
+        }
+    }
 
     public func toggleFullscreen() {
         guard let window = hostWindow ?? NSApp.keyWindow else { return }
-        guard !isFullscreenTransitioning else { return }
+        guard !isFullscreenTransitioning else {
+            FullscreenDiag.log("toggle ignored: in transition", window: window, player: self)
+            return
+        }
 
         // Music Mode disables fullscreen transitions (zoom & Space fullscreen stay locked)
         if isAudioOnly && !isFullscreen && !window.styleMask.contains(.fullScreen) {

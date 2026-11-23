@@ -93,6 +93,7 @@ public class SilkMetalRenderView: NSView {
     public var videoRotation: Int = 0
     public var currentPixelBuffer: CVPixelBuffer? = nil
     public var isWindowOccluded: Bool = false
+    public var isFullscreenTransitioning: Bool = false
     public var isQualityEnhancementEnabled: Bool = false
 
     public func renderCurrentFrameImmediately() {}

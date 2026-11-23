@@ -100,7 +100,6 @@ public struct SilkSettingsView: View {
         VStack(spacing: 0) {
             // Centered macOS Segmented Toolbar Header
             topTabBar
-                .frame(width: 452)
                 .padding(.top, 12)
                 .padding(.bottom, 8)
 
@@ -217,17 +216,58 @@ public struct SilkSettingsView: View {
 
     // MARK: - Top Tab Bar (4 Standard Tabs + Red Dot)
     private var topTabBar: some View {
-        HStack(spacing: 0) {
-            tabButton(title: L10n.tr("General", "通用"), icon: "gearshape", tag: 0)
-            tabButton(title: L10n.playback, icon: "play.circle", tag: 1)
-            tabButton(title: L10n.tr("LAN", "局域网"), icon: "network", tag: 2)
-            tabButton(
+        HStack(spacing: 2) {
+            SettingsTabButton(
+                title: L10n.tr("General", "通用"),
+                icon: "gearshape",
+                tag: 0,
+                isSelected: selectedTab == 0,
+                showRedDot: false,
+                isLightPro: isLightPro,
+                isIceBlue: isIceBlue,
+                isProThemed: isProThemed,
+                theme: currentTheme,
+                action: { selectedTab = 0 }
+            )
+            SettingsTabButton(
+                title: L10n.playback,
+                icon: "play.circle",
+                tag: 1,
+                isSelected: selectedTab == 1,
+                showRedDot: false,
+                isLightPro: isLightPro,
+                isIceBlue: isIceBlue,
+                isProThemed: isProThemed,
+                theme: currentTheme,
+                action: { selectedTab = 1 }
+            )
+            SettingsTabButton(
+                title: L10n.tr("LAN", "局域网"),
+                icon: "network",
+                tag: 2,
+                isSelected: selectedTab == 2,
+                showRedDot: false,
+                isLightPro: isLightPro,
+                isIceBlue: isIceBlue,
+                isProThemed: isProThemed,
+                theme: currentTheme,
+                action: { selectedTab = 2 }
+            )
+            SettingsTabButton(
                 title: L10n.tr("About", "关于"),
                 icon: "info.circle",
                 tag: 3,
-                showRedDot: updateService.hasPendingUpdate
+                isSelected: selectedTab == 3,
+                showRedDot: updateService.hasPendingUpdate,
+                isLightPro: isLightPro,
+                isIceBlue: isIceBlue,
+                isProThemed: isProThemed,
+                theme: currentTheme,
+                action: { selectedTab = 3 }
             )
         }
+        .padding(2)
+        .frame(width: 352, height: 34)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(isLightPro ? currentTheme.pillSurface : (isIceBlue ? Color.white.opacity(0.08) : Color.primary.opacity(0.06)))
@@ -241,61 +281,6 @@ public struct SilkSettingsView: View {
                     lineWidth: 0.65
                 )
         )
-    }
-
-    private func tabButton(title: String, icon: String, tag: Int, showRedDot: Bool = false) -> some View {
-        Button {
-            selectedTab = tag
-        } label: {
-            HStack(spacing: 6) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: icon)
-                        .font(.system(size: 13, weight: selectedTab == tag ? .semibold : .regular))
-
-                    if showRedDot {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 6, height: 6)
-                            .overlay(
-                                Circle()
-                                    .stroke(isProThemed ? currentTheme.cardSurface : Color(nsColor: .windowBackgroundColor), lineWidth: 1.2)
-                            )
-                            .offset(x: 4, y: -2)
-                    }
-                }
-
-                Text(title)
-                    .font(.system(size: 12.5, weight: selectedTab == tag ? .medium : .regular))
-            }
-            .foregroundColor(selectedTab == tag
-                ? (isProThemed ? currentTheme.accentColor : .primary)
-                : (isProThemed ? currentTheme.secondaryText : .secondary))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(
-                Group {
-                    if selectedTab == tag {
-                        if isIceBlue {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(Color.white.opacity(0.14))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .stroke(Color.white.opacity(0.28), lineWidth: 0.75)
-                                )
-                        } else {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(isLightPro ? currentTheme.cardSurface : Color(nsColor: .controlBackgroundColor))
-                                .shadow(color: Color.black.opacity(isLightPro ? 0.05 : 0.12), radius: 2, x: 0, y: 1)
-                        }
-                    } else {
-                        Color.clear
-                    }
-                }
-            )
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
-        .padding(2)
     }
 
     // MARK: - Tab Content Switcher
@@ -1535,5 +1520,80 @@ private struct SettingsContentHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
+    }
+}
+
+// MARK: - Fully Responsive Compact Settings Tab Button
+private struct SettingsTabButton: View {
+    let title: String
+    let icon: String
+    let tag: Int
+    let isSelected: Bool
+    let showRedDot: Bool
+    let isLightPro: Bool
+    let isIceBlue: Bool
+    let isProThemed: Bool
+    let theme: SilkLibraryTheme
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5.5) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: icon)
+                        .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
+
+                    if showRedDot {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 6, height: 6)
+                            .overlay(
+                                Circle()
+                                    .stroke(isProThemed ? theme.cardSurface : Color(nsColor: .windowBackgroundColor), lineWidth: 1.2)
+                            )
+                            .offset(x: 4, y: -2)
+                    }
+                }
+
+                Text(title)
+                    .font(.system(size: 12.5, weight: isSelected ? .medium : .regular))
+            }
+            .foregroundColor(isSelected
+                ? (isProThemed ? theme.accentColor : .primary)
+                : (isProThemed ? theme.secondaryText : .secondary))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                Group {
+                    if isSelected {
+                        if isIceBlue {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.white.opacity(0.14))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .stroke(Color.white.opacity(0.28), lineWidth: 0.75)
+                                )
+                        } else {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(isLightPro ? theme.cardSurface : Color(nsColor: .controlBackgroundColor))
+                                .shadow(color: Color.black.opacity(isLightPro ? 0.05 : 0.12), radius: 2, x: 0, y: 1)
+                        }
+                    } else if isHovered {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.primary.opacity(0.04))
+                    } else {
+                        Color.clear
+                    }
+                }
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .frame(height: 30)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }

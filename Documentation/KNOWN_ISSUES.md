@@ -886,6 +886,48 @@ public enum WindowPresentationState: Equatable {
 - **在 `1.6.0` 直接移除顶栏「贴合画面尺寸」子菜单**：从 [`PlayerCommands.swift`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Sources/SilkPlayer/App/PlayerCommands.swift#L391-L399) 移除 `Menu(L10n.fitToVideo)` 入口（并按需清理冗余重名菜单或保留常用快捷键命令），停止用顶部菜单栏承载低频窗口尺寸调节；
 - 后续若需提供窗口倍率缩放（对应 [GitHub Issue #6](https://github.com/meowvia/SilkPlayer/issues/6)），按 [`提案 027`](file:///Volumes/2T/Projects/SilkPlayer/SilkPlayer/Documentation/FEATURE_PROPOSALS.md#L964-L980) 统一做进视频画布右键菜单并先修复 `fitWindow(scale:)` 的 `minSize` 释放与全屏保护。
 
+---
+
+## ISSUE-021: macOS Space 原生全屏转场在特定旧版驱动与高频切换下的 WindowServer GPU 调度死锁排查与治理记录
+
+### 1. 缺陷现象
+- **发生背景**：特定用户环境（Mac Studio M2 Max / `Mac14,13`，运行未打后续补丁的 `macOS 14.6 23G80`，常驻 DisplayBuddy、BetterMouse、PopClip 等全局钩子，使用外置磁盘挂载片源）。
+- **初始表现（2.0.2 正式版）**：双击全屏可正常进入，但在退出全屏瞬间整个系统画面冻结，随后触发看门狗强杀并强制注销用户会话（WindowServer 重启），生成 `WindowServer-*.ips` 与对应 `.spin` 报告。
+- **加固后实测表现（2.0.2-test）**：应用了转场保护补丁后，单次进出全屏死锁现象彻底消失；但若在极短时间内连续疯狂触发全屏与缩小切换，系统仍会在多次 Space 动画积压后发生卡死注销。
+
+### 2. 崩溃日志深度剖析（根因物理事实）
+1. **WindowServer 主线程不可中断内核死等**：
+   - 提取自 `WindowServer-2026-11-22-203739.ips` 与 4 份堆栈快照，WindowServer 主线程（`Thread 0x9cc`，队列 `com.apple.SkyLight.mtl_submit`）深陷于以下调用链：
+     `QuartzCore` -> `Metal` -> `IOGPU` -> `AGXG14X` (Apple Silicon M2 Max GPU 驱动) -> `kernel.release.t6020 + 576768`；
+   - 状态为 `TH_WAIT | TH_UNINT`（不可中断内核睡眠），等待内核唤醒超时达到看门狗阈值（180 秒）。
+2. **Dock `exit_fullscreen` Space 动画队列阻塞**：
+   - Dock 进程中存在名为 `exit_fullscreen` 的私有 GCD 队列，调用 `_CGSUnfullscreenWindowWithOptions` 时同步阻塞在与 WindowServer 的 Mach IPC 通信上；
+   - 证明死锁点严格发生于系统 Dock 托管的独立 Space 跨桌面几何反向重构阶段。
+3. **SilkPlayer 与系统的反向死等**：
+   - SilkPlayer 主线程被内核 `turnstile` 挂起，等待 WindowServer 处理完窗口状态；而 WindowServer 驱动队列正被堵死，导致双向死锁；
+   - 2.0.2 原版代码在 `windowWillExitFullScreen` 中同步调用了 `window.setFrame(targetFrame, display: false, animate: false)`，在 AppKit 与 Dock 尚在拉伸 Space 视口时强行改写底层 CoreGraphics 窗口拓扑，导致 GPU 帧提交管线发生管线碰撞。
+
+### 3. 已落地的架构加固治理（2.0.2-test）
+1. **彻底移除转场中非法 `setFrame`（P0-1）**：
+   - 彻底删除 `windowWillExitFullScreen` 中的 `window.setFrame` 与 `isAdjustingWindowFrame`；
+   - 退出全屏的几何反算与动画完全交还给 AppKit 原生接管，禁止在系统动画进行时向 WindowServer 发送改帧请求。
+2. **退出全屏完成后的异步对齐（P0-2）**：
+   - 在 `windowDidExitFullScreen` 阶段，仅当系统恢复尺寸与预期视频比例存在偏差且目标帧位于屏幕可视区域时，通过 `DispatchQueue.main.async` 延迟至下一 RunLoop 周期进行非阻塞微调。
+3. **Metal 硬件提交转场闸门（P0-3）**：
+   - 内核 `SilkMetalRenderView` 引入 `isTransitioningLock`（`OSAllocatedUnfairLock`）与 `isFullscreenTransitioning` 状态；
+   - 在转场开始到转场彻底落定期间，在渲染循环内安全短路 `layer.nextDrawable()` 提交，防止在新旧 Space 拓扑切换期间向 WindowServer 发送渲染指令。
+4. **状态看门狗与防重入加固（P0-4）**：
+   - 新增 3 秒安全复位定时器，防止系统极端情况下漏发 `windowDidExitFullScreen` 导致播放器永久卡在转场状态；
+   - `toggleFullscreen()` 增加防重入互斥锁，拦截转场过程中的连续触发。
+5. **全屏物理落盘诊断器（P1-1）**：
+   - 新建 `FullscreenDiag.swift`，记录全屏生命周期、窗口坐标、屏幕拓扑、刷新率及播放状态，强刷落盘至 `~/Library/Logs/SilkPlayer/fullscreen.log`，用于异常排查。
+
+### 4. 治理结论与后续规划
+- **加固价值验证**：单次退出全屏死锁被 100% 根治，证明非法 `setFrame` 确实是打破 GPU 提交管线的触发原凶，今晚的加固代码全部保留，不予回滚。
+- **环境复合诱因定性**：在连续快速敲击全屏的情况下仍会发生死锁，其根因在于用户所处 `macOS 14.6 (23G80)` 系统内核中的 AGX GPU 驱动与 Dock Space 动画在高频冲击下崩溃，且受到常驻的第三方全局截获插件影响。
+- **降维根治方案（规划 2.1.0）**：系统 Space 原生全屏存在跨桌面动画重、驱动偶发死锁的先天架构缺陷。已正式在 `提案 031` 中规划引入“原生无边框桌面全屏（Borderless Fullscreen）”，不走系统 Space 和 Dock 转场，从根本上免疫 macOS 系统级全屏死锁。
+
+
 
 
 

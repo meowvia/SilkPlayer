@@ -6,6 +6,48 @@ import SilkCoreKit
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     public static var pendingFiles: [String] = []
 
+    public override init() {
+        super.init()
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleAppleEventOpenDocs(event:reply:)),
+            forEventClass: AEEventClass(kCoreEventClass),
+            andEventID: AEEventID(kAEOpenDocuments)
+        )
+    }
+
+    @objc private func handleAppleEventOpenDocs(event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        var paths: [String] = []
+        if let listDesc = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject)) {
+            let count = listDesc.numberOfItems
+            if count == 0 {
+                if let url = listDesc.fileURLValue {
+                    paths.append(url.path)
+                } else if let str = listDesc.stringValue {
+                    paths.append(str)
+                }
+            } else {
+                for i in 1...count {
+                    if let item = listDesc.atIndex(i) {
+                        if let url = item.fileURLValue {
+                            paths.append(url.path)
+                        } else if let str = item.stringValue {
+                            paths.append(str)
+                        }
+                    }
+                }
+            }
+        }
+        guard !paths.isEmpty else { return }
+        for p in paths where !Self.pendingFiles.contains(p) {
+            Self.pendingFiles.append(p)
+        }
+        PlayerWindowManager.shared.enqueuePendingFiles(paths)
+        if !PlayerWindowManager.shared.sessions.isEmpty {
+            PlayerWindowManager.shared.handleSystemOpenFiles(paths)
+        }
+    }
+
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp?.setActivationPolicy(.regular)
         UserDefaults.standard.removeObject(forKey: "SilkEpisodeSkipMemory")

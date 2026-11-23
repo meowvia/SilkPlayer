@@ -650,12 +650,16 @@ extension Notification.Name {
         return pendingQueue.removeFirst()
     }
 
+    public var hasPendingFiles: Bool {
+        !pendingQueue.isEmpty
+    }
+
     // MARK: - Open External Files Scheduling
     public func handleSystemOpenFiles(_ files: [String]) {
         guard !files.isEmpty else { return }
         if !Self.isRunningTests {
             let now = ProcessInfo.processInfo.systemUptime
-            if files == lastSystemOpenPaths && (now - lastSystemOpenTime) < 0.45 {
+            if files == lastSystemOpenPaths && (now - lastSystemOpenTime) < 1.5 {
                 return
             }
             lastSystemOpenPaths = files
@@ -678,6 +682,20 @@ extension Notification.Name {
 
         let expanded = Self.expandFilesAndDirectories(files)
         guard !expanded.isEmpty else { return }
+
+        // If the primary session is already playing this exact file, focus window and return without opening duplicate window
+        if let primarySession = sessions.first,
+           let currentPath = (primarySession.player as? PlayerCore)?.currentFilePath,
+           currentPath == expanded[0] {
+            if !Self.isRunningTests {
+                if primarySession.window?.isMiniaturized == true {
+                    primarySession.window?.deminiaturize(nil)
+                }
+                primarySession.window?.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            }
+            return
+        }
 
         func deliver(to session: PlayerWindowSession) {
             session.openPath(expanded[0])
@@ -923,6 +941,7 @@ private enum PreFullScreenState: Equatable {
 public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public weak var session: PlayerWindowSession?
     public weak var player: (any PlayerControllable)?
+    public var isMediaLibraryActiveProvider: (@MainActor () -> Bool)?
     public private(set) var currentInteractiveMode: WindowInteractiveMode = .normal
     public private(set) var isMaximizingOrRestoring: Bool = false
     private var isAdjustingWindowFrame: Bool = false
@@ -934,6 +953,33 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     private var preFullScreenState: PreFullScreenState? = nil
     private var lastToggleMaximizeTime: TimeInterval = 0
     public private(set) var resizeHUDView: WindowResizeHUDView?
+    private var transitionWatchdog: DispatchWorkItem?
+
+    public func beginFullscreenTransition(_ reason: String, window: NSWindow?) {
+        isFullscreenTransitioning = true
+        player?.isFullscreenTransitioning = true
+        transitionWatchdog?.cancel()
+        let w = DispatchWorkItem { [weak self] in
+            self?.endFullscreenTransition("watchdog-timeout-3s", window: nil)
+        }
+        transitionWatchdog = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: w)
+        FullscreenDiag.log("begin \(reason)", window: window, player: player)
+    }
+
+    public func endFullscreenTransition(_ reason: String, window: NSWindow?) {
+        transitionWatchdog?.cancel()
+        transitionWatchdog = nil
+        guard isFullscreenTransitioning else { return }
+        isFullscreenTransitioning = false
+        player?.isFullscreenTransitioning = false
+        FullscreenDiag.log("end \(reason)", window: window, player: player)
+        DispatchQueue.main.async { [weak self] in
+            if let p = self?.player, !p.isPlaying {
+                p.renderCurrentFrameImmediately()
+            }
+        }
+    }
 
     /// Clears maximized tracking state before programmatic window resizing (e.g., scale presets or adaptive reset).
     public func resetInteractiveModeToNormal() {
@@ -966,13 +1012,23 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         return hud
     }
 
-    public static func shouldShowResizeDimensionHUD(isAudioOnly: Bool) -> Bool {
-        !isAudioOnly
+    public static func shouldShowResizeDimensionHUD(isAudioOnly: Bool, isMediaLibrary: Bool = false) -> Bool {
+        !isAudioOnly && !isMediaLibrary
+    }
+
+    @MainActor
+    private var isMediaLibraryMode: Bool {
+        if let provider = isMediaLibraryActiveProvider {
+            return provider()
+        }
+        let isSecondary = session?.isSecondaryWindow ?? false
+        let isPlaying = player?.isPlaying ?? false
+        return !isSecondary && !isPlaying && SilkProLicenseEngine.shared.isProActive && AppSettings.shared.proLibraryHomeEnabled && !SilkMediaLibraryEngine.shared.sources.isEmpty
     }
 
     @MainActor
     private func updateResizeHUD(window: NSWindow, resolvedSize: NSSize) {
-        guard Self.shouldShowResizeDimensionHUD(isAudioOnly: self.player?.isAudioOnly ?? false),
+        guard Self.shouldShowResizeDimensionHUD(isAudioOnly: self.player?.isAudioOnly ?? false, isMediaLibrary: isMediaLibraryMode),
               !window.styleMask.contains(.fullScreen),
               !isFullscreenTransitioning else {
             resizeHUDView?.hideImmediately()
@@ -1090,7 +1146,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
               !isFullscreenTransitioning else { return }
         musicLiveResizeStartedCollapsed = AppSettings.shared.isMusicQueueCollapsed
         musicLiveResizeDidToggleCollapse = false
-        guard Self.shouldShowResizeDimensionHUD(isAudioOnly: player?.isAudioOnly ?? false) else {
+        guard Self.shouldShowResizeDimensionHUD(isAudioOnly: player?.isAudioOnly ?? false, isMediaLibrary: isMediaLibraryMode) else {
             resizeHUDView?.hideImmediately()
             return
         }
@@ -1706,7 +1762,10 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
 
     public func windowWillEnterFullScreen(_ notification: Notification) {
         resizeHUDView?.hideImmediately()
-        if let window = notification.object as? NSWindow {
+        let window = notification.object as? NSWindow
+        beginFullscreenTransition("willEnter", window: window)
+
+        if let window = window {
             let screen = window.screen ?? NSScreen.main
             let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
             let isMax = (currentInteractiveMode == .maximized) ||
@@ -1729,98 +1788,44 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             window.resizeIncrements = NSSize(width: 1, height: 1)
             window.contentResizeIncrements = NSSize(width: 1, height: 1)
         }
-        isFullscreenTransitioning = true
-        player?.isFullscreenTransitioning = true
     }
 
     public func windowDidEnterFullScreen(_ notification: Notification) {
-        if player?.isProMusicModeActive == true, let window = notification.object as? NSWindow {
-            isFullscreenTransitioning = false
-            player?.isFullscreenTransitioning = false
+        let window = notification.object as? NSWindow
+        if player?.isProMusicModeActive == true, let window = window {
+            endFullscreenTransition("didEnter-music-abort", window: window)
             DispatchQueue.main.async {
                 window.toggleFullScreen(nil)
             }
             return
         }
-        isFullscreenTransitioning = false
-        player?.isFullscreenTransitioning = false
+        endFullscreenTransition("didEnter", window: window)
         player?.setFullscreenState(true)
-        if let window = notification.object as? NSWindow {
+        if let window = window {
             window.contentView?.layer?.cornerRadius = 0.0
         }
     }
 
     public func windowWillExitFullScreen(_ notification: Notification) {
-        isFullscreenTransitioning = true
-        player?.isFullscreenTransitioning = true
-        if let window = notification.object as? NSWindow {
+        let window = notification.object as? NSWindow
+        beginFullscreenTransition("willExit", window: window)
+
+        if let window = window {
             window.contentAspectRatio = .zero
             window.aspectRatio = .zero
             window.resizeIncrements = NSSize(width: 1, height: 1)
             window.contentResizeIncrements = NSSize(width: 1, height: 1)
-            let screen = window.screen ?? NSScreen.main
-            let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
 
-            let targetFrame: NSRect
-            if player?.isProMusicModeActive == true {
-                let lockedW = MusicModeGeometry.lockedWidth(forScreenWidth: screenFrame.width)
-                if AppSettings.shared.isMusicQueueCollapsed {
-                    let collapsedH = MusicModeGeometry.collapsedHeight(
-                        forWindowWidth: lockedW,
-                        screenVisibleHeight: screenFrame.height
-                    )
-                    targetFrame = MusicModeGeometry.clampedFrame(
-                        around: nil,
-                        targetHeight: collapsedH,
-                        clampToExpandedMin: false,
-                        screenVisibleFrame: screenFrame
-                    )
-                } else {
-                    let storedH = UserDefaults.standard.object(forKey: PlayerCore.musicModeHeightDefaultsKey) as? Double
-                    targetFrame = MusicModeGeometry.clampedFrame(
-                        around: nil,
-                        rememberedHeight: storedH.map { CGFloat($0) },
-                        screenVisibleFrame: screenFrame
-                    )
-                }
-                preFullScreenState = nil
-                currentInteractiveMode = .normal
-            } else if let preState = preFullScreenState {
-                switch preState {
-                case .maximized(let preZoom):
-                    // 【全屏 -> 双击播放区 -> 恢复最大化】
-                    // 保持最大化状态、保持屏幕可用区域尺寸、不恢复成普通窗口
-                    targetFrame = screenFrame
-                    currentInteractiveMode = .maximized
-                    savedPreZoomFrame = preZoom
-                case .normal(let saved):
-                    // 【全屏 -> 双击播放区 -> 恢复普通窗口】
-                    // 恢复普通窗口（原宽度、原高度、原位置）
-                    let clampedW = min(saved.width, screenFrame.width)
-                    let clampedH = min(saved.height, screenFrame.height)
-                    let clampedX = max(screenFrame.minX, min(screenFrame.maxX - clampedW, saved.origin.x))
-                    let clampedY = max(screenFrame.minY, min(screenFrame.maxY - clampedH, saved.origin.y))
-                    targetFrame = NSRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
-                    currentInteractiveMode = .normal
-                    savedPreZoomFrame = nil
-                }
-            } else {
-                targetFrame = defaultNormalFrame(for: screenFrame)
-                currentInteractiveMode = .normal
-            }
-
-            // 预设桌面空间窗口恢复帧，使 AppKit 全屏退出转场动画直接平滑缩回该目标帧，避免从 (0,0) 左下角缩放跳跃
-            isAdjustingWindowFrame = true
-            window.setFrame(targetFrame, display: false, animate: false)
-            isAdjustingWindowFrame = false
+            // P0-1: 严禁在 windowWillExitFullScreen 转场钩子中调用 window.setFrame
+            // 保持纯粹只读状态记录，完全交由 AppKit 原生 Space 转场机制平滑缩回原位
         }
     }
 
     public func windowDidExitFullScreen(_ notification: Notification) {
-        isFullscreenTransitioning = false
-        player?.isFullscreenTransitioning = false
+        let window = notification.object as? NSWindow
+        endFullscreenTransition("didExit", window: window)
         player?.setFullscreenState(false)
-        if let window = notification.object as? NSWindow {
+        if let window = window {
             window.contentView?.layer?.cornerRadius = 10.0
         }
 
@@ -1829,7 +1834,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
             return
         }
 
-        if let window = notification.object as? NSWindow {
+        if let window = window {
             let screen = window.screen ?? NSScreen.main
             let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
 
@@ -1855,13 +1860,19 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
                 currentInteractiveMode = .normal
             }
 
+            // P0-2: 退出全屏后位置与尺寸恢复防护（仅在原生未落位且处于可见屏幕交集时，异步至下一 RunLoop 微调）
             if abs(window.frame.width - targetFrame.width) > 2.0 ||
                abs(window.frame.height - targetFrame.height) > 2.0 ||
                abs(window.frame.origin.x - targetFrame.origin.x) > 2.0 ||
                abs(window.frame.origin.y - targetFrame.origin.y) > 2.0 {
-                isAdjustingWindowFrame = true
-                window.setFrame(targetFrame, display: true, animate: false)
-                isAdjustingWindowFrame = false
+                if NSScreen.screens.contains(where: { $0.visibleFrame.intersects(targetFrame) }) {
+                    DispatchQueue.main.async { [weak window, weak self] in
+                        guard let win = window, let self = self else { return }
+                        self.isAdjustingWindowFrame = true
+                        win.setFrame(targetFrame, display: true, animate: false)
+                        self.isAdjustingWindowFrame = false
+                    }
+                }
             }
 
             let contentSize = window.contentRect(forFrameRect: window.frame).size
@@ -1871,21 +1882,14 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         }
 
         player?.applyContentAspectRatioLock()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            if let player = self?.player, !player.isPlaying {
-                player.renderCurrentFrameImmediately()
-            }
-        }
     }
 
     public func windowDidFailToEnterFullScreen(_ window: NSWindow) {
-        isFullscreenTransitioning = false
-        player?.isFullscreenTransitioning = false
+        endFullscreenTransition("didFailToEnter", window: window)
     }
 
     public func windowDidFailToExitFullScreen(_ window: NSWindow) {
-        isFullscreenTransitioning = false
-        player?.isFullscreenTransitioning = false
+        endFullscreenTransition("didFailToExit", window: window)
     }
 
     public func windowWillClose(_ notification: Notification) {

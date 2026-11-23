@@ -208,12 +208,12 @@ final class GeometryAndTransformTests: XCTestCase {
         XCTAssertLessThanOrEqual(maxCinemascope.width, screenSize.width * 0.88 + 1.0)
         XCTAssertLessThanOrEqual(maxCinemascope.height, screenSize.height * 0.85 + 1.0)
 
-        // 9:16 (Vertical)
+        // 9:16 (Vertical) - QuickTime Player aligned (fills 100% visible height)
         let maxVertical = PlayerGeometry.maximumSafeContentSize(for: 9.0 / 16.0, screenVisibleSize: screenSize)
         let ratioVertical = maxVertical.width / maxVertical.height
         XCTAssertEqual(ratioVertical, 9.0 / 16.0, accuracy: 0.02, "9:16 maximum safe size must preserve aspect ratio")
         XCTAssertLessThanOrEqual(maxVertical.width, screenSize.width * 0.88 + 1.0)
-        XCTAssertLessThanOrEqual(maxVertical.height, screenSize.height * 0.85 + 1.0)
+        XCTAssertLessThanOrEqual(maxVertical.height, screenSize.height + 1.0)
 
         // 4. Aspect-preserved 100% maximized window content size calculations
         let full169 = PlayerGeometry.maximizedContentSize(for: 16.0 / 9.0, screenVisibleSize: screenSize)

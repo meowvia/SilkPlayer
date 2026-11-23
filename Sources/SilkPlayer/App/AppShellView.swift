@@ -343,7 +343,11 @@ public struct AppShellView: View {
             SilkProIconManager.syncApplicationIcon(isProActive: licenseEngine.isProActive)
             registerSession()
             setupHooks()
-            checkPendingFiles()
+            if case .playing(let url) = navigationModel.state, player.currentFilePath == nil {
+                startPlayback(path: url.path, startTime: AppSettings.shared.getSavedPosition(for: url.path), autoPlay: true)
+            } else {
+                checkPendingFiles()
+            }
             if !isSecondaryWindow && licenseEngine.isProActive {
                 Task { @MainActor in
                     if settings.proAutoScanOnLaunch {
@@ -484,8 +488,12 @@ public struct AppShellView: View {
         let url = URL(fileURLWithPath: path)
         let cat = PlaylistManager.category(for: url)
         playlistManager.applyPlaybackCategory(cat)
-        withAnimation(appSpringAnimation) {
+        if !isPlaying {
             navigationModel.state = .playing(url: url)
+        } else {
+            withAnimation(appSpringAnimation) {
+                navigationModel.state = .playing(url: url)
+            }
         }
         player.loadMediaWithCrossfade(path: path, startTime: startTime, autoPlay: autoPlay)
     }
@@ -799,64 +807,60 @@ public struct AppShellView: View {
     }
 
     public func openExternalPaths(_ paths: [String]) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
-            guard !expanded.isEmpty else { return }
+        let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
+        guard !expanded.isEmpty else { return }
 
-            var newItems: [PlaylistItem] = []
-            for p in expanded {
-                let url = URL(fileURLWithPath: p)
-                let title = url.deletingPathExtension().lastPathComponent
-                let size = (try? FileManager.default.attributesOfItem(atPath: p)[.size] as? Int64) ?? 0
-                let item = MediaItem(path: p, title: title, fileSize: size)
-                newItems.append(PlaylistItem(from: item))
+        var newItems: [PlaylistItem] = []
+        for p in expanded {
+            let url = URL(fileURLWithPath: p)
+            let title = url.deletingPathExtension().lastPathComponent
+            let size = (try? FileManager.default.attributesOfItem(atPath: p)[.size] as? Int64) ?? 0
+            let item = MediaItem(path: p, title: title, fileSize: size)
+            newItems.append(PlaylistItem(from: item))
+        }
+
+        guard !newItems.isEmpty else { return }
+
+        self.inFlightResolveTask?.cancel()
+        self.inFlightResolveTask = nil
+        self.resolvingTargetPath = nil
+        self.playRequestGeneration &+= 1
+
+        let isExternalNonLibrary = !self.isSecondaryWindow
+            && self.isProLibraryActive
+            && !expanded.allSatisfy { p in self.libraryEngine.items.contains(where: { $0.path == p }) }
+
+        if isExternalNonLibrary {
+            if self.isPlaying, let currentPath = self.player.currentFilePath, self.player.currentTime > 0 {
+                AppSettings.shared.recordPlaybackProgress(
+                    path: currentPath,
+                    current: self.player.currentTime,
+                    duration: self.player.duration,
+                    isPlaying: false,
+                    force: true
+                )
             }
-
-            guard !newItems.isEmpty else { return }
-
-            Task { @MainActor in
-                self.inFlightResolveTask?.cancel()
-                self.inFlightResolveTask = nil
-                self.resolvingTargetPath = nil
-                self.playRequestGeneration &+= 1
-
-                let isExternalNonLibrary = !self.isSecondaryWindow
-                    && self.isProLibraryActive
-                    && !expanded.allSatisfy { p in self.libraryEngine.items.contains(where: { $0.path == p }) }
-
-                if isExternalNonLibrary {
-                    if self.isPlaying, let currentPath = self.player.currentFilePath, self.player.currentTime > 0 {
-                        AppSettings.shared.recordPlaybackProgress(
-                            path: currentPath,
-                            current: self.player.currentTime,
-                            duration: self.player.duration,
-                            isPlaying: false,
-                            force: true
-                        )
-                    }
-                    if !self.isPlayingEphemeralExternalMedia {
-                        self.interruptedLibraryDetailPath = self.libraryEngine.activeDetailPath ?? self.activeLibraryRecordPath
-                    }
-                    self.isPlayingEphemeralExternalMedia = true
-                    self.libraryEngine.activeDetailPath = nil
-                    self.playlistManager.isPersistenceEnabled = false
-                    self.playlistManager.setPlaylist(playlistItems: newItems, startingIndex: 0)
-                    if let target = newItems.first {
-                        self.playPlaylistItem(target)
-                    }
-                } else {
-                    if !self.isSecondaryWindow {
-                        self.playlistManager.isPersistenceEnabled = true
-                    }
-                    let wasEmpty = self.playlistManager.isEmpty
-                    self.playlistManager.appendItems(newItems)
-                    let itemToPlay = (wasEmpty && self.playlistManager.playbackMode == .shuffle)
-                        ? (self.playlistManager.currentItem ?? newItems.first)
-                        : newItems.first
-                    if let target = itemToPlay {
-                        self.playPlaylistItem(target)
-                    }
-                }
+            if !self.isPlayingEphemeralExternalMedia {
+                self.interruptedLibraryDetailPath = self.libraryEngine.activeDetailPath ?? self.activeLibraryRecordPath
+            }
+            self.isPlayingEphemeralExternalMedia = true
+            self.libraryEngine.activeDetailPath = nil
+            self.playlistManager.isPersistenceEnabled = false
+            self.playlistManager.setPlaylist(playlistItems: newItems, startingIndex: 0)
+            if let target = newItems.first {
+                self.playPlaylistItem(target)
+            }
+        } else {
+            if !self.isSecondaryWindow {
+                self.playlistManager.isPersistenceEnabled = true
+            }
+            let wasEmpty = self.playlistManager.isEmpty
+            self.playlistManager.appendItems(newItems)
+            let itemToPlay = (wasEmpty && self.playlistManager.playbackMode == .shuffle)
+                ? (self.playlistManager.currentItem ?? newItems.first)
+                : newItems.first
+            if let target = itemToPlay {
+                self.playPlaylistItem(target)
             }
         }
     }
@@ -942,6 +946,7 @@ public struct AppShellView: View {
                     orphanedFiles.append(contentsOf: AppDelegate.pendingFiles)
                     AppDelegate.pendingFiles.removeAll()
                 }
+                window.orderOut(nil)
                 PlayerWindowManager.shared.unregisterSession(id: sessionId)
                 DispatchQueue.main.async {
                     window.close()
@@ -961,21 +966,29 @@ public struct AppShellView: View {
         } else {
             // Enforce strict maxConcurrentWindows (2) cap in Dual-Window mode
             let attachedOthers = PlayerWindowManager.shared.sessions.filter { $0.id != sessionId && $0.window != nil }
-            if attachedOthers.count >= PlayerWindowManager.maxConcurrentWindows,
-               let reuseTarget = attachedOthers.last {
+            let hasPendingTask = PlayerWindowManager.shared.hasPendingFiles || !AppDelegate.pendingFiles.isEmpty
+            let isPrimaryPlaying = attachedOthers.first?.isLoaded == true
+            // If another window already exists, secondary window is ONLY allowed if there are pending files or primary window is actively playing
+            if attachedOthers.count >= PlayerWindowManager.maxConcurrentWindows || (attachedOthers.count >= 1 && !hasPendingTask && !isPrimaryPlaying) {
                 isDiscardedDuplicateWindow = true
-                let orphanedFiles = PlayerWindowManager.shared.dequeuePendingFiles()
+                var orphanedFiles = PlayerWindowManager.shared.dequeuePendingFiles()
+                if !AppDelegate.pendingFiles.isEmpty {
+                    orphanedFiles.append(contentsOf: AppDelegate.pendingFiles)
+                    AppDelegate.pendingFiles.removeAll()
+                }
+                window.orderOut(nil)
                 PlayerWindowManager.shared.unregisterSession(id: sessionId)
+                let reuseTarget = attachedOthers.first
                 DispatchQueue.main.async {
                     window.close()
-                    if !orphanedFiles.isEmpty {
-                        reuseTarget.openPath(orphanedFiles[0])
+                    if !orphanedFiles.isEmpty, let target = reuseTarget {
+                        target.openPath(orphanedFiles[0])
                         if orphanedFiles.count > 1 {
-                            reuseTarget.appendPlaylistPaths(Array(orphanedFiles.dropFirst()))
+                            target.appendPlaylistPaths(Array(orphanedFiles.dropFirst()))
                         }
                     }
                     if !PlayerWindowManager.isRunningTests {
-                        reuseTarget.window?.makeKeyAndOrderFront(nil)
+                        reuseTarget?.window?.makeKeyAndOrderFront(nil)
                         NSApp?.activate(ignoringOtherApps: true)
                     }
                 }
@@ -987,10 +1000,16 @@ public struct AppShellView: View {
             session.window = window
             if session.windowDelegate == nil {
                 let delegate = PlayerWindowDelegate(session: session, player: player)
+                delegate.isMediaLibraryActiveProvider = { [self] in
+                    !self.isPlaying && self.isProLibraryActive
+                }
                 session.windowDelegate = delegate
                 window.delegate = delegate
             } else if window.delegate == nil {
                 window.delegate = session.windowDelegate
+            }
+            (window.delegate as? PlayerWindowDelegate)?.isMediaLibraryActiveProvider = { [self] in
+                !self.isPlaying && self.isProLibraryActive
             }
             if let zoomBtn = window.standardWindowButton(.zoomButton),
                let delegate = window.delegate as? PlayerWindowDelegate {

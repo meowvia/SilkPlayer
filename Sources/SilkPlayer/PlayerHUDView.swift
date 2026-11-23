@@ -180,7 +180,7 @@ public struct PlayerHUDView: View {
                 VStack(spacing: 0) {
                     topBar(tier: tier, isHUDActive: isHUDActive)
                         .padding(.horizontal, 16)
-                        .padding(.top, player.isFullscreen ? 16 : 40)
+                        .padding(.top, player.isFullscreen ? 16 : (player.isEffectiveVertical ? 12 : 40))
                         .allowsHitTesting(isHUDActive)
                     Spacer()
                         .allowsHitTesting(false)
@@ -239,13 +239,16 @@ public struct PlayerHUDView: View {
 
     // MARK: - Top Information Bar
     private func topBar(tier: HUDLayoutTier, isHUDActive: Bool) -> some View {
-        ZStack(alignment: .center) {
+        let isVertical = player.isEffectiveVertical
+        return ZStack(alignment: .center) {
             // 1. Base Layer: Leading Spec Badges + Trailing Quick Actions
             HStack(alignment: .center, spacing: 10) {
-                specBadgesRow(tier: tier)
-                    .padding(.leading, player.isFullscreen ? 0 : (tier == .minimal ? 54 : 70)) // Avoid traffic lights in windowed mode
-                    .opacity(isHUDActive ? 1.0 : 0.0)
-                    .allowsHitTesting(false)
+                if !isVertical {
+                    specBadgesRow(tier: tier)
+                        .padding(.leading, player.isFullscreen ? 0 : (tier == .minimal ? 54 : 70)) // Avoid traffic lights in windowed mode
+                        .opacity(isHUDActive ? 1.0 : 0.0)
+                        .allowsHitTesting(false)
+                }
 
                 Spacer()
                     .allowsHitTesting(false)
@@ -272,7 +275,7 @@ public struct PlayerHUDView: View {
                         }
 
                         // Media Inspector Button
-                        if tier != .minimal {
+                        if tier != .minimal && !isVertical {
                             HUDCircleButton(
                                 icon: player.isInspectorVisible ? "info.circle.fill" : "info.circle",
                                 isActive: player.isInspectorVisible,
@@ -296,8 +299,8 @@ public struct PlayerHUDView: View {
                 }
             }
 
-            // 2. Center Overlay: Active Media Title (Pure static capsule; episode navigation handled via right drawer)
-            if !player.mediaTitle.isEmpty && !player.isAudioOnly {
+            // 2. Center Overlay: Active Media Title (Hidden on vertical videos for clean zero-occlusion)
+            if !isVertical && !player.mediaTitle.isEmpty && !player.isAudioOnly {
                 let sanitized = MediaFilenameSanitizer.sanitize(player.mediaTitle)
                 Text(sanitized.headerTitle)
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
@@ -353,9 +356,11 @@ public struct PlayerHUDView: View {
             }
 
             // 2. Resolution Badge (e.g. 4K UHD, 1080p HD, 8K)
-            if player.videoWidth > 0 && player.videoHeight > 0 {
+            if player.videoWidth > 0 && player.videoHeight > 0 && tier != .minimal && !player.isEffectiveVertical {
                 Text(resolutionText)
                     .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .fixedSize()
                     .foregroundColor(.white.opacity(0.92))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 4.5)
@@ -695,7 +700,8 @@ public struct PlayerHUDView: View {
                     size: 13.5,
                     weight: .medium,
                     color: .white.opacity(0.90),
-                    helpText: L10n.tr("Toggle Fullscreen (F / Return)", "切换全屏 (F / 回车)")
+                    helpText: L10n.tr("Toggle Fullscreen (F / Return)", "切换全屏 (F / 回车)"),
+                    tooltipHorizontalAlignment: .trailing
                 ) {
                     player.toggleFullscreen()
                 }

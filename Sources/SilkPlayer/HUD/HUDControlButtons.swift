@@ -289,7 +289,11 @@ struct HUDSpeedMenuButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .hudTooltip(player.isAudioOnly ? "" : L10n.tr("Playback Speed (Click to choose)", "倍速播放 (点击选择常规倍速)"), edge: .top)
+        .hudTooltip(
+            player.isAudioOnly ? "" : L10n.tr("Playback Speed (Click to choose)", "倍速播放 (点击选择常规倍速)"),
+            edge: .top,
+            horizontalAlignment: .leading
+        )
         .help(L10n.tr("Playback Speed: \(String(format: "%.2fx", player.speed)) (Click to choose)", "倍速播放: \(String(format: "%.2fx", player.speed)) (点击选择常规倍速)"))
     }
 
@@ -364,38 +368,35 @@ struct HUDReturnCapsuleButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 11, weight: .bold))
-                Text(L10n.tr("Back", "返回"))
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-            }
-            .foregroundColor(.white.opacity(isHovered ? 1.0 : 0.90))
-            .padding(.horizontal, 11)
-            .frame(height: 30)
-            .background(
-                ZStack {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                    Capsule()
-                        .fill(Color.black.opacity(isHovered ? 0.35 : 0.22))
-                }
-            )
-            .overlay(
-                Capsule()
-                    .strokeBorder(
-                        Color.white.opacity(isHovered ? 0.38 : 0.18),
-                        lineWidth: 0.75
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 2)
-            .scaleEffect(isHovered ? 1.04 : 1.0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isHovered)
+            Image(systemName: "chevron.left")
+                .font(.system(size: 12.5, weight: .bold))
+                .offset(x: -0.5)
+                .foregroundColor(.white.opacity(isHovered ? 1.0 : 0.90))
+                .frame(width: 30, height: 30)
+                .background(
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                        Circle()
+                            .fill(Color.black.opacity(isHovered ? 0.35 : 0.22))
+                    }
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            Color.white.opacity(isHovered ? 0.38 : 0.18),
+                            lineWidth: 0.75
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 2)
+                .scaleEffect(isHovered ? 1.06 : 1.0)
+                .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isHovered)
         }
-        .buttonStyle(SilkFluidSpringButtonStyle(pressedScale: 0.94, pressedOpacity: 0.88))
+        .buttonStyle(SilkFluidSpringButtonStyle(pressedScale: 0.93, pressedOpacity: 0.88))
         .onHover { hovering in
             isHovered = hovering
         }
+        .hudTooltip(helpText.isEmpty ? L10n.tr("Return (Esc / Cmd+W)", "返回 (Esc / Cmd+W)") : helpText, edge: .bottom)
         .help(helpText.isEmpty ? L10n.tr("Return (Esc / Cmd+W)", "返回 (Esc / Cmd+W)") : helpText)
     }
 }

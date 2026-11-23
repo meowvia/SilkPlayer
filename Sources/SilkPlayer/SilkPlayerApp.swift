@@ -8,6 +8,17 @@ struct SilkPlayerApp: App {
 
     init() {
         Self.purgeSavedWindowFrameAutosave()
+        let args = CommandLine.arguments.dropFirst()
+        for arg in args where !arg.hasPrefix("-") {
+            if FileManager.default.fileExists(atPath: arg) {
+                let ext = (arg as NSString).pathExtension.lowercased()
+                if MediaFileClassifier.videoExtensions.contains(ext) || MediaFileClassifier.audioExtensions.contains(ext) {
+                    if !AppDelegate.pendingFiles.contains(arg) {
+                        AppDelegate.pendingFiles.append(arg)
+                    }
+                }
+            }
+        }
         PlayerWindowManager.shared.openShortcutsCheatsheetAction = {
             ShortcutsCheatsheetManager.shared.show()
         }
@@ -18,10 +29,10 @@ struct SilkPlayerApp: App {
         WindowGroup("SilkPlayer", id: "playerWindow") {
             PlayerWindowRootView()
                 .preferredColorScheme(settings.effectiveColorScheme)
-                .handlesExternalEvents(preferring: Set(arrayLiteral: "*"), allowing: Set(arrayLiteral: "*"))
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 960, height: 540)
+        .handlesExternalEvents(matching: [])
         .commands {
             PlayerCommands()
         }
