@@ -14,6 +14,18 @@ SilkPlayer 2.1.0 is a major UX and architectural release. It completely refactor
   彻底移除 WindowGroup 中无意义的外部事件声明，从根源上杜绝访达（Finder）外部双击/右键打开文件时由 SwiftUI 盲目额外实例化第二视窗的缺陷；加固视窗接入逻辑，对多余视窗实施即刻同步隐形（`window.orderOut(nil)`），根除单窗口模式下先闪现弹出再关闭的视觉瑕疵；引入双窗口合法准入守卫与同文件播放聚焦保护，只有当主窗口正在播放且存在有效待播媒体任务（或用户明确按 `⌘N`）时才允许实例化第二视窗，彻底终结前台闲置欢迎屏与后台播放并存的现象。
   Completely removed redundant external event declarations on WindowGroup, preventing SwiftUI from autonomously instantiating extraneous window scenes on Finder launch events. Enforced instantaneous window unmapping (`window.orderOut(nil)`) on discarded duplicate instances, eliminating transient window flashes in single-window mode. Implemented strict dual-window admission guards and duplicate-file focus routing to ensure secondary windows only instantiate when explicitly requested or when the primary window is actively playing external media queues.
 
+- 剧集连载进度与追剧缺集提醒雷达（提案 036）/ TV Series Episode Tracker & Missing Episodes Radar:
+  基于离线断点差额分析与元数据联动，为本地追剧仓储提供全自动的缺集提醒。封面海报左上角智能定性展示「全 X 集」或高对比暖橙色「缺 X 集」/「S2 缺 X 集」状态微标；详情页顶部季切换按钮自带健康度与预警微标（如「第 1 季（全 10 集）」与高亮预警点「第 2 季（缺 2 集）」）；在选集列表中为未入库的缺失单集自动生成虚线「幽灵占位卡（Ghost Card）」，清晰呈现「E03 · 待补齐」，一目了然定位本地资源缺口。
+  Introduced local offline sequence gap analysis and metadata tracking for TV series storage. Poster cards now highlight completeness via ambient badges ("All X Eps" or amber "Missing X Ep(s)" / "S2 Missing X Ep(s)"); season switcher tabs in the detail view visually flag completeness with warning pips and localized counts; and missing episodes within seasons automatically render as dashed "Ghost Cards" indicating "E03 · Missing", eliminating mental burden when managing downloaded series.
+
+- 播放器右上角悬浮返回按钮图标化 / Minimal Circular HUD Return Button:
+  移除播放态右上角悬浮胶囊中的文字「返回」，重构为 30x30 圆形液态毛玻璃微质感左箭图标按钮，与右侧常驻图钉和检视器控制键形成严格统一的几何秩序，并提供完备的悬停浮窗提示与快捷键交互。
+  Redesigned the top-right playback return button from text "返回" into a minimal 30x30 circular liquid-glass chevron icon, harmonizing geometry with adjacent pin and inspector actions while retaining full native tooltips.
+
+- 设置面板顶部 4 分段导航栏紧凑与全域响应重构 / Compact Settings Tab Navigation & Full Hit-Test Hitbox:
+  将设置面板顶部 4 分段 Tab 宽度由 452pt 紧凑收拢至 352pt，消减过宽空隙；重构子分段的点击命中区域，修复透明背景击穿缺陷，实现按钮几何矩形全域 100% 灵敏响应与平滑悬停微高亮。
+  Compacted the top settings segmented tab bar from 452pt to 352pt, eliminating awkward dead spacing. Fixed SwiftUI transparent background hit-testing pass-through by binding full-surface content shapes, ensuring instantaneous click responsiveness across 100% of each tab area.
+
 - 全画幅自适应几何革新（提案 033 & 034）/ Full-Canvas Adaptive Geometry Upgrades:
   横屏视频（`aspect >= 1.0`）基准自适应宽度比例由 55% 提升至 70%，显著改善 13~14 寸便携小屏笔记本默认窗口过小、字幕辨识度低的问题，将上下 HUD 对核心画面的遮挡压迫率从 34% 大幅降至 23%，同时严格保留外接 4K/5K 屏幕 88% 宽度与 85% 高度安全呼吸边距；竖屏视频默认垂直铺满当前屏幕可用高度（100% visible height），最低宽度硬性锁定 280pt 杜绝微型缩略图退化，并重构竖屏模式顶部 HUD 为极简置顶返回栏，实现画面主体 100% 无遮挡透出。
   Upgraded horizontal adaptive content sizing from 55% to a 70% golden viewport ratio, significantly enhancing viewing immersion on 13-14 inch MacBooks while reducing HUD overlay coverage from 34% to 23% and preserving 88%/85% display breathing margins on 4K/5K monitors. Aligned vertical videos with QuickTime's edge-to-edge visible screen height with a 280pt locked minimum width, streamlining top vertical controls to flush pin and return actions with zero subtitle or canvas obstruction.

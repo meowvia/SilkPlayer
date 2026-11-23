@@ -46,7 +46,7 @@
 | 提案 033 | 竖屏视频自适应初始尺寸黄金比例升级（对齐 QuickTime 满高）与极简 HUD 规格药丸防折行保护 (Vertical Video Adaptive Size 100% Ratio & Minimal HUD) | 已实施 (交付归档) | **2.1.0** |
 | 提案 034 | 横屏视频自适应初始尺寸黄金比例升级（55% → 70% 舒适观影比例）与小屏笔记本呼吸边距优化 (Horizontal Video Adaptive Size 70% Ratio Upgrade for Laptop Display & HUD Clearance) | 已实施 (交付归档) | **2.1.0** |
 | 提案 035 | 播放列表侧边抽屉拉手微质感重构（解决小屏/非整数缩放下高反差白斑，融入液态毛玻璃与悬浮动态呼吸态） (Playlist Drawer Handle Visual Refinement & Fractional Scaling Protection) | 已实施 (交付归档) | **2.1.0** |
-| 提案 036 | 基于 TMDB 元数据的剧集连载进度与追剧缺集提醒雷达 (TV Series Episode Tracker & Missing Episodes Radar) | 需求定稿 (方案就绪) | **后续排期 (2.2.0)** |
+| 提案 036 | 基于 TMDB 元数据的剧集连载进度与追剧缺集提醒雷达 (TV Series Episode Tracker & Missing Episodes Radar) | 已实施 (交付归档) | **2.1.0** |
 
 
 ---
@@ -1316,7 +1316,7 @@
   - 用户完全无需在大脑中手动计数排查，缺失集数与名称一目了然。
 
 ### 4. 当前状态
-- 需求架构与交互设计定稿归档，排期于后续媒体库重大迭代（**2.2.0**）集中实施落地。
+- 方案已于 2.1.0 交付落地。
 
 
 
