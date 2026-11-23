@@ -14,10 +14,6 @@ SilkPlayer 2.1.0 is a major UX and architectural release. It completely refactor
   彻底移除 WindowGroup 中无意义的外部事件声明，从根源上杜绝访达（Finder）外部双击/右键打开文件时由 SwiftUI 盲目额外实例化第二视窗的缺陷；加固视窗接入逻辑，对多余视窗实施即刻同步隐形（`window.orderOut(nil)`），根除单窗口模式下先闪现弹出再关闭的视觉瑕疵；引入双窗口合法准入守卫与同文件播放聚焦保护，只有当主窗口正在播放且存在有效待播媒体任务（或用户明确按 `⌘N`）时才允许实例化第二视窗，彻底终结前台闲置欢迎屏与后台播放并存的现象。
   Completely removed redundant external event declarations on WindowGroup, preventing SwiftUI from autonomously instantiating extraneous window scenes on Finder launch events. Enforced instantaneous window unmapping (`window.orderOut(nil)`) on discarded duplicate instances, eliminating transient window flashes in single-window mode. Implemented strict dual-window admission guards and duplicate-file focus routing to ensure secondary windows only instantiate when explicitly requested or when the primary window is actively playing external media queues.
 
-- 剧集连载进度与追剧缺集提醒雷达（提案 036）/ TV Series Episode Tracker & Missing Episodes Radar:
-  基于离线断点差额分析与元数据联动，为本地追剧仓储提供全自动的缺集提醒。封面海报左上角智能定性展示「全 X 集」或高对比暖橙色「缺 X 集」/「S2 缺 X 集」状态微标；详情页顶部季切换按钮自带健康度与预警微标（如「第 1 季（全 10 集）」与高亮预警点「第 2 季（缺 2 集）」）；在选集列表中为未入库的缺失单集自动生成虚线「幽灵占位卡（Ghost Card）」，清晰呈现「E03 · 待补齐」，一目了然定位本地资源缺口。
-  Introduced local offline sequence gap analysis and metadata tracking for TV series storage. Poster cards now highlight completeness via ambient badges ("All X Eps" or amber "Missing X Ep(s)" / "S2 Missing X Ep(s)"); season switcher tabs in the detail view visually flag completeness with warning pips and localized counts; and missing episodes within seasons automatically render as dashed "Ghost Cards" indicating "E03 · Missing", eliminating mental burden when managing downloaded series.
-
 - 播放器右上角悬浮返回按钮图标化 / Minimal Circular HUD Return Button:
   移除播放态右上角悬浮胶囊中的文字「返回」，重构为 30x30 圆形液态毛玻璃微质感左箭图标按钮，与右侧常驻图钉和检视器控制键形成严格统一的几何秩序，并提供完备的悬停浮窗提示与快捷键交互。
   Redesigned the top-right playback return button from text "返回" into a minimal 30x30 circular liquid-glass chevron icon, harmonizing geometry with adjacent pin and inspector actions while retaining full native tooltips.
@@ -35,8 +31,8 @@ SilkPlayer 2.1.0 is a major UX and architectural release. It completely refactor
   Refined the playlist drawer edge handle to eliminate harsh white haloing on fractional Retina displays. Default idle opacity now features a subtle ambient reflection (stroke 0.22, arrow 0.26) paired with a 0.18 anti-halation dark backing, smoothly blooming into a 0.65/0.75 responsive hover feedback that integrates seamlessly into the ultra-thin material aesthetic.
 
 - 媒体库窗口拉伸尺寸 HUD 智能抑制与右键菜单极简收拢 / Media Library Resize HUD Suppression & Context Menu Simplification:
-  在媒体库海报墙与影视详情页浏览状态下拖拽调整窗口大小时，智能屏蔽视频高宽比 HUD（如 16:9 / 2.39:1），保持纯净的无遮挡目录式自适应缩放浏览体验，仅在实际视频播放态下恢复尺寸指示；遵循奥卡姆剃刀原则彻底剔除电影卡片右键菜单中歧义冗余的「重置为未观看」选项，仅保留清晰确切的「标记为已看完」，进度归零与从头播放完全收拢至顶部继续观看区域卡片右上角 `X` 移除动作与右键「从头播放」，实现交互与视觉语言的高度统一。
-  Suppressed the video aspect-ratio dimension HUD overlay when resizing windows in media library and detail browsing states, delivering a distraction-free grid browsing experience. Streamlined movie poster context menus by pruning the redundant "Mark as Unwatched" option and retaining strictly the unambiguous "Mark as Watched" action, seamlessly aligning playhead reset behaviors with the Continue Watching shelf dismiss controls and dedicated "Play from Beginning" commands.
+  在媒体库海报墙与影视详情页浏览状态下拖拽调整窗口大小时，智能屏蔽视频高宽比 HUD（如 16:9 / 2.39:1），保持纯净的无遮挡目录式自适应缩放浏览体验，仅在实际视频播放态下恢复尺寸指示；遵循奥卡姆剃刀原则彻底剔除电影卡片右键菜单中歧义冗余的「重置为未观看」与「标记为已看完」，播放状态重置完全收拢至继续观看区域卡片右上角 `X` 移除动作与右键「从头播放」，极大降低右键视觉干扰并实现交互职责的高度收拢。
+  Suppressed the video aspect-ratio dimension HUD overlay when resizing windows in media library and detail browsing states, delivering a distraction-free grid browsing experience. Streamlined movie poster context menus by removing both redundant "Mark as Unwatched" and "Mark as Watched" options, strictly consolidating progress reset behaviors into the Continue Watching dismiss action and dedicated "Play from Beginning" commands.
 
 - 全屏转场生命周期与渲染提交流程治理 / Fullscreen Exit Lifecycle & Presentation Lockout:
   彻底移除退出全屏阶段针对窗口坐标的同步非法改帧（`setFrame`），几何反算完全交由 AppKit 原生异步接管；在 Metal 渲染视图中引入硬件提交流程互斥锁（`isTransitioningLock`），转场期间安全短路 `layer.nextDrawable()` 提交，结合防重入互斥与 3 秒看门狗复位，根除极端多显示器与高频切换环境下可能引发的系统显示服务（WindowServer）死锁卡顿。
