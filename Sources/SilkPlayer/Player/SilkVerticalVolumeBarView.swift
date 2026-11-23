@@ -122,12 +122,12 @@ public struct SilkVerticalVolumeBarView: View {
                         }
                 )
             }
-            .frame(width: 24, height: 130)
+            .frame(width: 24, height: 175)
             .padding(.vertical, 4)
         }
-        .padding(.horizontal, 5)
+        .padding(.horizontal, 4)
         .padding(.vertical, 10)
-        .frame(width: 44)
+        .frame(width: 38)
         .background(
             ZStack {
                 Capsule().fill(.ultraThinMaterial)

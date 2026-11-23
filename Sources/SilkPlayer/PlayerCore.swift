@@ -741,11 +741,11 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     // MARK: - Volume & Audio
-    public func setVolume(_ val: Double, maxLimit: Double = 150.0, showOSD: Bool = true) {
+    public func setVolume(_ val: Double, maxLimit: Double = AppSettings.shared.maxVolumeLimit, showOSD: Bool = true) {
         let clamped = max(0.0, min(maxLimit, val))
         self.volume = clamped
         if AppSettings.shared.rememberVolume {
-            AppSettings.shared.savedVolume = clamped
+            AppSettings.shared.savedVolume = min(clamped, 100.0)
         }
         if isMuted && clamped > 0 {
             isMuted = false
@@ -759,7 +759,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     }
 
     public func adjustVolume(by delta: Double = 10.0) {
-        setVolume(volume + delta, showOSD: true)
+        setVolume(volume + delta, maxLimit: AppSettings.shared.maxVolumeLimit, showOSD: true)
     }
 
     public func handleScrollWheelVolume(deltaY: Double) {
