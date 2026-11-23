@@ -43,9 +43,9 @@
 | 提案 030 | 媒体库影片分类体系与高效批量管理方案（本地虚拟标签 + 官方边缘稳定刮削双轨架构） | 归档备忘 | **媒体库规划** |
 | 提案 031 | 原生无边框桌面全屏（Borderless Desktop Fullscreen）方案 | 排期备忘 | **2.1.0** |
 | 提案 032 | 播放器音频增益扩展至 200%、软限幅防削波、安全回落记忆策略与右侧纵向音量条视觉比例重构 (Audio Volume 200% Boost, Soft-Limiter, Safety Clamping & Vertical Slider Redesign) | 需求定稿 (方案就绪) | **后续排期** |
-| 提案 033 | 竖屏视频自适应初始尺寸黄金比例升级（60% → 78%）与极简 HUD 规格药丸防折行保护 (Vertical Video Adaptive Size 78% Screen Ratio & Minimal HUD Overflow Protection) | 需求定稿 (排期就绪) | **下个版本** |
-| 提案 034 | 横屏视频自适应初始尺寸黄金比例升级（55% → 70% 舒适观影比例）与小屏笔记本呼吸边距优化 (Horizontal Video Adaptive Size 70% Ratio Upgrade for Laptop Display & HUD Clearance) | 需求定稿 (方案就绪) | **待定（随大版本规划）** |
-| 提案 035 | 播放列表侧边抽屉拉手微质感重构（解决小屏/非整数缩放下高反差白斑，融入液态毛玻璃与悬浮动态呼吸态） (Playlist Drawer Handle Visual Refinement & Fractional Scaling Protection) | 需求定稿 (方案就绪) | **下个版本 (2.0.3)** |
+| 提案 033 | 竖屏视频自适应初始尺寸黄金比例升级（对齐 QuickTime 满高）与极简 HUD 规格药丸防折行保护 (Vertical Video Adaptive Size 100% Ratio & Minimal HUD) | 已实施 (交付归档) | **2.1.0** |
+| 提案 034 | 横屏视频自适应初始尺寸黄金比例升级（55% → 70% 舒适观影比例）与小屏笔记本呼吸边距优化 (Horizontal Video Adaptive Size 70% Ratio Upgrade for Laptop Display & HUD Clearance) | 已实施 (交付归档) | **2.1.0** |
+| 提案 035 | 播放列表侧边抽屉拉手微质感重构（解决小屏/非整数缩放下高反差白斑，融入液态毛玻璃与悬浮动态呼吸态） (Playlist Drawer Handle Visual Refinement & Fractional Scaling Protection) | 已实施 (交付归档) | **2.1.0** |
 
 
 ---

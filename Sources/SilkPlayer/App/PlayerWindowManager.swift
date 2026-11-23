@@ -650,12 +650,16 @@ extension Notification.Name {
         return pendingQueue.removeFirst()
     }
 
+    public var hasPendingFiles: Bool {
+        !pendingQueue.isEmpty
+    }
+
     // MARK: - Open External Files Scheduling
     public func handleSystemOpenFiles(_ files: [String]) {
         guard !files.isEmpty else { return }
         if !Self.isRunningTests {
             let now = ProcessInfo.processInfo.systemUptime
-            if files == lastSystemOpenPaths && (now - lastSystemOpenTime) < 0.45 {
+            if files == lastSystemOpenPaths && (now - lastSystemOpenTime) < 1.5 {
                 return
             }
             lastSystemOpenPaths = files
@@ -678,6 +682,20 @@ extension Notification.Name {
 
         let expanded = Self.expandFilesAndDirectories(files)
         guard !expanded.isEmpty else { return }
+
+        // If the primary session is already playing this exact file, focus window and return without opening duplicate window
+        if let primarySession = sessions.first,
+           let currentPath = (primarySession.player as? PlayerCore)?.currentFilePath,
+           currentPath == expanded[0] {
+            if !Self.isRunningTests {
+                if primarySession.window?.isMiniaturized == true {
+                    primarySession.window?.deminiaturize(nil)
+                }
+                primarySession.window?.makeKeyAndOrderFront(nil)
+                NSApp?.activate(ignoringOtherApps: true)
+            }
+            return
+        }
 
         func deliver(to session: PlayerWindowSession) {
             session.openPath(expanded[0])

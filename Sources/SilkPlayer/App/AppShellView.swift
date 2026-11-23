@@ -941,6 +941,7 @@ public struct AppShellView: View {
                     orphanedFiles.append(contentsOf: AppDelegate.pendingFiles)
                     AppDelegate.pendingFiles.removeAll()
                 }
+                window.orderOut(nil)
                 PlayerWindowManager.shared.unregisterSession(id: sessionId)
                 DispatchQueue.main.async {
                     window.close()
@@ -960,21 +961,29 @@ public struct AppShellView: View {
         } else {
             // Enforce strict maxConcurrentWindows (2) cap in Dual-Window mode
             let attachedOthers = PlayerWindowManager.shared.sessions.filter { $0.id != sessionId && $0.window != nil }
-            if attachedOthers.count >= PlayerWindowManager.maxConcurrentWindows,
-               let reuseTarget = attachedOthers.last {
+            let hasPendingTask = PlayerWindowManager.shared.hasPendingFiles || !AppDelegate.pendingFiles.isEmpty
+            let isPrimaryPlaying = attachedOthers.first?.isLoaded == true
+            // If another window already exists, secondary window is ONLY allowed if there are pending files or primary window is actively playing
+            if attachedOthers.count >= PlayerWindowManager.maxConcurrentWindows || (attachedOthers.count >= 1 && !hasPendingTask && !isPrimaryPlaying) {
                 isDiscardedDuplicateWindow = true
-                let orphanedFiles = PlayerWindowManager.shared.dequeuePendingFiles()
+                var orphanedFiles = PlayerWindowManager.shared.dequeuePendingFiles()
+                if !AppDelegate.pendingFiles.isEmpty {
+                    orphanedFiles.append(contentsOf: AppDelegate.pendingFiles)
+                    AppDelegate.pendingFiles.removeAll()
+                }
+                window.orderOut(nil)
                 PlayerWindowManager.shared.unregisterSession(id: sessionId)
+                let reuseTarget = attachedOthers.first
                 DispatchQueue.main.async {
                     window.close()
-                    if !orphanedFiles.isEmpty {
-                        reuseTarget.openPath(orphanedFiles[0])
+                    if !orphanedFiles.isEmpty, let target = reuseTarget {
+                        target.openPath(orphanedFiles[0])
                         if orphanedFiles.count > 1 {
-                            reuseTarget.appendPlaylistPaths(Array(orphanedFiles.dropFirst()))
+                            target.appendPlaylistPaths(Array(orphanedFiles.dropFirst()))
                         }
                     }
                     if !PlayerWindowManager.isRunningTests {
-                        reuseTarget.window?.makeKeyAndOrderFront(nil)
+                        reuseTarget?.window?.makeKeyAndOrderFront(nil)
                         NSApp?.activate(ignoringOtherApps: true)
                     }
                 }

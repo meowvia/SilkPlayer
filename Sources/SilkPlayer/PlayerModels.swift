@@ -551,7 +551,7 @@ public enum PlayerGeometry: Sendable {
                 targetContentH = round(targetContentW / safeAspect)
             }
         } else {
-            let idealW = round(min(rawVideoWidth, screenVisibleSize.width * 0.55))
+            let idealW = round(min(rawVideoWidth, screenVisibleSize.width * 0.70))
             targetContentW = max(minSz.width, min(maxSafe.width, idealW))
             targetContentH = round(targetContentW / safeAspect)
 

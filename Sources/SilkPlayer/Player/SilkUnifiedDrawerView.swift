@@ -1246,6 +1246,7 @@ public final class SilkDrawerHandleNSView: NSView {
     public var onAction: (() -> Void)?
     public var onHoverChange: ((Bool) -> Void)?
 
+    private var isHovered: Bool = false
     private var trackingArea: NSTrackingArea?
 
     override public init(frame frameRect: NSRect) {
@@ -1320,6 +1321,8 @@ public final class SilkDrawerHandleNSView: NSView {
 
     override public func mouseEntered(with event: NSEvent) {
         if !isDrawerVisible {
+            isHovered = true
+            needsDisplay = true
             NSCursor.pointingHand.set()
             onHoverChange?(true)
         }
@@ -1327,6 +1330,8 @@ public final class SilkDrawerHandleNSView: NSView {
 
     override public func mouseExited(with event: NSEvent) {
         if !isDrawerVisible {
+            isHovered = false
+            needsDisplay = true
             NSCursor.arrow.set()
             onHoverChange?(false)
         }
@@ -1410,21 +1415,24 @@ public final class SilkDrawerHandleNSView: NSView {
             triPath.closeSubpath()
         }
 
-        if let customFillColor {
-            ctx.setFillColor(customFillColor.cgColor)
-            ctx.addPath(borderPath)
-            ctx.closePath()
-            ctx.fillPath()
-        }
+        // Anti-halation base fill (dark absorption base to prevent white haloing on fractional Retina displays)
+        let baseFillColor = customFillColor ?? NSColor.black.withAlphaComponent(0.18)
+        ctx.setFillColor(baseFillColor.cgColor)
+        ctx.addPath(borderPath)
+        ctx.closePath()
+        ctx.fillPath()
 
-        // Stroke 3-sided border
-        let strokeColor = customStrokeColor ?? NSColor.white.withAlphaComponent(0.75)
+        // Stroke 3-sided border with subtle ambient reflection and responsive hover state
+        let defaultStrokeAlpha: CGFloat = isHovered ? 0.65 : 0.22
+        let strokeColor = customStrokeColor ?? NSColor.white.withAlphaComponent(defaultStrokeAlpha)
         ctx.setStrokeColor(strokeColor.cgColor)
         ctx.setLineWidth(customFillColor != nil ? 1.2 : 1.0)
         ctx.addPath(borderPath)
         ctx.strokePath()
 
-        let arrowColor = customArrowColor ?? NSColor.white.withAlphaComponent(0.85)
+        // Subtle indicator triangle with responsive hover feedback
+        let defaultArrowAlpha: CGFloat = isHovered ? 0.75 : 0.26
+        let arrowColor = customArrowColor ?? NSColor.white.withAlphaComponent(defaultArrowAlpha)
         ctx.setFillColor(arrowColor.cgColor)
         ctx.addPath(triPath)
         ctx.fillPath()
