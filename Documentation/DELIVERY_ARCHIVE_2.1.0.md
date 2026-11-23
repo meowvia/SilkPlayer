@@ -18,7 +18,7 @@
 ### 2. 交付产物与校验基准
 - 安装镜像文件：`SilkPlayer-2.1.0-universal.dmg`
 - 文件完整路径：`/Volumes/2T/Projects/SilkPlayer/SilkPlayer/build/SilkPlayer-2.1.0-universal.dmg`
-- SHA-256 校验和：`bb526a1ee3c45ab0ab777170780279e8b24a24bb60b0fe62435d4c8b79e1a481`
+- SHA-256 校验和：`1ef25198fa86f17702ebd20e9e8591d643748fcc8a2ba2361a97218c09f2933a`
 - 架构支持：Apple Silicon (arm64) + Intel 64-bit (x86_64) Universal 二进制
 - 依赖审计：`@rpath` 合规，无外部宿主私有绝对路径泄漏
 
