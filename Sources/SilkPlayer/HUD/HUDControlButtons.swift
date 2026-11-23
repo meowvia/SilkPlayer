@@ -289,7 +289,11 @@ struct HUDSpeedMenuButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .hudTooltip(player.isAudioOnly ? "" : L10n.tr("Playback Speed (Click to choose)", "倍速播放 (点击选择常规倍速)"), edge: .top)
+        .hudTooltip(
+            player.isAudioOnly ? "" : L10n.tr("Playback Speed (Click to choose)", "倍速播放 (点击选择常规倍速)"),
+            edge: .top,
+            horizontalAlignment: .leading
+        )
         .help(L10n.tr("Playback Speed: \(String(format: "%.2fx", player.speed)) (Click to choose)", "倍速播放: \(String(format: "%.2fx", player.speed)) (点击选择常规倍速)"))
     }
 

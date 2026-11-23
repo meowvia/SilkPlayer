@@ -404,21 +404,16 @@ public enum PlayerGeometry: Sendable {
     public static func minimumContentSize(for aspect: CGFloat, screenVisibleHeight: CGFloat? = nil) -> NSSize {
         let safeAspect = max(0.001, aspect)
         if safeAspect < 1.0 {
-            // 竖屏体系：宽为短边 (>= 280pt 容纳控制栏)，高严格以视频高宽比为准则，
-            // 且严格受制于安全上限的 55%，杜绝倒挂死锁，保障充足自由缩放区间
-            var baseW: CGFloat = 280.0
+            // 竖屏体系：宽为短边 (严格锁定 >= 280pt 容纳控制栏与红绿灯，严禁向后倒挂缩减为 200~222pt 玩具缩略图)
+            // 高严格以视频高宽比为准则，上限受制于可见屏幕 85% 安全高度
+            let baseW: CGFloat = 280.0
             var baseH = round(baseW / safeAspect)
 
             if let sH = screenVisibleHeight, sH > 0 {
                 let maxSafeH = floor(sH * 0.85)
-                let maxAllowedMinH = floor(maxSafeH * 0.55)
-                if baseH > maxAllowedMinH {
-                    baseH = maxAllowedMinH
-                    baseW = max(200.0, round(baseH * safeAspect))
+                if baseH > maxSafeH {
+                    baseH = maxSafeH
                 }
-            } else if baseH > 480.0 {
-                baseH = 480.0
-                baseW = max(200.0, round(baseH * safeAspect))
             }
             return NSSize(width: baseW, height: baseH)
         } else {
@@ -453,11 +448,12 @@ public enum PlayerGeometry: Sendable {
     }
 
     /// Objective physical maximum safe content size preserving target aspect ratio and natural desktop breathing margins:
-    /// - Vertical (aspect < 1.0): strictly capped at 85% of visible screen height to prevent jamming against menu bar and Dock
-    /// - Horizontal (aspect >= 1.0): capped at 88% of visible screen bounds
+    /// - Vertical (aspect < 1.0): fills 100% of visible screen height top-to-bottom like QuickTime Player
+    /// - Horizontal (aspect >= 1.0): capped at 85% of visible screen height
     public static func maximumSafeContentSize(for aspect: CGFloat, screenVisibleSize: NSSize) -> NSSize {
         let safeAspect = max(0.001, aspect)
-        let maxSafeH = floor(screenVisibleSize.height * 0.85)
+        let isVertical = safeAspect < 1.0
+        let maxSafeH = isVertical ? floor(screenVisibleSize.height) : floor(screenVisibleSize.height * 0.85)
         let maxSafeW = floor(screenVisibleSize.width * 0.88)
 
         var targetW = maxSafeW
@@ -542,7 +538,8 @@ public enum PlayerGeometry: Sendable {
         var targetContentH: CGFloat
 
         if isVertical {
-            let idealH = round(screenVisibleSize.height * 0.60)
+            // 对齐 QuickTime Player：竖屏默认上下顶格铺满屏幕可用高度（从菜单栏底边到 Dock 顶边）
+            let idealH = floor(screenVisibleSize.height)
             targetContentH = min(max(idealH, minSz.height), maxSafe.height)
             targetContentW = round(targetContentH * safeAspect)
             if targetContentW > maxSafe.width {
