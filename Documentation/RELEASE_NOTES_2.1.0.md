@@ -2,41 +2,74 @@
 
 ## 版本概括 / Overview
 
-SilkPlayer 2.1.0 是一个重要的体验与架构升级版本，全面重构了外部文件打开与视窗生命周期受控调度，彻底消除双击视频时产生的多余闲置窗口与闪烁启动问题；实现了全画幅视频自适应几何体验革新，竖屏全面对齐 QuickTime 100% 满高标准，横屏升级至 70% 黄金观影比例；重构播放列表侧边抽屉拉手微质感以消除小屏高反差白斑，并正式沉淀全屏转场管线硬件提交互斥治理。
+SilkPlayer 2.1.0 重点解决了长期困扰日常使用的几个痛点体验：彻底消除了双击视频时误打开多个多余空白窗口的缺陷；全面重构了横竖屏视频的开窗大小，告别小屏看不清字幕与竖屏缩小成缩略图的糟糕体验；音量支持最高放大至 200%；精简优化了界面控件与 Pro 影视库交互；同时解决了全屏切换时可能引发的系统卡死与退回登录界面的严重稳定性问题。
 
-SilkPlayer 2.1.0 is a major UX and architectural release. It completely refactors external file launching and window lifecycle orchestration, permanently eliminating phantom idle windows and startup flicker when opening media from Finder. It introduces full-canvas adaptive geometry upgrades—vertical videos now align with QuickTime's 100% visible height standard and horizontal videos upgrade to a 70% golden viewport ratio. It also refines the playlist drawer handle with anti-halation micro-textures for fractional Retina displays and solidifies Metal presentation lockouts during fullscreen Space transitions.
+SilkPlayer 2.1.0 focuses on resolving key day-to-day usability pain points: permanently eliminating redundant blank windows when opening videos from Finder; fully redesigning default window sizes for horizontal and vertical videos to fix cramped subtitle reading and tiny vertical video windows; extending maximum volume up to 200%; refining interface controls and Pro Media Library interactions; and eliminating critical system freezes and logout crashes during fullscreen Space transitions.
 
 ---
 
-## 核心特性 / Key Features
+## 核心体验改进与优化 / Key Improvements & Optimizations
 
-- 视窗生命周期纯净调度与幽灵开窗根除 / Window Lifecycle Architecture & Phantom Window Elimination:
-  彻底移除 WindowGroup 中无意义的外部事件声明，从根源上杜绝访达（Finder）外部双击/右键打开文件时由 SwiftUI 盲目额外实例化第二视窗的缺陷；加固视窗接入逻辑，对多余视窗实施即刻同步隐形（`window.orderOut(nil)`），根除单窗口模式下先闪现弹出再关闭的视觉瑕疵；引入双窗口合法准入守卫与同文件播放聚焦保护，只有当主窗口正在播放且存在有效待播媒体任务（或用户明确按 `⌘N`）时才允许实例化第二视窗，彻底终结前台闲置欢迎屏与后台播放并存的现象。
-  Completely removed redundant external event declarations on WindowGroup, preventing SwiftUI from autonomously instantiating extraneous window scenes on Finder launch events. Enforced instantaneous window unmapping (`window.orderOut(nil)`) on discarded duplicate instances, eliminating transient window flashes in single-window mode. Implemented strict dual-window admission guards and duplicate-file focus routing to ensure secondary windows only instantiate when explicitly requested or when the primary window is actively playing external media queues.
+### 1. 视窗与打开体验 [通用] / Window & Launch Experience [Standard]
+- 解决打开视频多弹空白窗口的问题 / Eliminate Extra Blank Windows on Launch:
+  修复在访达（Finder）双击或右键打开视频时，经常会额外弹出一个多余空白窗口并伴随闪烁的现象。
+  Fixed an issue where opening videos from Finder via double-click or context menu would frequently spawn an unwanted extra blank window with transient screen flicker.
+- 解决重复打开同一视频多开窗口的问题 / Prevent Duplicate Windows for the Same Video:
+  如果某个视频已经在播放，再次打开它时会自动聚焦切换到该窗口，不再重复开启新窗口。
+  Opening a video that is already playing now automatically brings its existing window to focus instead of spawning a duplicate window.
+- 消除打开视频时欢迎界面的瞬态闪烁 / Eliminate Welcome Screen Flicker on Launch:
+  双击视频直接流畅进入播放，不再出现拖拽界面的瞬间闪白。
+  Launching external media files now opens smoothly directly into playback without a transient flash of the drop-zone welcome screen.
 
-- 播放器右上角悬浮返回按钮图标化 / Minimal Circular HUD Return Button:
-  移除播放态右上角悬浮胶囊中的文字「返回」，重构为 30x30 圆形液态毛玻璃微质感左箭图标按钮，与右侧常驻图钉和检视器控制键形成严格统一的几何秩序，并提供完备的悬停浮窗提示与快捷键交互。
-  Redesigned the top-right playback return button from text "返回" into a minimal 30x30 circular liquid-glass chevron icon, harmonizing geometry with adjacent pin and inspector actions while retaining full native tooltips.
+### 2. 画面与视窗比例重构 [通用] / Canvas & Window Sizing Overhaul [Standard]
+- 优化横屏视频默认开窗大小 / Optimized Default Horizontal Window Sizing:
+  解决在 13~14 寸 MacBook 等小屏设备上默认开窗过小、字幕辨识困难的问题。默认播放尺寸由原先的 55% 提升至 70%，画面更舒展，且大幅减少了上下控制栏对视频主体的遮挡。
+  Resolved the issue of cramped default windows and poor subtitle readability on 13-14 inch MacBooks. The default window width ratio is upgraded from 55% to 70%, delivering a more spacious picture while significantly reducing HUD overlay on video content.
+- 重构竖屏视频播放体验 / Overhauled Vertical Video Playback:
+  解决竖屏短视频打开时严重缩水、变成难以看清的微型小窗口的问题。现在竖屏视频默认撑满屏幕可用高度，并锁定最小宽度。
+  Resolved the issue where vertical short videos shrank into tiny, unreadable thumbnail windows. Vertical videos now vertically fill the entire available screen height by default with a locked minimum width.
+- 精简竖屏视频顶部遮挡 / Streamlined Vertical Video Top Bar:
+  竖屏播放时自动隐藏居中的长标题和参数标签，仅保留最简返回与置顶按钮，防止横条遮盖竖屏人物面部或字幕。
+  Automatically hides the center title capsule and format badges during vertical video playback, keeping only the pin and return buttons to prevent controls from obstructing video subjects or subtitles.
 
-- 设置面板顶部 4 分段导航栏紧凑与全域响应重构 / Compact Settings Tab Navigation & Full Hit-Test Hitbox:
-  将设置面板顶部 4 分段 Tab 宽度由 452pt 紧凑收拢至 352pt，消减过宽空隙；重构子分段的点击命中区域，修复透明背景击穿缺陷，实现按钮几何矩形全域 100% 灵敏响应与平滑悬停微高亮。
-  Compacted the top settings segmented tab bar from 452pt to 352pt, eliminating awkward dead spacing. Fixed SwiftUI transparent background hit-testing pass-through by binding full-surface content shapes, ensuring instantaneous click responsiveness across 100% of each tab area.
+### 3. 声音体验升级 [通用] / Audio Experience Upgrades [Standard]
+- 支持音量最高放大至 200% / Up to 200% Volume Boost:
+  解决部分电影或录像本身声音偏小、即便将 Mac 系统音量拉到最大依然听不清的痛点，并内置防破音处理，音量偏好支持自动记忆。
+  Added up to 200% volume amplification to resolve low-volume source videos that remained hard to hear even at max system volume, featuring built-in distortion protection and persistent volume settings.
 
-- 全画幅自适应几何革新（提案 033 & 034）/ Full-Canvas Adaptive Geometry Upgrades:
-  横屏视频（`aspect >= 1.0`）基准自适应宽度比例由 55% 提升至 70%，显著改善 13~14 寸便携小屏笔记本默认窗口过小、字幕辨识度低的问题，将上下 HUD 对核心画面的遮挡压迫率从 34% 大幅降至 23%，同时严格保留外接 4K/5K 屏幕 88% 宽度与 85% 高度安全呼吸边距；竖屏视频默认垂直铺满当前屏幕可用高度（100% visible height），最低宽度硬性锁定 280pt 杜绝微型缩略图退化，并重构竖屏模式顶部 HUD 为极简置顶返回栏，实现画面主体 100% 无遮挡透出。
-  Upgraded horizontal adaptive content sizing from 55% to a 70% golden viewport ratio, significantly enhancing viewing immersion on 13-14 inch MacBooks while reducing HUD overlay coverage from 34% to 23% and preserving 88%/85% display breathing margins on 4K/5K monitors. Aligned vertical videos with QuickTime's edge-to-edge visible screen height with a 280pt locked minimum width, streamlining top vertical controls to flush pin and return actions with zero subtitle or canvas obstruction.
+### 4. 界面交互细节优化 [通用] / Interface Refinements [Standard]
+- 精简播放器右上角返回按钮 / Streamlined Top-Right Return Button:
+  将原本写着汉字“返回”的悬浮按钮，替换为更小巧清爽的圆圈小箭头，视觉更统一。
+  Replaced the text "返回" button in the top-right corner with a clean, compact circular chevron icon that visually aligns with adjacent controls.
+- 修复偏好设置顶部标签点击不灵敏的问题 / Responsive Settings Tab Navigation:
+  解决之前点击设置顶部切换按钮时，只有精准点到文字才有反应、点文字旁边空白处无法切换的问题，现在整个选项区域均可随心点击。
+  Fixed an issue where settings navigation tabs only registered clicks directly on the text; the entire tab rectangular area is now 100% clickable.
+- 优化播放列表侧边拉手显示 / Refined Playlist Drawer Handle:
+  修复播放列表展开把手在部分 Mac 屏幕上边缘发虚、泛白刺眼的问题，光标划过时反馈更平滑。
+  Fixed harsh white haloing and blurry edges on the playlist drawer handle across certain Mac displays, providing smoother hover feedback.
+- 修复小窗口播放时提示文字被切断的问题 / Fixed Tooltip Clipping on Edge Buttons:
+  解决小窗口模式下，鼠标悬停在左右边缘按钮上弹出的提示文字被窗口边框切掉一半的问题。
+  Fixed an issue where hover tooltips for leftmost and rightmost controls were partially clipped by the window edges in compact window mode.
 
-- 播放列表侧边抽屉拉手微质感重构（提案 035）/ Playlist Drawer Handle Micro-Texture Refinement:
-  针对非整数倍 Retina 缩放下细微描边与实心箭头混合产生高反差粗糙白斑的视觉割裂，静默状态下透明度大幅收敛至微弱漫反射态（描边 0.22 / 箭头 0.26），并注入 0.18 微弱吸光底色阻断像素白光扩散；增加灵敏悬停呼吸反馈，光标划入时平滑过渡至 0.65 描边与 0.75 箭头，完美融入整套液态毛玻璃视觉语言。
-  Refined the playlist drawer edge handle to eliminate harsh white haloing on fractional Retina displays. Default idle opacity now features a subtle ambient reflection (stroke 0.22, arrow 0.26) paired with a 0.18 anti-halation dark backing, smoothly blooming into a 0.65/0.75 responsive hover feedback that integrates seamlessly into the ultra-thin material aesthetic.
+---
 
-- 媒体库窗口拉伸尺寸 HUD 智能抑制与右键菜单极简收拢 / Media Library Resize HUD Suppression & Context Menu Simplification:
-  在媒体库海报墙与影视详情页浏览状态下拖拽调整窗口大小时，智能屏蔽视频高宽比 HUD（如 16:9 / 2.39:1），保持纯净的无遮挡目录式自适应缩放浏览体验，仅在实际视频播放态下恢复尺寸指示；遵循奥卡姆剃刀原则彻底剔除电影卡片右键菜单中歧义冗余的「重置为未观看」与「标记为已看完」，播放状态重置完全收拢至继续观看区域卡片右上角 `X` 移除动作与右键「从头播放」，极大降低右键视觉干扰并实现交互职责的高度收拢。
-  Suppressed the video aspect-ratio dimension HUD overlay when resizing windows in media library and detail browsing states, delivering a distraction-free grid browsing experience. Streamlined movie poster context menus by removing both redundant "Mark as Unwatched" and "Mark as Watched" options, strictly consolidating progress reset behaviors into the Continue Watching dismiss action and dedicated "Play from Beginning" commands.
+## 缺陷修复与稳定性提升 / Bug Fixes & Stability Improvements
 
-- 全屏转场生命周期与渲染提交流程治理 / Fullscreen Exit Lifecycle & Presentation Lockout:
-  彻底移除退出全屏阶段针对窗口坐标的同步非法改帧（`setFrame`），几何反算完全交由 AppKit 原生异步接管；在 Metal 渲染视图中引入硬件提交流程互斥锁（`isTransitioningLock`），转场期间安全短路 `layer.nextDrawable()` 提交，结合防重入互斥与 3 秒看门狗复位，根除极端多显示器与高频切换环境下可能引发的系统显示服务（WindowServer）死锁卡顿。
-  Removed synchronous window frame modifications during fullscreen exit transitions, returning geometry restoration to AppKit's asynchronous lifecycle. Introduced hardware presentation lockouts (`isTransitioningLock`) in the Metal render view to short-circuit frame delivery during Space transitions, eliminating WindowServer watchdog deadlocks under multi-display configurations.
+### 1. 影视媒体库交互优化 [Pro 专属] / Pro Media Library Refinements [Pro]
+- 去除影视库拉伸窗口时的无用提示 / Suppressed Aspect Ratio HUD in Media Library:
+  修复在媒体库浏览海报墙或查看影片详情时，拖动调节窗口大小画面中间会误跳出“16:9”等视频比例黑框的干扰问题。
+  Fixed an issue where resizing the window while browsing posters or movie details erroneously popped up aspect ratio overlays (e.g. 16:9) in the center of the screen.
+- 精简电影卡片右键菜单 / Simplified Movie Poster Context Menu:
+  删除了右键菜单中多余且容易引起混淆的“标记已看”和“重置未看”选项。想要重新观看，直接右键点击“从头播放”，或在“继续观看”卡片上点击右上角的叉号移除即可。
+  Removed redundant and confusing "Mark as Watched" and "Mark as Unwatched" options from movie context menus. To reset progress, simply right-click "Play from Beginning" or click the dismiss button on the Continue Watching card.
+- 简化剧集海报集数显示 / Simplified TV Series Episode Count Badges:
+  单季剧集右上角角标由原本繁琐的“1 季 · 12 集”直接简化为清爽直观的“12 集”（英文显示为 12 Eps）。
+  Streamlined single-season TV badges from verbose "1 季 · 12 集" to clean "12 集" ("12 Eps"), keeping multi-season formats clear.
+
+### 2. 系统级稳定性修复 [通用] / System Stability Fixes [Standard]
+- 解决全屏切换导致系统卡顿甚至注销闪退的严重缺陷 / Resolved Fullscreen Freeze & WindowServer Logout Crash:
+  彻底修复在频繁进入/退出全屏、多显示器切换或隔空播放时，因画面渲染与系统动画冲突导致整个 Mac 界面卡死、鼠标转彩虹圈甚至直接退回系统登录界面的严重稳定性问题。
+  Completely resolved a critical bug where rapid fullscreen transitions, multi-display switching, or AirPlay caused rendering conflicts with macOS system animations, leading to system hangs, spinning beachballs, or abrupt logouts back to the lock screen.
 
 ---
 
@@ -44,16 +77,16 @@ SilkPlayer 2.1.0 is a major UX and architectural release. It completely refactor
 
 - 操作系统 / OS: macOS 14.0 (Sonoma) 或更高版本 / macOS 14.0 (Sonoma) or later
 - 芯片架构 / Architecture: Universal 通用二进制（原生支持 Apple Silicon 与 Intel 64 位芯片）/ Universal Binary (Apple Silicon & Intel 64-bit)
-- 图形显示 / Graphics: 支持 Metal 硬件加速与 HDR / EDR 显示 / Metal hardware acceleration & HDR / EDR display supported
+- 图形要求 / Graphics: 支持 Metal 硬件加速与 HDR 显示输出 / Metal hardware acceleration & HDR display supported
 
 ---
 
 ## 安装方式 / Installation
 
 1. 下载并打开 `SilkPlayer-2.1.0-universal.dmg`；
-2. 将 `SilkPlayer.app` 拖拽至 `Applications` 文件夹；
-3. 如遇首次打开系统安全提示，请前往「系统设置 → 隐私与安全性」点击「仍要打开」。
+2. 将 `SilkPlayer.app` 拖入 `Applications`（应用程序）文件夹；
+3. 首次打开如遇系统安全提示，请前往「系统设置 → 隐私与安全性」点击「仍要打开」。
 
 1. Download and open `SilkPlayer-2.1.0-universal.dmg`;
 2. Drag `SilkPlayer.app` into the `Applications` folder;
-3. If prompted by macOS Gatekeeper, navigate to "System Settings → Privacy & Security" and click "Open Anyway".
+3. If prompted by macOS Gatekeeper on first launch, navigate to "System Settings → Privacy & Security" and click "Open Anyway".
