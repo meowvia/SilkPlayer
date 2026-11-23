@@ -48,6 +48,8 @@
 | 提案 035 | 播放列表侧边抽屉拉手微质感重构（解决小屏/非整数缩放下高反差白斑，融入液态毛玻璃与悬浮动态呼吸态） (Playlist Drawer Handle Visual Refinement & Fractional Scaling Protection) | 已实施 (交付归档) | **2.1.0** |
 | 提案 036 | 基于 TMDB 元数据的剧集连载进度与追剧缺集提醒雷达 (TV Series Episode Tracker & Missing Episodes Radar) | 需求定稿 (方案就绪) | **后续排期 (2.2.0)** |
 | 提案 037 | 全屏播放列表胶囊悬停自动呼出与离场收回机制 (Fullscreen Playlist Drawer Handle-Hover Auto-Expand & Boundary Auto-Collapse) | 需求定稿 (方案就绪) | **2.2.0** |
+| 提案 038 | 网络挂载卷宗与流媒体 I/O 8 秒熔断看门狗与超时自愈治理 (Network Volume & Stream I/O 8s Watchdog Timeout & Anti-Hang Hardening) | 需求定稿 (方案就绪) | **2.2.0** |
+| 提案 039 | 原生 WebDAV 协议网络存储源挂载与媒体点播流式直读 (Native WebDAV Network Share & Direct Streaming VOD Pipeline) | 需求定稿 (方案就绪) | **2.2.0** |
 
 
 ---
@@ -1354,6 +1356,54 @@
 
 ### 3. 当前状态
 - 需求定稿，架构与交互方案已对齐，正式归档并排期于 **2.2.0** 集中实施落地。
+
+---
+
+## 提案 038: 网络挂载卷宗与流媒体 I/O 8 秒熔断看门狗与超时自愈治理 (Network Volume & Stream I/O 8s Watchdog Timeout & Anti-Hang Hardening) [需求定稿 · 方案就绪]
+
+### 1. 核心背景与潜在痛点
+1. **网络挂载卷宗假死时的无限等待**：
+   - 现行 `SilkPlayerEngine.openAsync` 虽已实现后台派发以避免主线程 UI 冻结，但若用户通过第三方挂载工具（如 FUSE、网盘虚拟卷、非 Soft Mount 共享）访问远端文件，在突发网络中断时底层的 POSIX `open/read` 容易陷入内核态长时等待；
+   - 播放器当前缺乏前端看门狗超时机制，会导致界面长时间停留在 `Loading...` 状态，无法主动失败或重置。
+2. **FFmpeg 网络字典参数缺省**：
+   - `SilkDemuxer.open` 调用 `avformat_open_input` 时传入的 `options` 为 `nil`，未注入 `rw_timeout`，对网络流的探测完全受制于操作系统的长 TCP 超时。
+
+### 2. 优化方案与架构设计
+1. **8 秒打开看门狗（Open Watchdog Task）**：
+   - 在 `openAsync` 启动时并行开启一个 8.0 秒的轻量看门狗 Task；
+   - 若 8 秒内 `demuxer.open` 仍未返回，看门狗自动介入，将 `abortFlag.pointee = 1` 强制中断底层 FFmpeg 解复用探测；
+   - 主线程优雅捕获超时状态，将播放状态转换为 `.error`，并在 HUD 给出明确、克制的提示：“网络媒体读取超时，请检查连接”。
+2. **FFmpeg 网络选项字典补齐**：
+   - 针对非普通本地文件的网络路径或挂载卷，构建 `AVDictionary` 显式注入：
+     - `rw_timeout = 8000000`（8 秒读写超时，单位微秒）；
+     - `stimeout = 8000000`（Socket 连接超时）；
+   - 彻底消灭网络突发假死引发的后台线程泄漏与死锁。
+
+### 3. 当前状态
+- 需求定稿，排期于 **2.2.0** 随核心管线一并实施交付。
+
+---
+
+## 提案 039: 原生 WebDAV 协议网络存储源挂载与媒体点播流式直读 (Native WebDAV Network Share & Direct Streaming VOD Pipeline) [需求定稿 · 方案就绪]
+
+### 1. 核心定位与业务边界
+1. **产品定位**：
+   - 作为商业化 Pro 网络生态的重要拼图，与现行 SMB 2/3 并列构成局域网与广域网的高清媒体串流双轨；
+   - 专门对接 NAS WebDAV 服务、自建 AList 聚合网盘等高频点播场景。
+2. **严格收敛功能边界（只做只读点播流，坚决不做云盘管理器）**：
+   - **核心范围**：HTTP/HTTPS 握手鉴权（Basic/Digest）、`PROPFIND` 目录树解析与视频文件过滤、基于 HTTP `Range: bytes=start-end` 的高码率分片并发拉取与随意时间点 Seek、凭据安全存入 macOS Keychain；
+   - **红线排除**：坚决不碰文件上传、重命名、删除、转码等非播放业务，保持播放器内核极致轻盈与专注。
+
+### 2. 技术设计与验证路径
+1. **通信与解码管线**：
+   - 目录与鉴权层使用 Swift 原生 `URLSession` 处理 `PROPFIND` 与 XML 解析；
+   - 播放流直接交由 `PlayerCore` 结合 FFmpeg 原生 HTTP Range 驱动流式拉取，与现有音画同步及 Metal 渲染管线无缝复用；
+2. **家庭网络真机测试基准**：
+   - 利用现有 VM 102 (Debian) Docker 部署轻量 AList / WebDAV 容器，在 2.5G 局域网内对 4K REMUX 原盘的高频 Seek、中文路径编码及断网自愈展开 100% 真实闭环压测。
+
+### 3. 当前状态
+- 需求架构定稿归档，正式排期于 **2.2.0** 作为网络拓展核心特性落地。
+
 
 
 
