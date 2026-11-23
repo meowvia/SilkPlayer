@@ -180,9 +180,10 @@ final class MusicModeTests: XCTestCase {
 
     @MainActor
     func testMusicModeIsolatesVideoHUDFeatures() {
-        // Resize dimension/aspect-ratio HUD stays enabled in Video Mode and disabled in Music Mode
+        // Resize dimension/aspect-ratio HUD stays enabled in Video Mode and disabled in Music Mode / Media Library Mode
         XCTAssertFalse(PlayerWindowDelegate.shouldShowResizeDimensionHUD(isAudioOnly: true))
         XCTAssertTrue(PlayerWindowDelegate.shouldShowResizeDimensionHUD(isAudioOnly: false))
+        XCTAssertFalse(PlayerWindowDelegate.shouldShowResizeDimensionHUD(isAudioOnly: false, isMediaLibrary: true))
 
         // Video scrubber defaults stay unchanged (hover preview enabled, default height); Music Mode disables preview cleanly
         let player = PlayerCore()

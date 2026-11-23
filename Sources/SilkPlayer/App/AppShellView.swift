@@ -995,10 +995,16 @@ public struct AppShellView: View {
             session.window = window
             if session.windowDelegate == nil {
                 let delegate = PlayerWindowDelegate(session: session, player: player)
+                delegate.isMediaLibraryActiveProvider = { [self] in
+                    !self.isPlaying && self.isProLibraryActive
+                }
                 session.windowDelegate = delegate
                 window.delegate = delegate
             } else if window.delegate == nil {
                 window.delegate = session.windowDelegate
+            }
+            (window.delegate as? PlayerWindowDelegate)?.isMediaLibraryActiveProvider = { [self] in
+                !self.isPlaying && self.isProLibraryActive
             }
             if let zoomBtn = window.standardWindowButton(.zoomButton),
                let delegate = window.delegate as? PlayerWindowDelegate {

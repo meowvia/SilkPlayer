@@ -941,6 +941,7 @@ private enum PreFullScreenState: Equatable {
 public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
     public weak var session: PlayerWindowSession?
     public weak var player: (any PlayerControllable)?
+    public var isMediaLibraryActiveProvider: (@MainActor () -> Bool)?
     public private(set) var currentInteractiveMode: WindowInteractiveMode = .normal
     public private(set) var isMaximizingOrRestoring: Bool = false
     private var isAdjustingWindowFrame: Bool = false
@@ -1011,13 +1012,23 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
         return hud
     }
 
-    public static func shouldShowResizeDimensionHUD(isAudioOnly: Bool) -> Bool {
-        !isAudioOnly
+    public static func shouldShowResizeDimensionHUD(isAudioOnly: Bool, isMediaLibrary: Bool = false) -> Bool {
+        !isAudioOnly && !isMediaLibrary
+    }
+
+    @MainActor
+    private var isMediaLibraryMode: Bool {
+        if let provider = isMediaLibraryActiveProvider {
+            return provider()
+        }
+        let isSecondary = session?.isSecondaryWindow ?? false
+        let isPlaying = player?.isPlaying ?? false
+        return !isSecondary && !isPlaying && SilkProLicenseEngine.shared.isProActive && AppSettings.shared.proLibraryHomeEnabled && !SilkMediaLibraryEngine.shared.sources.isEmpty
     }
 
     @MainActor
     private func updateResizeHUD(window: NSWindow, resolvedSize: NSSize) {
-        guard Self.shouldShowResizeDimensionHUD(isAudioOnly: self.player?.isAudioOnly ?? false),
+        guard Self.shouldShowResizeDimensionHUD(isAudioOnly: self.player?.isAudioOnly ?? false, isMediaLibrary: isMediaLibraryMode),
               !window.styleMask.contains(.fullScreen),
               !isFullscreenTransitioning else {
             resizeHUDView?.hideImmediately()
@@ -1135,7 +1146,7 @@ public final class PlayerWindowDelegate: NSObject, NSWindowDelegate {
               !isFullscreenTransitioning else { return }
         musicLiveResizeStartedCollapsed = AppSettings.shared.isMusicQueueCollapsed
         musicLiveResizeDidToggleCollapse = false
-        guard Self.shouldShowResizeDimensionHUD(isAudioOnly: player?.isAudioOnly ?? false) else {
+        guard Self.shouldShowResizeDimensionHUD(isAudioOnly: player?.isAudioOnly ?? false, isMediaLibrary: isMediaLibraryMode) else {
             resizeHUDView?.hideImmediately()
             return
         }

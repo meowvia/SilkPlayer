@@ -22,6 +22,10 @@ SilkPlayer 2.1.0 is a major UX and architectural release. It completely refactor
   针对非整数倍 Retina 缩放下细微描边与实心箭头混合产生高反差粗糙白斑的视觉割裂，静默状态下透明度大幅收敛至微弱漫反射态（描边 0.22 / 箭头 0.26），并注入 0.18 微弱吸光底色阻断像素白光扩散；增加灵敏悬停呼吸反馈，光标划入时平滑过渡至 0.65 描边与 0.75 箭头，完美融入整套液态毛玻璃视觉语言。
   Refined the playlist drawer edge handle to eliminate harsh white haloing on fractional Retina displays. Default idle opacity now features a subtle ambient reflection (stroke 0.22, arrow 0.26) paired with a 0.18 anti-halation dark backing, smoothly blooming into a 0.65/0.75 responsive hover feedback that integrates seamlessly into the ultra-thin material aesthetic.
 
+- 媒体库窗口拉伸尺寸 HUD 智能抑制与右键菜单极简收拢 / Media Library Resize HUD Suppression & Context Menu Simplification:
+  在媒体库海报墙与影视详情页浏览状态下拖拽调整窗口大小时，智能屏蔽视频高宽比 HUD（如 16:9 / 2.39:1），保持纯净的无遮挡目录式自适应缩放浏览体验，仅在实际视频播放态下恢复尺寸指示；遵循奥卡姆剃刀原则彻底剔除电影卡片右键菜单中歧义冗余的「重置为未观看」选项，仅保留清晰确切的「标记为已看完」，进度归零与从头播放完全收拢至顶部继续观看区域卡片右上角 `X` 移除动作与右键「从头播放」，实现交互与视觉语言的高度统一。
+  Suppressed the video aspect-ratio dimension HUD overlay when resizing windows in media library and detail browsing states, delivering a distraction-free grid browsing experience. Streamlined movie poster context menus by pruning the redundant "Mark as Unwatched" option and retaining strictly the unambiguous "Mark as Watched" action, seamlessly aligning playhead reset behaviors with the Continue Watching shelf dismiss controls and dedicated "Play from Beginning" commands.
+
 - 全屏转场生命周期与渲染提交流程治理 / Fullscreen Exit Lifecycle & Presentation Lockout:
   彻底移除退出全屏阶段针对窗口坐标的同步非法改帧（`setFrame`），几何反算完全交由 AppKit 原生异步接管；在 Metal 渲染视图中引入硬件提交流程互斥锁（`isTransitioningLock`），转场期间安全短路 `layer.nextDrawable()` 提交，结合防重入互斥与 3 秒看门狗复位，根除极端多显示器与高频切换环境下可能引发的系统显示服务（WindowServer）死锁卡顿。
   Removed synchronous window frame modifications during fullscreen exit transitions, returning geometry restoration to AppKit's asynchronous lifecycle. Introduced hardware presentation lockouts (`isTransitioningLock`) in the Metal render view to short-circuit frame delivery during Space transitions, eliminating WindowServer watchdog deadlocks under multi-display configurations.
