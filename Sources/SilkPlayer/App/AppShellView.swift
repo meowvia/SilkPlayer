@@ -343,7 +343,11 @@ public struct AppShellView: View {
             SilkProIconManager.syncApplicationIcon(isProActive: licenseEngine.isProActive)
             registerSession()
             setupHooks()
-            checkPendingFiles()
+            if case .playing(let url) = navigationModel.state, player.currentFilePath == nil {
+                startPlayback(path: url.path, startTime: AppSettings.shared.getSavedPosition(for: url.path), autoPlay: true)
+            } else {
+                checkPendingFiles()
+            }
             if !isSecondaryWindow && licenseEngine.isProActive {
                 Task { @MainActor in
                     if settings.proAutoScanOnLaunch {
@@ -484,8 +488,12 @@ public struct AppShellView: View {
         let url = URL(fileURLWithPath: path)
         let cat = PlaylistManager.category(for: url)
         playlistManager.applyPlaybackCategory(cat)
-        withAnimation(appSpringAnimation) {
+        if !isPlaying {
             navigationModel.state = .playing(url: url)
+        } else {
+            withAnimation(appSpringAnimation) {
+                navigationModel.state = .playing(url: url)
+            }
         }
         player.loadMediaWithCrossfade(path: path, startTime: startTime, autoPlay: autoPlay)
     }
@@ -799,64 +807,60 @@ public struct AppShellView: View {
     }
 
     public func openExternalPaths(_ paths: [String]) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
-            guard !expanded.isEmpty else { return }
+        let expanded = PlayerWindowManager.expandFilesAndDirectories(paths)
+        guard !expanded.isEmpty else { return }
 
-            var newItems: [PlaylistItem] = []
-            for p in expanded {
-                let url = URL(fileURLWithPath: p)
-                let title = url.deletingPathExtension().lastPathComponent
-                let size = (try? FileManager.default.attributesOfItem(atPath: p)[.size] as? Int64) ?? 0
-                let item = MediaItem(path: p, title: title, fileSize: size)
-                newItems.append(PlaylistItem(from: item))
+        var newItems: [PlaylistItem] = []
+        for p in expanded {
+            let url = URL(fileURLWithPath: p)
+            let title = url.deletingPathExtension().lastPathComponent
+            let size = (try? FileManager.default.attributesOfItem(atPath: p)[.size] as? Int64) ?? 0
+            let item = MediaItem(path: p, title: title, fileSize: size)
+            newItems.append(PlaylistItem(from: item))
+        }
+
+        guard !newItems.isEmpty else { return }
+
+        self.inFlightResolveTask?.cancel()
+        self.inFlightResolveTask = nil
+        self.resolvingTargetPath = nil
+        self.playRequestGeneration &+= 1
+
+        let isExternalNonLibrary = !self.isSecondaryWindow
+            && self.isProLibraryActive
+            && !expanded.allSatisfy { p in self.libraryEngine.items.contains(where: { $0.path == p }) }
+
+        if isExternalNonLibrary {
+            if self.isPlaying, let currentPath = self.player.currentFilePath, self.player.currentTime > 0 {
+                AppSettings.shared.recordPlaybackProgress(
+                    path: currentPath,
+                    current: self.player.currentTime,
+                    duration: self.player.duration,
+                    isPlaying: false,
+                    force: true
+                )
             }
-
-            guard !newItems.isEmpty else { return }
-
-            Task { @MainActor in
-                self.inFlightResolveTask?.cancel()
-                self.inFlightResolveTask = nil
-                self.resolvingTargetPath = nil
-                self.playRequestGeneration &+= 1
-
-                let isExternalNonLibrary = !self.isSecondaryWindow
-                    && self.isProLibraryActive
-                    && !expanded.allSatisfy { p in self.libraryEngine.items.contains(where: { $0.path == p }) }
-
-                if isExternalNonLibrary {
-                    if self.isPlaying, let currentPath = self.player.currentFilePath, self.player.currentTime > 0 {
-                        AppSettings.shared.recordPlaybackProgress(
-                            path: currentPath,
-                            current: self.player.currentTime,
-                            duration: self.player.duration,
-                            isPlaying: false,
-                            force: true
-                        )
-                    }
-                    if !self.isPlayingEphemeralExternalMedia {
-                        self.interruptedLibraryDetailPath = self.libraryEngine.activeDetailPath ?? self.activeLibraryRecordPath
-                    }
-                    self.isPlayingEphemeralExternalMedia = true
-                    self.libraryEngine.activeDetailPath = nil
-                    self.playlistManager.isPersistenceEnabled = false
-                    self.playlistManager.setPlaylist(playlistItems: newItems, startingIndex: 0)
-                    if let target = newItems.first {
-                        self.playPlaylistItem(target)
-                    }
-                } else {
-                    if !self.isSecondaryWindow {
-                        self.playlistManager.isPersistenceEnabled = true
-                    }
-                    let wasEmpty = self.playlistManager.isEmpty
-                    self.playlistManager.appendItems(newItems)
-                    let itemToPlay = (wasEmpty && self.playlistManager.playbackMode == .shuffle)
-                        ? (self.playlistManager.currentItem ?? newItems.first)
-                        : newItems.first
-                    if let target = itemToPlay {
-                        self.playPlaylistItem(target)
-                    }
-                }
+            if !self.isPlayingEphemeralExternalMedia {
+                self.interruptedLibraryDetailPath = self.libraryEngine.activeDetailPath ?? self.activeLibraryRecordPath
+            }
+            self.isPlayingEphemeralExternalMedia = true
+            self.libraryEngine.activeDetailPath = nil
+            self.playlistManager.isPersistenceEnabled = false
+            self.playlistManager.setPlaylist(playlistItems: newItems, startingIndex: 0)
+            if let target = newItems.first {
+                self.playPlaylistItem(target)
+            }
+        } else {
+            if !self.isSecondaryWindow {
+                self.playlistManager.isPersistenceEnabled = true
+            }
+            let wasEmpty = self.playlistManager.isEmpty
+            self.playlistManager.appendItems(newItems)
+            let itemToPlay = (wasEmpty && self.playlistManager.playbackMode == .shuffle)
+                ? (self.playlistManager.currentItem ?? newItems.first)
+                : newItems.first
+            if let target = itemToPlay {
+                self.playPlaylistItem(target)
             }
         }
     }

@@ -467,7 +467,9 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
 
         // 3. Audio & Subtitles
         let storedMaxVol = UserDefaults.standard.object(forKey: "maxVolumeLimit") as? Double ?? 200.0
-        self.maxVolumeLimit = (storedMaxVol <= 150.0 && storedMaxVol > 0.0) ? 200.0 : storedMaxVol
+        let effectiveMaxVol = (storedMaxVol <= 150.0 && storedMaxVol > 0.0) ? 200.0 : storedMaxVol
+        self.maxVolumeLimit = effectiveMaxVol
+        UserDefaults.standard.set(effectiveMaxVol, forKey: "maxVolumeLimit")
         self.rememberVolume = UserDefaults.standard.object(forKey: "rememberVolume") as? Bool ?? true
         self.savedVolume = UserDefaults.standard.object(forKey: "savedVolume") as? Double ?? 100.0
         self.subAutoMode = UserDefaults.standard.string(forKey: "subAutoMode") ?? "fuzzy"

@@ -5,7 +5,9 @@ import SwiftUI
 public final class AppNavigationModel {
     public static let shared = AppNavigationModel()
 
-    public init() {}
+    public init(initialState: PlaybackState = .idle) {
+        self.state = initialState
+    }
 
     public enum PlaybackState: Equatable {
         case idle

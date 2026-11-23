@@ -9,7 +9,7 @@ public struct SilkVerticalVolumeBarView: View {
     @State private var isHovered: Bool = false
     @State private var isDragging: Bool = false
 
-    private let maxLimit: Double = AppSettings.shared.maxVolumeLimit
+    private var maxLimit: Double { AppSettings.shared.maxVolumeLimit }
 
     public init(player: PlayerCore) {
         self.player = player
