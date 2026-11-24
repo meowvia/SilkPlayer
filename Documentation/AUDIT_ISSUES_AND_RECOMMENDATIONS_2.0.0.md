@@ -33,8 +33,8 @@
 | **关联修复** | `SilkPlayer/Sources/SilkCoreKitMock/SilkCoreKitMock.swift` | 补齐 `updateRecordMetadata` 接口定义，消除 CI 模拟套件编译对齐问题。 | **已闭环核销** |
 | **关联修复** | `SilkPlayer/Tests/SilkPlayerTests/PlaylistTests.swift` | 断言窗口高度由 490 更新对齐为当前无滚动条标准的 460，确保测试环境与 UI 现状 100% 对齐。 | **已闭环核销** |
 | **关联修复** | `SilkPlayer/Packages/SilkCoreKit.xcframework` | 双架构（`arm64` + `x86_64`）全量编译并通过，已同步至前端 Packages 目录。 | **已闭环核销** |
-| **关联修复** | `SilkPlayer/Sources/SilkPlayer/Settings/SilkSettingsView.swift` | 修复关于面板「产品官网」跳转至 `https://silkplayer.1999909.xyz`；并在核心规格栏增加「商业授权咨询」直链邮箱 `support@1999909.xyz`。 | **已闭环核销** |
-| **许可完善** | `THIRD_PARTY_LICENSES.txt` / `SILKCOREKIT_LICENSE.md` / `THIRD_PARTY.md` | 在应用内许可文稿、双端协议与合规文档中全量同步官方邮箱 `support@1999909.xyz`，明确声明闭源核心 `SilkCoreKit` 支持对外商业 OEM 授权与企业定制合作。 | **已闭环核销** |
+| **关联修复** | `SilkPlayer/Sources/SilkPlayer/Settings/SilkSettingsView.swift` | 修复关于面板「产品官网」跳转至 `https://silkplayer.com`；并在核心规格栏增加「商业授权咨询」直链邮箱 `support@silkplayer.com`。 | **已闭环核销** |
+| **许可完善** | `THIRD_PARTY_LICENSES.txt` / `SILKCOREKIT_LICENSE.md` / `THIRD_PARTY.md` | 在应用内许可文稿、双端协议与合规文档中全量同步官方邮箱 `support@silkplayer.com`，明确声明闭源核心 `SilkCoreKit` 支持对外商业 OEM 授权与企业定制合作。 | **已闭环核销** |
 
 ---
 

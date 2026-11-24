@@ -36,7 +36,7 @@ brew upgrade --cask silkplayer
 - **Application Name**: `SilkPlayer`
 - **Platform**: `Mac` (macOS 14.0+)
 - **License**: `Open Source / Freemium` (Frontend LGPL-3.0)
-- **Official Website**: `https://silkplayer.1999909.xyz/`
+- **Official Website**: `https://silkplayer.com/`
 - **Source Code URL**: `https://github.com/meowvia/SilkPlayer`
 - **Short Description (一句话简介)**:  
   `A fast, native macOS media player built with Swift & Metal. Zero telemetry, pure local playback, and full Dolby Vision support.`
@@ -66,17 +66,17 @@ brew upgrade --cask silkplayer
 可向 [jaywcjlove/awesome-mac](https://github.com/jaywcjlove/awesome-mac) 的 `README-zh.md` 与 `README.md` 中的「音频与视频 / Audio & Video」分类提交 PR：
 
 ```markdown
-- [SilkPlayer](https://silkplayer.1999909.xyz/) - 专为 macOS 开发的轻量原生多媒体播放器，支持 4K/8K 硬件解码、杜比视界色彩映射与局域网海报墙。[![Open-Source Software](https://jaywcjlove.github.io/sb/ico/min-oss.svg)](https://github.com/meowvia/SilkPlayer)
+- [SilkPlayer](https://silkplayer.com/) - 专为 macOS 开发的轻量原生多媒体播放器，支持 4K/8K 硬件解码、杜比视界色彩映射与局域网海报墙。[![Open-Source Software](https://jaywcjlove.github.io/sb/ico/min-oss.svg)](https://github.com/meowvia/SilkPlayer)
 ```
 英文版：
 ```markdown
-- [SilkPlayer](https://silkplayer.1999909.xyz/) - Lightweight native macOS media player built with Swift & Metal, featuring 4K/8K hardware decoding, Dolby Vision, and zero telemetry. [![Open-Source Software](https://jaywcjlove.github.io/sb/ico/min-oss.svg)](https://github.com/meowvia/SilkPlayer)
+- [SilkPlayer](https://silkplayer.com/) - Lightweight native macOS media player built with Swift & Metal, featuring 4K/8K hardware decoding, Dolby Vision, and zero telemetry. [![Open-Source Software](https://jaywcjlove.github.io/sb/ico/min-oss.svg)](https://github.com/meowvia/SilkPlayer)
 ```
 
 ---
 
 ## 四、 官网 SEO 基础设施交付状态
 
-- **搜索引擎入口**: 已部署标准 `robots.txt` 与 `sitemap.xml` 至 `https://silkplayer.1999909.xyz/`
+- **搜索引擎入口**: 已部署标准 `robots.txt` 与 `sitemap.xml` 至 `https://silkplayer.com/`
 - **结构化数据 (JSON-LD)**: 注入 `schema.org/SoftwareApplication` 实体标记
 - **国际化与社交卡片**: 完整注入 Open Graph 与 Twitter Card 大图卡片，增强被社交网络爬取时的展示效果。

@@ -31,7 +31,7 @@
 - iCloud 进度接力：跨 Mac 设备自动同步观影断点与剧集已看标记（支持设置内按需关闭）。
 
 ## 4. 官方网站与全球加速 CDN 交付
-- 生产服务入口：`https://silkplayer.1999909.xyz`（Cloudflare Pages，Zone ID: `ac360499b8663998691e9c949e56c1d9`）
+- 生产服务入口：`https://silkplayer.com`（Cloudflare Pages，Zone ID: `ac360499b8663998691e9c949e56c1d9`）
 - 本地工作目录：`/Volumes/2T/Projects/SilkPlayer/Website`
 - 高清展示图床：全部 18 张高保真功能展示截图（`zh_01.png` - `zh_18.png`）部署于 Cloudflare 边缘 CDN（`/assets/screenshots/`），国内直连秒级加载。
 - 早鸟价标签与视觉：

@@ -23,7 +23,7 @@
   - 历史 `1.x` 开源主干保留于 `main` 分支；`2.x` 系列在独立发布分支（如 `release/2.0.0`）演进，严禁将 `SilkCoreKit` 闭源源码提交至公开仓库。
 
 ### 1.4 官网克制原则与极简更新说明规范 (Restrained Release Notes Standard)
-- **官网不堆砌版本日志**：官方网站（`silkplayer.1999909.xyz`）定位为稳定的成品展示、高速下载与购买转化主入口；日常版本迭代仅通过 `sync_release.sh` 静默替换安装包并自动更新按钮版本号，不在官网罗列琐碎更新记录（仅在跨代大功能落地时调整官网版块）。
+- **官网不堆砌版本日志**：官方网站（`silkplayer.com`）定位为稳定的成品展示、高速下载与购买转化主入口；日常版本迭代仅通过 `sync_release.sh` 静默替换安装包并自动更新按钮版本号，不在官网罗列琐碎更新记录（仅在跨代大功能落地时调整官网版块）。
 - **更新说明极简克制、只写结果**：
   - 自 `2.0.0` 商业化起，GitHub Releases 与 `RELEASE_NOTES` 大幅缩减篇幅，**严禁写成开发工作流水账，严禁披露 `SilkCoreKit` 闭源商业模块的底层实现细节、参数策略或内部重构过程**；
   - 摒弃生硬凑字数的六宫格固定模板，全文聚焦用户可直观感知的结果（日常维护版通常控制在 2～5 行精炼短句，底层调优与常规修补合并为一句话概括）；
@@ -109,7 +109,7 @@ cd /Volumes/2T/Projects/SilkPlayer/SilkPlayer
 1. 对 DMG 执行 `hdiutil verify` 完整性校验，覆盖更新 `Website/downloads/SilkPlayer-{universal,arm64,x86_64}.dmg`；
 2. 自动同步更新 `Website/functions/api/download.js` 与 `version.js` 中的 `LOCAL_EMBEDDED_TAG` 及静态资源缓存时间戳；
 3. 自动执行 `wrangler pages deploy` 与 Cloudflare 全局缓存刷新；
-4. 自动拉取线上 `https://silkplayer.1999909.xyz/api/version` 与 `/api/download`，实测比对版本号、`Content-Length` 与完整 **SHA-256 哈希 100% 一致**后才允许汇报完成。
+4. 自动拉取线上 `https://silkplayer.com/api/version` 与 `/api/download`，实测比对版本号、`Content-Length` 与完整 **SHA-256 哈希 100% 一致**后才允许汇报完成。
 
 ---
 

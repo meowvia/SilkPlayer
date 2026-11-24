@@ -627,7 +627,7 @@ public enum SilkLicenseVerificationError: Error, Sendable, Equatable {
 public final class SilkProLicenseEngine: ObservableObject {
     public static let shared = SilkProLicenseEngine()
     public static let defaultPublicKeyBase64 = ""
-    public static let defaultEndpointBase = "https://license.1999909.xyz/v1/silkplayer/licenses"
+    public static let defaultEndpointBase = "https://silkplayer.com/api/license"
 
     @Published public private(set) var status: SilkProLicenseStatus = .unlicensed
     @Published public private(set) var isProcessing: Bool = false

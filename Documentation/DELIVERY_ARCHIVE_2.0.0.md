@@ -65,7 +65,7 @@ SilkPlayer 2.0.0 确立了统一版本号、双轨制能力交付的架构基准
   - 继续观看微交互联动：日常态悬停在单卡右上角显示微透 `✕` 按钮一键移出续播，批量管理模式下显示选择勾选框支持多选；
   - 批量管理运维扩展与安全防呆：底部浮动条补齐「重置进度」、「移出媒体库（仅删索引）」与「删除源文件…（警示红 + 废纸篓二次确认弹窗）」；
   - 双击红绿灯栏窗口最大化与恢复：顶栏拖拽基底注入双击事件触发 `window?.zoom(nil)`；
-  - Cloudflare Pages 边缘网关集成：生产端点 `https://silkplayer.1999909.xyz/api/tmdb` 与 `/api/poster` 免代理直连反代与 30 天边缘强缓存。
+  - Cloudflare Pages 边缘网关集成：生产端点 `https://silkplayer.com/api/tmdb` 与 `/api/poster` 免代理直连反代与 30 天边缘强缓存。
 
 ### 2.7 沉浸式影片详情页、微型快播重构、iCloud 跨设备同步控制与偏好滚动修复
 - **实现模块**: `SilkCoreKit/Pro/SilkMediaDetailView.swift`、`SilkCoreKit/Pro/SilkProLibraryView.swift`、`SilkCoreKit/Pro/SilkCloudSyncService.swift`、`SilkPlayer/Settings/SilkSettingsView.swift`、`SilkPlayer/Settings/AppSettings.swift`；

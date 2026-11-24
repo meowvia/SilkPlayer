@@ -1173,7 +1173,7 @@ public struct SilkSettingsView: View {
                             Button {
                                 if let url = licenseEngine.purchaseURL {
                                     NSWorkspace.shared.open(url)
-                                } else if let websiteURL = URL(string: "https://silkplayer.1999909.xyz") {
+                                } else if let websiteURL = URL(string: "https://silkplayer.com") {
                                     NSWorkspace.shared.open(websiteURL)
                                 } else {
                                     showPurchasePendingAlert = true
@@ -1278,7 +1278,7 @@ public struct SilkSettingsView: View {
                 .focusEffectDisabled()
 
                 Button {
-                    if let url = URL(string: "https://silkplayer.1999909.xyz") {
+                    if let url = URL(string: "https://silkplayer.com") {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {

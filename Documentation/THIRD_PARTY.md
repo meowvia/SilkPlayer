@@ -11,7 +11,7 @@ SilkPlayer 遵循严格的开源合规标准与开放核心（Open-Core）架构
 | **FFmpeg** | **6.1.2** ("Von Neumann") | **GNU LGPL-3.0**<br>(配置参数 `--disable-gpl --disable-nonfree --enable-version3`) | **动态链接 (Dynamic Framework)**<br>`Libavformat.framework`<br>`Libavcodec.framework`<br>`Libavutil.framework`<br>`Libswresample.framework`<br>`Libswscale.framework`<br>位于 `Contents/Frameworks/` | **必须署名**<br>保留 FFmpeg 开发者版权声明与 LGPL 文本 | **必须提供**<br>提供构建所用源码版本、补丁及完整编译构建脚本，保证用户具备替换库与重链接权利 | 媒体解封装 (Demuxing)、音频解码、备用软件视频解码与时间戳处理 |
 | **dav1d** | **1.2.1** (API 6.8.0) | **BSD-2-Clause**<br>(VideoLAN / Two Orioles) | **静态编译嵌入**<br>(静态库 `libdav1d.a` 预编译后嵌入 `Libavcodec.framework`) | **必须署名**<br>分发物中必须包含原始版权声明与免责条款 | **无强制提供要求**<br>(宽松许可证，允许专有或二次分发；我们主动公开构建脚本与源码指引) | 极速汇编优化的 AV1 视频高效解码器 |
 | **macOS SDK 系统库** | **macOS 14.0+** | Apple Proprietary / System EULA / BSD | **系统动态链接**<br>`/System/Library/Frameworks/*`<br>`/usr/lib/*` | **遵循商标使用准则**<br>注明 Apple 相关注册商标免责声明 | **不适用**<br>(操作系统内置标准系统运行时与专有驱动) | 原生 UI (SwiftUI/AppKit)、硬件硬解 (VideoToolbox)、音频输出 (AudioToolbox)、GPU 表面渲染 (Metal) |
-| **SilkCoreKit** | **主版本跟随** | **商业专有许可证 (Proprietary)**<br>(独立闭源内核组件，支持商业/OEM授权) | **二进制模块解耦**<br>(Swift Package 二进制 Target，无 GPL 依赖) | **专有版权归属**<br>Copyright © 2026 SilkPlayer | **不公开源码**<br>(自研专有核心算法，与 LGPL 前端物理隔离；商业授权洽 `support@1999909.xyz`) | 专有 Metal 色彩着色器管线、局域网 SMB/NFS 索引引擎、就地激活引擎 |
+| **SilkCoreKit** | **主版本跟随** | **商业专有许可证 (Proprietary)**<br>(独立闭源内核组件，支持商业/OEM授权) | **二进制模块解耦**<br>(Swift Package 二进制 Target，无 GPL 依赖) | **专有版权归属**<br>Copyright © 2026 SilkPlayer | **不公开源码**<br>(自研专有核心算法，与 LGPL 前端物理隔离；商业授权洽 `support@silkplayer.com`) | 专有 Metal 色彩着色器管线、局域网 SMB/NFS 索引引擎、就地激活引擎 |
 
 ---
 
@@ -301,6 +301,6 @@ SilkPlayer 采用解耦的开放核心（Open-Core）架构，前端应用外壳
 - **授权形态**：支持以预编译静态/动态库、XCFramework 或源码定制形式嵌入商业软件；
 - **业务场景**：专业多媒体回放、广电与非编审片监看、企业音视频资产管理、嵌入式软硬件协同设备；
 - **商务与授权洽谈**：
-  - **官方商业授权邮箱**：`support@1999909.xyz`
-  - **产品官方网站**：`https://silkplayer.1999909.xyz`
+  - **官方商业授权邮箱**：`support@silkplayer.com`
+  - **产品官方网站**：`https://silkplayer.com`
 

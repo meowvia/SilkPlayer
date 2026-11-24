@@ -7,7 +7,7 @@ final class SilkUsageAnalytics {
     static let shared = SilkUsageAnalytics()
 
     // Deploy the companion Cloudflare Worker on this first-party hostname before release.
-    private let endpoint = URL(string: "https://analytics.silkplayer.1999909.xyz/v1/events")!
+    private let endpoint = URL(string: "https://analytics.silkplayer.com/v1/events")!
     private let installationIDKey = "silk.analytics.installationID"
     private let defaults = UserDefaults.standard
 
@@ -53,7 +53,7 @@ final class SilkUsageAnalytics {
     private func retryPendingDeletion() async {
         guard let identifier = defaults.string(forKey: installationIDKey),
               UUID(uuidString: identifier) != nil,
-              let baseURL = URL(string: "https://analytics.silkplayer.1999909.xyz/v1/install/"),
+              let baseURL = URL(string: "https://analytics.silkplayer.com/v1/install/"),
               let url = URL(string: identifier, relativeTo: baseURL)?.absoluteURL else {
             return
         }

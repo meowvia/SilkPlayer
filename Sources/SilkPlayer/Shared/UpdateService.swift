@@ -2,15 +2,15 @@ import Foundation
 import AppKit
 
 /// Centralized Update Service for SilkPlayer (Proposal 020).
-/// Prioritizes official Cloudflare Edge endpoints (`silkplayer.1999909.xyz`) for reliable
+/// Prioritizes official Cloudflare Edge endpoints (`silkplayer.com`) for reliable
 /// Mainland China connectivity, with automatic fallback to GitHub Releases.
 @MainActor
 @Observable
 public final class UpdateService {
     public static let shared = UpdateService()
 
-    public nonisolated static let officialVersionEndpoint = "https://silkplayer.1999909.xyz/api/version"
-    public nonisolated static let officialDownloadEndpoint = "https://silkplayer.1999909.xyz/api/download?arch=universal"
+    public nonisolated static let officialVersionEndpoint = "https://silkplayer.com/api/version"
+    public nonisolated static let officialDownloadEndpoint = "https://silkplayer.com/api/download?arch=universal"
     public nonisolated static let githubLatestAPIEndpoint = "https://api.github.com/repos/meowvia/SilkPlayer/releases/latest"
 
     public private(set) var isChecking: Bool = false

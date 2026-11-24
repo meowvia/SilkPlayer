@@ -17,7 +17,7 @@
   <a href="https://swift.org"><img src="https://img.shields.io/badge/Swift-6.0-F05138?style=flat-square&logo=swift" alt="Swift 6" /></a>
   <a href="scripts/run_tests.sh"><img src="https://img.shields.io/badge/测试-103%20项全部通过-brightgreen?style=flat-square" alt="自动化测试" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/许可证-LGPL--3.0-blue?style=flat-square" alt="许可证" /></a>
-  <a href="https://silkplayer.1999909.xyz"><img src="https://img.shields.io/badge/官网-silkplayer.1999909.xyz-2b231c?style=flat-square" alt="官方网站" /></a>
+  <a href="https://silkplayer.com"><img src="https://img.shields.io/badge/官网-silkplayer.com-2b231c?style=flat-square" alt="官方网站" /></a>
 </p>
 
 <br>
@@ -264,7 +264,7 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
 直接从官方全球网络高速下载最新通用安装镜像（满速秒下，无任何跳转与拦截）：  
 Download the latest universal disk image directly from our global network:
 
-* **通用安装镜像 / Universal DMG (Apple Silicon &amp; Intel)**: [SilkPlayer-2.0.0-universal.dmg](https://silkplayer.1999909.xyz/api/download)（安装包体积仅 22.8 MiB，精简轻巧 / 22.8 MiB, ultra-compact）
+* **通用安装镜像 / Universal DMG (Apple Silicon &amp; Intel)**: [SilkPlayer-universal.dmg](https://silkplayer.com/api/download)（安装包体积仅 22.8 MiB，精简轻巧 / 22.8 MiB, ultra-compact）
 
 亦可前往 / Alternatively download from [GitHub Releases](https://github.com/meowvia/SilkPlayer/releases/latest)。
 
