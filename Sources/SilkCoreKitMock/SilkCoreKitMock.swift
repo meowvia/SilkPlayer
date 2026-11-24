@@ -197,9 +197,12 @@ public final class SilkPlayerOptions: @unchecked Sendable {
 public struct SilkDoviInfo: Sendable {
     public let dv_profile: Int
     public let dv_level: Int
-    public init(dv_profile: Int, dv_level: Int = 0) {
+    public let dv_compatibility_id: Int
+
+    public init(dv_profile: Int, dv_level: Int = 0, dv_compatibility_id: Int = 0) {
         self.dv_profile = dv_profile
         self.dv_level = dv_level
+        self.dv_compatibility_id = dv_compatibility_id
     }
 }
 
@@ -212,6 +215,9 @@ public class SilkMediaTrack: NSObject, @unchecked Sendable, MediaPlayerTrack {
     public let rotation: Int
     public let dovi: SilkDoviInfo?
     public let isDoviProfile5: Bool
+    public let isDoviProfile84: Bool
+    public let isHLG: Bool
+    public let isFullRange: Bool
     public let formatDescription: CMFormatDescription?
     public let codecName: String
     public let isImageSubtitle: Bool
@@ -225,6 +231,9 @@ public class SilkMediaTrack: NSObject, @unchecked Sendable, MediaPlayerTrack {
         rotation: Int = 0,
         dovi: SilkDoviInfo? = nil,
         isDoviProfile5: Bool = false,
+        isDoviProfile84: Bool = false,
+        isHLG: Bool = false,
+        isFullRange: Bool = false,
         formatDescription: CMFormatDescription? = nil,
         codecName: String = "",
         isImageSubtitle: Bool = false
@@ -237,6 +246,9 @@ public class SilkMediaTrack: NSObject, @unchecked Sendable, MediaPlayerTrack {
         self.rotation = rotation
         self.dovi = dovi
         self.isDoviProfile5 = isDoviProfile5
+        self.isDoviProfile84 = isDoviProfile84
+        self.isHLG = isHLG
+        self.isFullRange = isFullRange
         self.formatDescription = formatDescription
         self.codecName = codecName
         self.isImageSubtitle = isImageSubtitle
@@ -1656,4 +1668,195 @@ public struct SilkNFOMetadata: Sendable, Equatable {
 public enum SilkNFOParser {
     public static func parse(fileURL: URL) -> SilkNFOMetadata? { nil }
     public static func parse(content: String) -> SilkNFOMetadata { SilkNFOMetadata() }
+}
+
+// MARK: - SilkColorArbitration (Color Space & TRC Routing Engine Mock)
+
+public enum SilkRenderPipelineTarget: Sendable, Equatable {
+    case sdr
+    case hlg
+    case hdr10
+    case doviProfile5
+}
+
+public struct SilkColorRoutingResult: Sendable, Equatable {
+    public let dolbyVisionProfile: Int
+    public let isHDR10: Bool
+    public let isHLG: Bool
+    public let isDoviProfile84: Bool
+    public let isFullRange: Bool
+    public let pipeline: SilkRenderPipelineTarget
+    public let osdBadge: String
+
+    public init(
+        dolbyVisionProfile: Int,
+        isHDR10: Bool,
+        isHLG: Bool,
+        isDoviProfile84: Bool,
+        isFullRange: Bool,
+        pipeline: SilkRenderPipelineTarget,
+        osdBadge: String
+    ) {
+        self.dolbyVisionProfile = dolbyVisionProfile
+        self.isHDR10 = isHDR10
+        self.isHLG = isHLG
+        self.isDoviProfile84 = isDoviProfile84
+        self.isFullRange = isFullRange
+        self.pipeline = pipeline
+        self.osdBadge = osdBadge
+    }
+}
+
+public enum SilkColorArbitration: Sendable {
+    public static let AVCOL_PRI_BT709: UInt32 = 1
+    public static let AVCOL_PRI_BT2020: UInt32 = 9
+
+    public static let AVCOL_TRC_BT709: UInt32 = 1
+    public static let AVCOL_TRC_SMPTE2084: UInt32 = 16
+    public static let AVCOL_TRC_ARIB_STD_B67: UInt32 = 18
+
+    public static let AVCOL_SPC_BT709: UInt32 = 1
+    public static let AVCOL_SPC_BT2020_NCL: UInt32 = 9
+
+    public static let AVCOL_RANGE_MPEG: UInt32 = 1
+    public static let AVCOL_RANGE_JPEG: UInt32 = 2
+
+    public static func resolve(
+        profile: Int,
+        doviCompatId: Int,
+        trc: UInt32,
+        space: UInt32,
+        primaries: UInt32,
+        range: UInt32
+    ) -> SilkColorRoutingResult {
+        let isBT709Primaries = (primaries == AVCOL_PRI_BT709)
+        let isBT709Space = (space == AVCOL_SPC_BT709)
+        let isHLGTransfer = (trc == AVCOL_TRC_ARIB_STD_B67)
+        let isPQTransfer = (trc == AVCOL_TRC_SMPTE2084)
+        let fullRange = (range == AVCOL_RANGE_JPEG)
+
+        var effectiveProfile = profile
+
+        if effectiveProfile == 5 && (isBT709Primaries || isBT709Space) {
+            effectiveProfile = 0
+        }
+
+        if effectiveProfile == 5 {
+            return SilkColorRoutingResult(
+                dolbyVisionProfile: 5,
+                isHDR10: false,
+                isHLG: false,
+                isDoviProfile84: false,
+                isFullRange: fullRange,
+                pipeline: .doviProfile5,
+                osdBadge: "Dolby Vision Profile 5"
+            )
+        }
+
+        if effectiveProfile == 8 {
+            if doviCompatId == 4 || isHLGTransfer {
+                return SilkColorRoutingResult(
+                    dolbyVisionProfile: 8,
+                    isHDR10: false,
+                    isHLG: true,
+                    isDoviProfile84: true,
+                    isFullRange: fullRange,
+                    pipeline: .hlg,
+                    osdBadge: "Dolby Vision Profile 8.4 (HLG)"
+                )
+            } else if doviCompatId == 2 || (isBT709Primaries && !isPQTransfer) {
+                return SilkColorRoutingResult(
+                    dolbyVisionProfile: 8,
+                    isHDR10: false,
+                    isHLG: false,
+                    isDoviProfile84: false,
+                    isFullRange: fullRange,
+                    pipeline: .sdr,
+                    osdBadge: "Dolby Vision Profile 8.2 (SDR)"
+                )
+            } else if doviCompatId == 1 || isPQTransfer {
+                return SilkColorRoutingResult(
+                    dolbyVisionProfile: 8,
+                    isHDR10: true,
+                    isHLG: false,
+                    isDoviProfile84: false,
+                    isFullRange: fullRange,
+                    pipeline: .hdr10,
+                    osdBadge: "Dolby Vision Profile 8.1 (HDR10)"
+                )
+            } else {
+                return SilkColorRoutingResult(
+                    dolbyVisionProfile: 8,
+                    isHDR10: false,
+                    isHLG: false,
+                    isDoviProfile84: false,
+                    isFullRange: fullRange,
+                    pipeline: .sdr,
+                    osdBadge: "Dolby Vision Profile 8.2 (SDR)"
+                )
+            }
+        }
+
+        if effectiveProfile == 7 {
+            return SilkColorRoutingResult(
+                dolbyVisionProfile: 7,
+                isHDR10: true,
+                isHLG: false,
+                isDoviProfile84: false,
+                isFullRange: fullRange,
+                pipeline: .hdr10,
+                osdBadge: "Dolby Vision Profile 7"
+            )
+        }
+
+        if isHLGTransfer {
+            return SilkColorRoutingResult(
+                dolbyVisionProfile: 0,
+                isHDR10: false,
+                isHLG: true,
+                isDoviProfile84: false,
+                isFullRange: fullRange,
+                pipeline: .hlg,
+                osdBadge: "HLG (BT.2020)"
+            )
+        } else if isPQTransfer {
+            return SilkColorRoutingResult(
+                dolbyVisionProfile: 0,
+                isHDR10: true,
+                isHLG: false,
+                isDoviProfile84: false,
+                isFullRange: fullRange,
+                pipeline: .hdr10,
+                osdBadge: "HDR10 (BT.2020)"
+            )
+        } else {
+            return SilkColorRoutingResult(
+                dolbyVisionProfile: 0,
+                isHDR10: false,
+                isHLG: false,
+                isDoviProfile84: false,
+                isFullRange: fullRange,
+                pipeline: .sdr,
+                osdBadge: "SDR (BT.709)"
+            )
+        }
+    }
+
+    public static func resolve(
+        profile: Int,
+        doviCompatId: Int,
+        trc: Int,
+        space: Int,
+        primaries: Int,
+        range: Int
+    ) -> SilkColorRoutingResult {
+        resolve(
+            profile: profile,
+            doviCompatId: doviCompatId,
+            trc: UInt32(max(0, trc)),
+            space: UInt32(max(0, space)),
+            primaries: UInt32(max(0, primaries)),
+            range: UInt32(max(0, range))
+        )
+    }
 }
