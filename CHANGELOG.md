@@ -5,6 +5,17 @@ All notable changes to **SilkPlayer** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-11-24
+
+### Changed
+- **4K 与 8K 超高清播放性能与内存控制**：全面重构了高规格视频的缓冲调度与内存流控机制，大幅降低播放 4K 高码率及 8K 超高清片源时的系统内存与显存占用，彻底杜绝内存随播放时长持续增长，长时间大文件播放更加轻盈稳定。
+- **极限高码率播放流畅度与拖拽响应**：优化了硬件解码与渲染管线的衔接效率，面对数百兆码率的极限片源依然保持平稳流畅；大幅提升了进度条任意拖拽（Seek）的响应速度，全程稳定零丢帧。
+- **切片与轨道切换资源周转**：提升了切换音轨、字幕或切换下一部视频时的底层资源回收效率，切换过渡干脆利落，消除界面延迟与卡顿感。
+
+### Fixed
+- **杜比视界 Profile 8.4 与 HLG 色彩过曝**：修复了 iPhone 录制及特定流媒体 Profile 8.4 视频高光惨白、过曝泛白的问题，准确还原画面原本的明暗层次与色彩细节。
+- **色彩与色阶范围误判**：修复了部分视频全色阶（Full Range）暗部发灰以及特定 SDR 片源被误判为 HDR 导致的偏色缺陷，画面黑位与色彩表现更加扎实精准。
+
 ## [2.1.0] - 2026-11-23
 
 ### Added

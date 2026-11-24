@@ -1910,11 +1910,26 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
             if let dovi = vTrack.dovi {
                 self.isDolbyVision = true
                 self.isHDRContent = true
-                self.hdrFormatString = "Dolby Vision Profile \(dovi.dv_profile)"
+                if dovi.dv_profile == 8 {
+                    if vTrack.isDoviProfile84 || vTrack.isHLG || dovi.dv_compatibility_id == 4 {
+                        self.hdrFormatString = "Dolby Vision Profile 8.4 (HLG)"
+                    } else if dovi.dv_compatibility_id == 2 {
+                        self.isHDRContent = false
+                        self.hdrFormatString = "Dolby Vision Profile 8.2 (SDR)"
+                    } else {
+                        self.hdrFormatString = "Dolby Vision Profile 8.1 (HDR10)"
+                    }
+                } else {
+                    self.hdrFormatString = "Dolby Vision Profile \(dovi.dv_profile)"
+                }
             } else if vTrack.isDoviProfile5 {
                 self.isDolbyVision = true
                 self.isHDRContent = true
                 self.hdrFormatString = "Dolby Vision Profile 5"
+            } else if vTrack.isHLG {
+                self.isDolbyVision = false
+                self.isHDRContent = true
+                self.hdrFormatString = "HLG (BT.2020)"
             } else if let desc = vTrack.formatDescription {
                 let extensions = CMFormatDescriptionGetExtensions(desc) as? [String: Any] ?? [:]
                 if let primaries = extensions[kCMFormatDescriptionExtension_ColorPrimaries as String] as? String,
