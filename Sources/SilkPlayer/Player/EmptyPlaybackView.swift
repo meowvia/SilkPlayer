@@ -11,19 +11,26 @@ public struct EmptyPlaybackView: View {
     var onOpenFile: () -> Void
     var onFileDropped: ((URL) -> Void)?
     var onFilesDropped: (([URL]) -> Void)?
+    var onOpenMediaLibrarySettings: (() -> Void)?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var licenseEngine = SilkProLicenseEngine.shared
+    // 0: initial breathing pill (no close button), 1: settings visited -> calm pill with × button, 2: permanently dismissed
+    @AppStorage("silk.onboarding.localLibraryStage.v220") private var libraryOnboardingStage: Int = 0
     @State private var isDropTargeted: Bool = false
     @State private var isHoveringLogo: Bool = false
+    @State private var isOnboardingPulseActive: Bool = false
 
     public init(
         onOpenFile: @escaping () -> Void,
         onFileDropped: ((URL) -> Void)? = nil,
-        onFilesDropped: (([URL]) -> Void)? = nil
+        onFilesDropped: (([URL]) -> Void)? = nil,
+        onOpenMediaLibrarySettings: (() -> Void)? = nil
     ) {
         self.onOpenFile = onOpenFile
         self.onFileDropped = onFileDropped
         self.onFilesDropped = onFilesDropped
+        self.onOpenMediaLibrarySettings = onOpenMediaLibrarySettings
     }
 
     public var body: some View {
@@ -131,6 +138,92 @@ public struct EmptyPlaybackView: View {
             }
             .help(L10n.tr("Open Media File (⌘O)", "打开媒体文件 (⌘O)"))
             .accessibilityLabel(L10n.openFile)
+
+            // 4.5 Subtle Media Library Onboarding Pill (Free Users)
+            if !licenseEngine.isProActive, libraryOnboardingStage < 2, let onOpenMediaLibrarySettings = onOpenMediaLibrarySettings {
+                let isInitialStage = (libraryOnboardingStage == 0)
+                let pulseGlow = isInitialStage && isOnboardingPulseActive && !reduceMotion
+
+                VStack {
+                    Spacer()
+
+                    HStack(spacing: 4) {
+                        Button {
+                            isOnboardingPulseActive = false
+                            if libraryOnboardingStage == 0 {
+                                libraryOnboardingStage = 1
+                            }
+                            onOpenMediaLibrarySettings()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "film.stack")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(pulseGlow ? Color.cyan.opacity(0.92) : Color.white.opacity(0.65))
+                                Text(L10n.tr(
+                                    "Local, external drive & NAS poster library · Open Settings",
+                                    "支持本地文件夹、外置硬盘与 NAS 海报墙 · 前往媒体库设置"
+                                ))
+                                .font(.system(size: 11.5, weight: .regular))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9.5, weight: .semibold))
+                            }
+                            .foregroundStyle(Color.white.opacity(pulseGlow ? 0.86 : 0.62))
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+
+                        if !isInitialStage {
+                            Button {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    libraryOnboardingStage = 2
+                                }
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 9.5, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.45))
+                                    .padding(4)
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .focusable(false)
+                            .help(L10n.tr("Dismiss", "关闭提示"))
+                        }
+                    }
+                    .padding(.leading, 12)
+                    .padding(.trailing, isInitialStage ? 12 : 8)
+                    .padding(.vertical, 6)
+                        .background(
+                        Capsule()
+                            .fill(Color.white.opacity(pulseGlow ? 0.12 : 0.06))
+                            .overlay(
+                                Capsule()
+                                    .stroke(
+                                        pulseGlow ? Color.cyan.opacity(0.78) : Color.white.opacity(0.12),
+                                        lineWidth: pulseGlow ? 1.15 : 0.5
+                                    )
+                            )
+                            .shadow(color: pulseGlow ? Color.cyan.opacity(0.42) : .clear, radius: 10)
+                    )
+                    .padding(.bottom, 22)
+                }
+                .onAppear {
+                    guard libraryOnboardingStage == 0, !reduceMotion, !PlayerWindowManager.isRunningTests else { return }
+                    isOnboardingPulseActive = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        guard libraryOnboardingStage == 0 else { return }
+                        withAnimation(.easeInOut(duration: 1.35).repeatForever(autoreverses: true)) {
+                            isOnboardingPulseActive = true
+                        }
+                    }
+                }
+                .onChange(of: libraryOnboardingStage) { _, newStage in
+                    if newStage >= 1 {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            isOnboardingPulseActive = false
+                        }
+                    }
+                }
+            }
 
             // 5. Drag & Drop Active Overlay
             if isDropTargeted {

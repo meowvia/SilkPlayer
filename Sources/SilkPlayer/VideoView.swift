@@ -231,7 +231,7 @@ public final class MetalPlayerContainerView: NSView {
         )
 
         var videoFrame = safeBounds
-        if let p = playerCore, p.videoWidth > 0, p.videoHeight > 0 {
+        if !(AppSettings.shared.ambientLetterboxFill && SilkProLicenseEngine.shared.isProActive), let p = playerCore, p.videoWidth > 0, p.videoHeight > 0 {
             let aspect = p.transform.displayAspectRatio(
                 rawWidth: p.displayVideoWidth > 0 ? p.displayVideoWidth : p.videoWidth,
                 rawHeight: p.displayVideoHeight > 0 ? p.displayVideoHeight : p.videoHeight,

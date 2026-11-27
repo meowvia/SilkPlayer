@@ -320,6 +320,7 @@ public protocol PlayerControllable: AnyObject {
     func toggleDeband()
     func toggleHDR()
     func setHDREnabled(_ enabled: Bool)
+    func setAmbientLetterboxEnabled(_ enabled: Bool)
     func adjustSharpen(by delta: Double)
     func adjustContrast(by delta: Double)
     func adjustBrightness(by delta: Double)
@@ -383,6 +384,7 @@ public extension PlayerControllable {
     func applyContentAspectRatioLock() {}
     func setFullscreenState(_ fullscreen: Bool) {}
     func setExactRotation(_ angle: Int) {}
+    func setAmbientLetterboxEnabled(_ enabled: Bool) {}
     func resetVideoRotation() {}
     func updateRememberedWindowSize(_ contentSize: NSSize) {}
     func closePlaybackOrReturnToEmpty() {

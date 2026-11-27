@@ -95,6 +95,7 @@ public class SilkMetalRenderView: NSView {
     public var isWindowOccluded: Bool = false
     public var isFullscreenTransitioning: Bool = false
     public var isQualityEnhancementEnabled: Bool = false
+    public var isAmbientLetterboxEnabled: Bool = false
 
     public func renderCurrentFrameImmediately() {}
     public func updateMetalGeometry() {}
@@ -132,6 +133,7 @@ public final class SilkPlayerEngine: ObservableObject {
     public var volume: Float = 1.0
     public var isMuted: Bool = false
     public var playbackRate: Double = 1.0
+    public var isAmbientLetterboxEnabled: Bool = false
 
     public init() {}
     public func open(url: URL) -> Bool { true }
@@ -289,6 +291,7 @@ public final class SilkPlayerWrapper: NSObject, ObservableObject {
         get { Float(engine.playbackRate) }
         set { engine.playbackRate = Double(newValue) }
     }
+    public var isAmbientLetterboxEnabled: Bool = false
     public var nominalFrameRate: Float { Float(engine.videoFps) }
     public var naturalSize: CGSize { CGSize(width: engine.videoWidth, height: engine.videoHeight) }
     public var chapters: [SilkChapter] { engine.chapters }
@@ -325,6 +328,7 @@ public final class SilkPlayerLayer: NSObject, SilkEngineDelegate {
     public var attachedPictureData: Data? { player.attachedPictureData }
     public var audioRhythmBands: [Float] { player.audioRhythmBands }
     public var isQualityEnhancementEnabled: Bool = false
+    public var isAmbientLetterboxEnabled: Bool = false
 
     public init(options: SilkPlayerOptions = SilkPlayerOptions(), delegate: (any SilkPlayerLayerDelegate)? = nil) {
         self.options = options
@@ -1025,6 +1029,7 @@ public final class SilkMediaLibraryEngine: ObservableObject {
         posterUrl: String?,
         localPosterPath: String? = nil
     ) async {}
+    public func enrichMediaSpecsIfNeeded(for record: SilkMediaLibraryRecord, force: Bool = false) async -> SilkMediaLibraryRecord { record }
 }
 
 extension SilkMediaLibraryEngine: @unchecked Sendable {}

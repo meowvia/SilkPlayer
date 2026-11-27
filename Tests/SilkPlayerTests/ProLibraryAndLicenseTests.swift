@@ -176,9 +176,10 @@ final class ProLibraryAndLicenseTests: XCTestCase {
         XCTAssertEqual(tracks.count, 2)
 
         let movie = try XCTUnwrap(movies.first)
-        XCTAssertEqual(movie.resolutionTag, "4K")
-        XCTAssertEqual(movie.videoCodecTag, "HEVC")
-        XCTAssertEqual(movie.audioSpecTag, "Atmos")
+        // Spec tags stay empty on initial file scan (populated later via FFmpeg header probing, never guessed from filename)
+        XCTAssertEqual(movie.resolutionTag, "")
+        XCTAssertEqual(movie.videoCodecTag, "")
+        XCTAssertEqual(movie.audioSpecTag, "")
         XCTAssertEqual(movie.posterPath, moviePoster.path)
 
         let ep1 = try XCTUnwrap(episodes.first(where: { $0.episodeNumber == 1 }))

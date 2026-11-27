@@ -35,6 +35,6 @@ Nothing in this Section 2 or this Agreement shall restrict, limit, or impair the
 The closed-source playback engine, demuxing optimizations, hardware acceleration pipelines, and Metal zero-copy direct rendering modules within `SilkCoreKit` are available for commercial OEM licensing, bespoke embedding into third-party commercial applications, and enterprise custom licensing.
 
 For enterprise licensing, evaluation builds, commercial integration agreements, or custom business inquiries, please contact:
-- **Commercial Licensing Email**: `support@1999909.xyz`
-- **Product Official Website**: `https://silkplayer.1999909.xyz`
+- **Commercial Licensing Email**: `support@silkplayer.com`
+- **Product Official Website**: `https://silkplayer.com`
 

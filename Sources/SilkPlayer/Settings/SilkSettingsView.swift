@@ -182,6 +182,8 @@ public struct SilkSettingsView: View {
                 Button(L10n.tr("No", "否"), role: .cancel) {
                     updateService.userDeclinedUpdate()
                 }
+            } message: {
+                Text(updateService.formattedAlertMessage(for: updateService.latestVersion ?? ""))
             }
             .alert(
                 L10n.tr("You're up to date", "当前已是最新版本"),
@@ -242,8 +244,8 @@ public struct SilkSettingsView: View {
                 action: { selectedTab = 1 }
             )
             SettingsTabButton(
-                title: L10n.tr("LAN", "局域网"),
-                icon: "network",
+                title: L10n.tr("Library", "媒体库"),
+                icon: "film.stack",
                 tag: 2,
                 isSelected: selectedTab == 2,
                 showRedDot: false,
@@ -616,6 +618,17 @@ public struct SilkSettingsView: View {
 
                     cardRowDivider
 
+                    settingsToggleRow(
+                        title: L10n.tr("Ambient Letterbox Fill", "黑边环境光柔化"),
+                        subtitle: L10n.tr("Fill cinema letterbox bars with a subtle blurred glow from the video", "宽银幕电影上下/左右留白时，填充柔和低亮度的画面环境光"),
+                        showProBadge: !licenseEngine.isProActive,
+                        isOn: proFeatureBinding($settings.ambientLetterboxFill)
+                    )
+                    .disabled(!licenseEngine.isProActive)
+                    .opacity(licenseEngine.isProActive ? 1.0 : 0.72)
+
+                    cardRowDivider
+
                     // Seek Step Duration
                     HStack {
                         Text(L10n.tr("Seek Step Duration", "进度快进步长"))
@@ -732,20 +745,175 @@ public struct SilkSettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private var proActivationPromptCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "key.horizontal")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isProThemed ? currentTheme.accentColor : Color.accentColor)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.tr("Activate Pro Features", "激活 Pro 功能"))
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundColor(primaryTextColor)
+
+                    Text(L10n.tr("Version \(appVersionLabel)", "版本 \(appVersionLabel)"))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(secondaryTextColor)
+
+                    Text(L10n.tr(
+                        "Enter an activation key for local, external drive, and NAS media library plus Music Mode.",
+                        "激活后解锁本地、外置硬盘与 NAS 媒体库海报墙及独立音乐模式。"
+                    ))
+                    .font(.system(size: 10.5))
+                    .foregroundColor(secondaryTextColor)
+
+                    if let cached = UserDefaults.standard.string(forKey: "silk.pro.lastActiveReceipt"), !cached.isEmpty {
+                        Button {
+                            Task {
+                                _ = await licenseEngine.activate(licenseKey: cached)
+                                SilkProIconManager.syncApplicationIcon(isProActive: true)
+                            }
+                        } label: {
+                            Text(L10n.tr("Restore Pro Activation", "恢复 Pro 授权"))
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.link)
+                        .padding(.top, 2)
+                    }
+                }
+
+                Spacer()
+            }
+
+            HStack(spacing: 8) {
+                TextField(
+                    L10n.tr("Enter activation key...", "输入激活码…"),
+                    text: $licenseKeyInput
+                )
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12, design: .monospaced))
+                .onSubmit {
+                    triggerActivation()
+                }
+
+                Button {
+                    triggerActivation()
+                } label: {
+                    if licenseEngine.isProcessing {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 44)
+                    } else {
+                        Text(L10n.tr("Activate", "激活"))
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4.5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(licenseKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || licenseEngine.isProcessing ? (isProThemed ? currentTheme.accentColor.opacity(0.35) : Color.accentColor.opacity(0.35)) : (isProThemed ? currentTheme.accentColor : Color.accentColor))
+                )
+                .buttonStyle(.plain)
+                .disabled(licenseKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || licenseEngine.isProcessing)
+
+                Button {
+                    if let url = licenseEngine.purchaseURL {
+                        NSWorkspace.shared.open(url)
+                    } else if let websiteURL = URL(string: "https://silkplayer.com") {
+                        NSWorkspace.shared.open(websiteURL)
+                    } else {
+                        showPurchasePendingAlert = true
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(licenseEngine.purchaseURL != nil
+                             ? L10n.tr("Buy", "购买")
+                             : L10n.tr("Website", "前往官网"))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(primaryTextColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4.5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(isProThemed ? currentTheme.pillSurface : Color.secondary.opacity(0.12))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(isProThemed ? currentTheme.borderColor : Color.secondary.opacity(0.24), lineWidth: 0.75)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if let err = licenseEngine.lastErrorMessage, !err.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.orange)
+                    Text(err)
+                        .font(.system(size: 10.5))
+                        .foregroundColor(.orange)
+                        .lineLimit(2)
+                }
+            }
+        }
+    }
+
+    private func proFeatureBinding(_ activeBinding: Binding<Bool>) -> Binding<Bool> {
+        licenseEngine.isProActive ? activeBinding : .constant(false)
+    }
+
     private var lanSettingsSection: some View {
         VStack(spacing: sectionOuterSpacing) {
-            // Group 1: LAN Media Library Switches
+            // Group 1: Media Library Switches
             VStack(spacing: sectionHeaderSpacing) {
-                sectionTitle(L10n.tr("LAN Media Library", "局域网媒体库"), showProBadge: !licenseEngine.isProActive)
+                HStack(spacing: 6) {
+                    Text(L10n.tr("Media Library", "媒体库"))
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundColor(isProThemed ? currentTheme.secondaryText : .secondary)
+                    if !licenseEngine.isProActive {
+                        proSuperscriptBadge
+                        Button {
+                            if let url = URL(string: "https://silkplayer.com/#pricing") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        } label: {
+                            HStack(spacing: 2.5) {
+                                Text(L10n.tr("Get Pro", "获取 Pro"))
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 8.5, weight: .semibold))
+                            }
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1.5)
+                            .background(
+                                Capsule()
+                                    .fill(Color.accentColor.opacity(0.12))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 4)
                 settingsFormCard {
                     Group {
                         settingsToggleRow(
-                            title: L10n.tr("Enable LAN Media Library", "启用局域网媒体库"),
+                            title: L10n.tr("Enable Media Library", "启用媒体库"),
                             subtitle: L10n.tr(
-                                "Turn off to use the standard playback view. Sources and history are preserved.",
-                                "关闭后切回标准播放视图，已添加的目录源与播放记录保留。"
+                                "Manage local, external, and network media. Your folders and history stay saved if turned off.",
+                                "支持本地、外置硬盘和局域网媒体；关闭后保留目录与播放记录。"
                             ),
-                            isOn: $settings.proLibraryHomeEnabled
+                            isOn: proFeatureBinding($settings.proLibraryHomeEnabled)
                         )
 
                         cardRowDivider
@@ -753,10 +921,10 @@ public struct SilkSettingsView: View {
                         settingsToggleRow(
                             title: L10n.tr("Auto-Scan Sources on Launch", "启动时自动更新媒体源"),
                             subtitle: L10n.tr(
-                                "Incrementally scan enabled media folders in the background at startup.",
-                                "应用启动后自动在后台增量扫描目录变更。"
+                                "Automatically scan local, external, and network folders on launch.",
+                                "启动时自动扫描本地、外置硬盘和局域网目录。"
                             ),
-                            isOn: $settings.proAutoScanOnLaunch
+                            isOn: proFeatureBinding($settings.proAutoScanOnLaunch)
                         )
 
                         cardRowDivider
@@ -767,7 +935,7 @@ public struct SilkSettingsView: View {
                                 "Automatically fetch missing posters and metadata online after scanning.",
                                 "目录扫描完成后自动联网补全缺失的影视海报与简介。"
                             ),
-                            isOn: $settings.proAutoScrapeAfterScan
+                            isOn: proFeatureBinding($settings.proAutoScrapeAfterScan)
                         )
 
                         cardRowDivider
@@ -778,7 +946,7 @@ public struct SilkSettingsView: View {
                                 "Sync playback progress across Macs signed into the same Apple Account.",
                                 "通过个人 iCloud 云盘在同账号 Mac 间同步播放进度。"
                             ),
-                            isOn: $settings.enableCloudPlaybackSync
+                            isOn: proFeatureBinding($settings.enableCloudPlaybackSync)
                         )
                     }
                     .disabled(!licenseEngine.isProActive)
@@ -921,12 +1089,17 @@ public struct SilkSettingsView: View {
         }
     }
 
-    private func settingsToggleRow(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+    private func settingsToggleRow(title: String, subtitle: String, showProBadge: Bool = false, isOn: Binding<Bool>) -> some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 2.5) {
-                Text(title)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundColor(primaryTextColor)
+                HStack(spacing: 5) {
+                    Text(title)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundColor(primaryTextColor)
+                    if showProBadge {
+                        proSuperscriptBadge
+                    }
+                }
                 Text(subtitle)
                     .font(.system(size: 10.5))
                     .foregroundColor(secondaryTextColor)
@@ -1097,117 +1270,7 @@ public struct SilkSettingsView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 3)
                 } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "key.horizontal")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(isProThemed ? currentTheme.accentColor : Color.accentColor)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.tr("Activate Pro Features", "激活 Pro 功能"))
-                                    .font(.system(size: 12.5, weight: .semibold))
-                                    .foregroundColor(primaryTextColor)
-
-                                Text(L10n.tr("Version \(appVersionLabel)", "版本 \(appVersionLabel)"))
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(secondaryTextColor)
-
-                                Text(L10n.tr(
-                                    "Enter an activation key for SMB 2/3, NFS, and LAN media library.",
-                                    "激活后可使用 SMB 2/3、NFS 共享挂载与局域网媒体库。"
-                                ))
-                                .font(.system(size: 10.5))
-                                .foregroundColor(secondaryTextColor)
-
-                                if let cached = UserDefaults.standard.string(forKey: "silk.pro.lastActiveReceipt"), !cached.isEmpty {
-                                    Button {
-                                        Task {
-                                            _ = await licenseEngine.activate(licenseKey: cached)
-                                            SilkProIconManager.syncApplicationIcon(isProActive: true)
-                                        }
-                                    } label: {
-                                        Text(L10n.tr("Restore Pro Activation", "恢复 Pro 授权"))
-                                            .font(.system(size: 11))
-                                    }
-                                    .buttonStyle(.link)
-                                    .padding(.top, 2)
-                                }
-                            }
-
-                            Spacer()
-                        }
-
-                        HStack(spacing: 8) {
-                            TextField(
-                                L10n.tr("Enter activation key...", "输入激活码…"),
-                                text: $licenseKeyInput
-                            )
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 12, design: .monospaced))
-                            .onSubmit {
-                                triggerActivation()
-                            }
-
-                            Button {
-                                triggerActivation()
-                            } label: {
-                                if licenseEngine.isProcessing {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .frame(width: 44)
-                                } else {
-                                    Text(L10n.tr("Activate", "激活"))
-                                        .font(.system(size: 12, weight: .medium))
-                                }
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 4.5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(licenseKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || licenseEngine.isProcessing ? (isProThemed ? currentTheme.accentColor.opacity(0.35) : Color.accentColor.opacity(0.35)) : (isProThemed ? currentTheme.accentColor : Color.accentColor))
-                            )
-                            .buttonStyle(.plain)
-                            .disabled(licenseKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || licenseEngine.isProcessing)
-
-                            Button {
-                                if let url = licenseEngine.purchaseURL {
-                                    NSWorkspace.shared.open(url)
-                                } else if let websiteURL = URL(string: "https://silkplayer.com") {
-                                    NSWorkspace.shared.open(websiteURL)
-                                } else {
-                                    showPurchasePendingAlert = true
-                                }
-                            } label: {
-                                Text(L10n.tr("Buy", "购买"))
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(primaryTextColor)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 4.5)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                            .fill(isProThemed ? currentTheme.pillSurface : Color.secondary.opacity(0.12))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                            .stroke(isProThemed ? currentTheme.borderColor : Color.secondary.opacity(0.24), lineWidth: 0.75)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        if let err = licenseEngine.lastErrorMessage, !err.isEmpty {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.orange)
-                                Text(err)
-                                    .font(.system(size: 10.5))
-                                    .foregroundColor(.orange)
-                                    .lineLimit(2)
-                            }
-                        }
-                    }
+                    proActivationPromptCard
                 }
             }
             .padding(.horizontal, 24)

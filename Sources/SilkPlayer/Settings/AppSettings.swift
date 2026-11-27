@@ -290,6 +290,12 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
             PlayerWindowManager.shared.applyHDRToneMapping(hdrToneMappingEnabled)
         }
     }
+    public var ambientLetterboxFill: Bool {
+        didSet {
+            UserDefaults.standard.set(ambientLetterboxFill, forKey: "ambientLetterboxFill")
+            PlayerWindowManager.shared.applyAmbientLetterboxFill(ambientLetterboxFill)
+        }
+    }
     public var autoScanSubfolders: Bool {
         didSet {
             UserDefaults.standard.set(autoScanSubfolders, forKey: "autoScanSubfolders")
@@ -462,6 +468,7 @@ public enum WindowMode: String, CaseIterable, Identifiable, Codable, Sendable {
         self.longSeekStep = UserDefaults.standard.object(forKey: "longSeekStep") as? Double ?? 30.0
         self.autoEnhanceQuality = UserDefaults.standard.object(forKey: "autoEnhanceQuality") as? Bool ?? false
         self.hdrToneMappingEnabled = UserDefaults.standard.object(forKey: "hdrToneMappingEnabled") as? Bool ?? true
+        self.ambientLetterboxFill = UserDefaults.standard.object(forKey: "ambientLetterboxFill") as? Bool ?? false
         self.autoScanSubfolders = UserDefaults.standard.object(forKey: "autoScanSubfolders") as? Bool ?? true
         self.keepRecentHistory = UserDefaults.standard.object(forKey: "keepRecentHistory") as? Bool ?? true
 

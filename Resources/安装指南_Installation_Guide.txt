@@ -20,13 +20,13 @@
   sudo xattr -rd com.apple.quarantine /Applications/SilkPlayer.app
 
 三、Pro 专业版激活指引
-1. 打开 SilkPlayer，点击顶部菜单栏「SilkPlayer」->「设置」（快捷键 Cmd + ,），或点击主界面右上方齿轮图标。
-2. 切换至「关于」标签页，点击「激活 Pro」按钮。
-3. 输入您购买时收到的 29 位许可证密钥（格式：XXXXX-XXXXX-XXXXX-XXXXX-XXXXX），点击「验证并激活」。
-4. 验证通过后即刻解锁全部 Pro 专享功能（媒体海报墙、局域网 SMB 自动挂载挂盘等）。
+1. 打开 SilkPlayer，点击顶部菜单栏「SilkPlayer」->「设置」（快捷键 Cmd + ,），或点击主界面底部/右上入口跳转。
+2. 切换至「关于」标签页。
+3. 在「激活 Pro 功能」卡片中输入您购买时收到的激活密钥，点击「激活」。
+4. 验证通过后即刻解锁全部 Pro 专享功能（本地、外置硬盘与 NAS 媒体库海报墙、SMB/NFS 自动挂载、独立音乐模式及多套主题等）。
 
 四、官网与技术支持
-- 官方网站：https://silkplayer.1999909.xyz
+- 官方网站：https://silkplayer.com
 - 问题反馈与更新：可在应用内「设置 -> 关于」中点击「检查更新」。
 
 --------------------------------------------------------------------------------
@@ -49,13 +49,13 @@ If macOS displays a warning such as "cannot be opened because Apple cannot check
   sudo xattr -rd com.apple.quarantine /Applications/SilkPlayer.app
 
 3. Pro Edition Activation
-1. Launch SilkPlayer, open Settings from the menu bar "SilkPlayer -> Settings" (or press Cmd + ,).
-2. Go to the "About" tab and click "Activate Pro".
-3. Enter your 29-character license key (format: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX) and click "Verify & Activate".
-4. Once verified, Pro features (Poster Wall, SMB Auto-Mount Service, etc.) are immediately unlocked.
+1. Launch SilkPlayer and open Settings from the menu bar "SilkPlayer -> Settings" (or press Cmd + ,).
+2. Switch to the "About" tab.
+3. Enter your activation key in the "Activate Pro Features" card and click "Activate".
+4. Once verified, Pro features (local, external drive & NAS Media Library, SMB/NFS auto-mount, Music Mode, and curated themes) are immediately unlocked.
 
 4. Website & Support
-- Official Website: https://silkplayer.1999909.xyz
+- Official Website: https://silkplayer.com
 - Updates & Inquiries: Access "Settings -> About -> Check for Updates" inside the app.
 
 ================================================================================

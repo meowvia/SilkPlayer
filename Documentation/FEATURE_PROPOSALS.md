@@ -13,43 +13,43 @@
 
 | 提案编号 | 提案名称 | 状态 | 目标版本 |
 | :--- | :--- | :--- | :--- |
-| ~~提案 002~~ | ~~设置为默认播放器与格式关联管理 (Default Player)~~ | ~~待落地评估 (未开始)~~ **已落地销项** | **1.3.0** |
-| 提案 003 | 原生轻量 SMB 局域网与 NAS 深度互联中枢 (Native SMB & NAS Pro Integration) | 商业化 Pro 储备 (1.x 坚决不碰) | **2.0.0+ 商业化 Pro 规划** |
-| 提案 004 | 局域网轻量投屏功能 (DLNA / Screencast) | 待落地评估 (未开始) | **2.0.0+ 规划 (局域网/投屏生态)** |
-| ~~提案 005~~ | ~~纯音频播放体验与原生极简封面动效 (Audio Artwork & Waveform)~~ | ~~待落地评估 (未开始)~~ **已落地销项** | **1.1.0** |
-| ~~提案 006~~ | ~~音视频双轨独立列表与智能分流管理 (Dual-Track Media Playlist)~~ | ~~核心需求 2.4 已落地，主界面双轨待落地~~ **已落地销项** | **1.4.0** |
-| 提案 007 | VP9 硬件加速解码与色彩管线 (VP9 Hardware Decoding) | 待落地评估 (未开始) | **1.7.0 核心排期** |
-| 提案 008 | 外挂字幕自动检索与同名关联推荐 (External Subtitle Auto-Search) | 基础已实装 80% (待补齐 Subs 子目录递归) | **1.7.0 核心排期** |
-| 提案 010 | 私有自用增强分支与端侧离线听译/网络流沙盒 (Personal Edition) | 搁置封存 (个人私享版本，主线不排期) | 独立私有分支 (自用测试) |
-| ~~提案 011~~ | ~~非原生预览格式文稿图标与品牌 Logo 占位替换 (Document Types Iconography & Fallback Branding)~~ | ~~正式立项 (下个版本解决)~~ **已落地销项** | **1.4.0** |
-| 提案 012 | 剧集片头探测与智能跳过 (Smart Intro Skip) | 远期技术储备 (无版本 · 不带时间表) | **无排期（待网络云端协同成熟再行规划）** |
-| ~~提案 013~~ | ~~HDR10 与杜比视界动态 EDR 高光软滚降压制与色调映射 (Dynamic EDR Tone-Mapping & Highlight Roll-off)~~ | ~~需求定稿 (方案设计就绪)~~ **已落地销项** | **1.6.0** |
-| 提案 014 | 全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion) | 技术攻关立项 (算法探索) | **1.7.0 核心排期 (画质进阶候选)** |
-| ~~提案 015~~ | ~~播控栏交互式音量微调与起播防爆音安全锁 (Interactive Volume Popover & Pre-play Audio Safety Lock)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0** |
-| ~~提案 016~~ | ~~多文件夹与批量剧集导入全局智能自然排序 (Multi-Folder & Batch Episode Intelligent Natural Sorting)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.5.0** |
-| ~~提案 017~~ | ~~全链路系统级资源占用优化与高频空转治理 (System-wide Performance & Resource Footprint Optimization)~~ | ~~正式立项 (方案就绪)~~ **已落地销项** | **1.5.0** |
-| ~~提案 018~~ | ~~偏好设置模块 macOS HIG 规范化全量重构 (Native Settings HIG Architecture & Design Overhaul)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.6.0** |
-| ~~提案 019~~ | ~~播放列表侧边拉手边框贴合与极简透明线框重构 (Playlist Drawer Handle Border-Flush & Transparent Stroke Redesign)~~ | ~~正式立项 (设计定稿)~~ **已落地销项** | **1.6.0** |
-| ~~提案 020~~ | ~~智能静默更新检测、周级克制频控与用户数据无损在位覆盖安装 (Smart Silent Update, Weekly Cadence & Lossless In-Place Overwrite Installer)~~ | ~~正式立项 (方案设计完成)~~ **已落地销项** | **1.6.0** |
-| 提案 021 | 播控栏与进度条无底框全景纯悬浮化重构 (Cinema-Embedded Canvas HUD) | 正式立项 (设计定稿) | **1.7.0 核心排期** |
-| 提案 022 | 播放列表多模态快速识别检索与防误触清空管线 (Playlist Multimodal Instant Search & Safe-Clear Pipeline) | 正式立项 (方案设计定稿) | **1.7.0 核心排期** |
-| ~~提案 023~~ | ~~窗口实时拉伸像素尺寸与画幅比例指示器 (Window Live-Resize Precision Dimension HUD)~~ | ~~需求就绪~~ **已落地销项** | **1.6.0** |
-| 提案 024 | 音乐模式可折叠两段式视图与磁吸切换机制 (Collapsible Two-Stage Music Mode & Magnetic Snap) | 预览实现 (待 2.0.0 评估收口) | **2.0.0 音乐模式规划** |
-| 提案 025 | 音乐模式状态栏常驻入口与轻量播控形态 (Music Mode Persistent Status Bar Entry) | 灵感归档 (待后续决策方案) | **2.0.0 音乐模式规划** |
-| 提案 026 | 黑边动态高斯模糊环境光填充 (Dynamic Ambient Letterbox Blur Fill) | 需求定稿 (方案就绪 · 规划归属 2.0.0) | **2.0.0 视觉体验规划** |
-| 提案 027 | 右键菜单窗口倍率缩放入口 (Context Menu Window Scale Presets · GitHub Issue #6) | 决策定稿 (不改默认自适应策略 · 仅在右键增加倍率缩放) | **1.7.0 候选排期** |
-| 提案 028 | 全局强调色与高光蓝系统按钮质感重构 (Global Accent & Prominent Button Visual Refinement) | 搁置待定 | **视觉体验规划** |
-| 提案 029 | SilkMediaEngineKit 本地嵌入式媒体库引擎架构收缩方案 (Local Embedded Media Engine Architecture) | 归档备案 | **媒体库规划** |
-| 提案 030 | 媒体库影片分类体系与高效批量管理方案（本地虚拟标签 + 官方边缘稳定刮削双轨架构） | 归档备忘 | **媒体库规划** |
-| 提案 031 | 原生无边框桌面全屏（Borderless Desktop Fullscreen）方案 | 排期备忘 | **2.1.0** |
-| 提案 032 | 播放器音频增益扩展至 200%、软限幅防削波、安全回落记忆策略与右侧纵向音量条视觉比例重构 (Audio Volume 200% Boost, Soft-Limiter, Safety Clamping & Vertical Slider Redesign) | 需求定稿 (方案就绪) | **后续排期** |
-| 提案 033 | 竖屏视频自适应初始尺寸黄金比例升级（对齐 QuickTime 满高）与极简 HUD 规格药丸防折行保护 (Vertical Video Adaptive Size 100% Ratio & Minimal HUD) | 已实施 (交付归档) | **2.1.0** |
-| 提案 034 | 横屏视频自适应初始尺寸黄金比例升级（55% → 70% 舒适观影比例）与小屏笔记本呼吸边距优化 (Horizontal Video Adaptive Size 70% Ratio Upgrade for Laptop Display & HUD Clearance) | 已实施 (交付归档) | **2.1.0** |
-| 提案 035 | 播放列表侧边抽屉拉手微质感重构（解决小屏/非整数缩放下高反差白斑，融入液态毛玻璃与悬浮动态呼吸态） (Playlist Drawer Handle Visual Refinement & Fractional Scaling Protection) | 已实施 (交付归档) | **2.1.0** |
-| 提案 036 | 基于 TMDB 元数据的剧集连载进度与追剧缺集提醒雷达 (TV Series Episode Tracker & Missing Episodes Radar) | 需求定稿 (方案就绪) | **后续排期 (2.2.0)** |
-| 提案 037 | 全屏播放列表胶囊悬停自动呼出与离场收回机制 (Fullscreen Playlist Drawer Handle-Hover Auto-Expand & Boundary Auto-Collapse) | 需求定稿 (方案就绪) | **2.2.0** |
-| 提案 038 | 网络挂载卷宗与流媒体 I/O 8 秒熔断看门狗与超时自愈治理 (Network Volume & Stream I/O 8s Watchdog Timeout & Anti-Hang Hardening) | 需求定稿 (方案就绪) | **2.2.0** |
-| 提案 039 | 原生 WebDAV 协议网络存储源挂载与媒体点播流式直读 (Native WebDAV Network Share & Direct Streaming VOD Pipeline) | 需求定稿 (方案就绪) | **2.2.0** |
+| ~~提案 002~~ | ~~设置为默认播放器与格式关联管理 (Default Player)~~ | **已落地销项** | **1.3.0** |
+| ~~提案 003~~ | ~~原生轻量 SMB 局域网与 NAS 深度互联中枢 (Native SMB & NAS Pro Integration)~~ | **已落地销项** | **2.0.0** |
+| ~~提案 004~~ | ~~局域网轻量投屏功能 (DLNA / Screencast)~~ | **彻底放弃（已推进独立 tvOS 端）** | **—** |
+| ~~提案 005~~ | ~~纯音频播放体验与原生极简封面动效 (Audio Artwork & Waveform)~~ | **已落地销项** | **1.1.0** |
+| ~~提案 006~~ | ~~音视频双轨独立列表与智能分流管理 (Dual-Track Media Playlist)~~ | **已落地销项** | **1.4.0** |
+| ~~提案 007~~ | ~~VP9 硬件加速解码与色彩管线 (VP9 Hardware Decoding)~~ | **已落地销项** | **1.7.0 / 2.0.0** |
+| ~~提案 008~~ | ~~外挂字幕自动检索与同名关联推荐 (External Subtitle Auto-Search)~~ | **已落地销项** | **1.7.0 / 2.0.0** |
+| 提案 010 | 私有自用增强分支与端侧离线听译/网络流沙盒 (Personal Edition) | 长期封存（不进主线） | **—** |
+| ~~提案 011~~ | ~~非原生预览格式文稿图标与品牌 Logo 占位替换 (Document Types Iconography & Fallback Branding)~~ | **已落地销项** | **1.4.0** |
+| 提案 012 | 剧集片头探测与智能跳过 (Smart Intro Skip) | 低优搁置（无依赖条件） | **—** |
+| ~~提案 013~~ | ~~HDR10 与杜比视界动态 EDR 高光软滚降压制与色调映射 (Dynamic EDR Tone-Mapping & Highlight Roll-off)~~ | **已落地销项** | **1.6.0** |
+| ~~提案 014~~ | ~~全场景大动态范围自适应画质重构与局部对比度增强 (SDR-to-EDR Dynamic Range Expansion)~~ | **已落地销项** | **2.0.0** |
+| ~~提案 015~~ | ~~播控栏交互式音量微调与起播防爆音安全锁 (Interactive Volume Popover & Pre-play Audio Safety Lock)~~ | **已落地销项** | **1.5.0** |
+| ~~提案 016~~ | ~~多文件夹与批量剧集导入全局智能自然排序 (Multi-Folder & Batch Episode Intelligent Natural Sorting)~~ | **已落地销项** | **1.5.0** |
+| ~~提案 017~~ | ~~全链路系统级资源占用优化与高频空转治理 (System-wide Performance & Resource Footprint Optimization)~~ | **已落地销项** | **1.5.0** |
+| ~~提案 018~~ | ~~偏好设置模块 macOS HIG 规范化全量重构 (Native Settings HIG Architecture & Design Overhaul)~~ | **已落地销项** | **1.6.0** |
+| ~~提案 019~~ | ~~播放列表侧边拉手边框贴合与极简透明线框重构 (Playlist Drawer Handle Border-Flush & Transparent Stroke Redesign)~~ | **已落地销项** | **1.6.0** |
+| ~~提案 020~~ | ~~智能静默更新检测、周级克制频控与用户数据无损在位覆盖安装 (Smart Silent Update, Weekly Cadence & Lossless In-Place Overwrite Installer)~~ | **已落地销项** | **1.6.0** |
+| ~~提案 021~~ | ~~播控栏与进度条无底框全景纯悬浮化重构 (Cinema-Embedded Canvas HUD)~~ | **已落地销项** | **1.7.0 / 2.0.0** |
+| ~~提案 022~~ | ~~播放列表多模态快速识别检索与防误触清空管线 (Playlist Multimodal Instant Search & Safe-Clear Pipeline)~~ | **已落地销项** | **1.7.0 / 2.0.0** |
+| ~~提案 023~~ | ~~窗口实时拉伸像素尺寸与画幅比例指示器 (Window Live-Resize Precision Dimension HUD)~~ | **已落地销项** | **1.6.0** |
+| ~~提案 024~~ | ~~音乐模式可折叠两段式视图与磁吸切换机制 (Collapsible Two-Stage Music Mode & Magnetic Snap)~~ | **已落地销项** | **2.0.0** |
+| ~~提案 025~~ | ~~音乐模式状态栏常驻入口与轻量播控形态 (Music Mode Persistent Status Bar Entry)~~ | **已落地销项** | **2.0.0** |
+| 提案 026 | 黑边动态高斯模糊环境光填充 (Dynamic Ambient Letterbox Blur Fill) | 本次实施试水 | **2.2.0** |
+| ~~提案 027~~ | ~~右键菜单窗口倍率缩放入口 (Context Menu Window Scale Presets · GitHub Issue #6)~~ | **已落地销项** | **1.7.0 / 2.0.0** |
+| 提案 028 | 全局强调色与高光蓝系统按钮质感重构 (Global Accent & Prominent Button Visual Refinement) | 搁置待定 | **—** |
+| ~~提案 029~~ | ~~SilkMediaEngineKit 本地嵌入式媒体库引擎架构收缩方案 (Local Embedded Media Engine Architecture)~~ | **已落地销项** | **2.0.0** |
+| ~~提案 030~~ | ~~媒体库影片分类体系与高效批量管理方案（本地虚拟标签 + 官方边缘稳定刮削双轨架构）~~ | **已落地销项** | **2.0.0** |
+| ~~提案 031~~ | ~~原生无边框桌面全屏（Borderless Desktop Fullscreen）方案~~ | **彻底放弃（旧系统环境个例，不再跟进）** | **—** |
+| ~~提案 032~~ | ~~播放器音频增益扩展至 200%、软限幅防削波、安全回落记忆策略与右侧纵向音量条视觉比例重构~~ | **已落地销项** | **2.0.0** |
+| ~~提案 033~~ | ~~竖屏视频自适应初始尺寸黄金比例升级（对齐 QuickTime 满高）与极简 HUD 规格药丸防折行保护~~ | **已落地销项** | **2.1.0** |
+| ~~提案 034~~ | ~~横屏视频自适应初始尺寸黄金比例升级（55% → 70% 舒适观影比例）与小屏笔记本呼吸边距优化~~ | **已落地销项** | **2.1.0** |
+| ~~提案 035~~ | ~~播放列表侧边抽屉拉手微质感重构（解决小屏/非整数缩放下高反差白斑，融入液态毛玻璃与悬浮动态呼吸态）~~ | **已落地销项** | **2.1.0** |
+| 提案 036 | 基于 TMDB 元数据的剧集连载进度与追剧缺集提醒雷达 (TV Series Episode Tracker & Missing Episodes Radar) | 搁置待重评（上次测试效果不理想） | **—** |
+| 提案 037 | 全屏播放列表胶囊悬停自动呼出与离场收回机制 (Fullscreen Playlist Drawer Handle-Hover Auto-Expand & Boundary Auto-Collapse) | 本次实施 | **2.2.0** |
+| 提案 038 | 网络挂载卷宗与流媒体 I/O 8 秒熔断看门狗与超时自愈治理 (Network Volume & Stream I/O 8s Watchdog Timeout & Anti-Hang Hardening) | 本次实施 | **2.2.0** |
+| 提案 039 | 原生 WebDAV 协议网络存储源挂载与媒体点播流式直读 (Native WebDAV Network Share & Direct Streaming VOD Pipeline) | 搁置（待后续长周期压测） | **—** |
 
 
 ---

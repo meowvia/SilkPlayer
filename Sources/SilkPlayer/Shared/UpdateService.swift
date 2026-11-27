@@ -18,6 +18,7 @@ public final class UpdateService {
     public private(set) var downloadProgress: Double = 0.0
     public var latestVersion: String? = nil
     public var latestDownloadURL: String? = nil
+    public var latestReleaseNotes: String? = nil
 
     public var isShowingUpdateAlert: Bool = false
     public var isShowingUpToDateAlert: Bool = false
@@ -25,6 +26,7 @@ public final class UpdateService {
 
     private let userDefaultsLatestVersionKey = "SilkPlayer.Update.LatestVersion"
     private let userDefaultsLatestDownloadURLKey = "SilkPlayer.Update.LatestDownloadURL"
+    private let userDefaultsLatestReleaseNotesKey = "SilkPlayer.Update.LatestReleaseNotes"
     private let userDefaultsHasPendingUpdateKey = "SilkPlayer.Update.HasPendingUpdate"
     private let userDefaultsLastColdStartReminderKey = "SilkPlayer.Update.LastColdStartReminderDate"
 
@@ -47,6 +49,9 @@ public final class UpdateService {
         }
         if let savedURL = UserDefaults.standard.string(forKey: userDefaultsLatestDownloadURLKey) {
             self.latestDownloadURL = savedURL
+        }
+        if let savedNotes = UserDefaults.standard.string(forKey: userDefaultsLatestReleaseNotesKey) {
+            self.latestReleaseNotes = savedNotes
         }
     }
 
@@ -114,10 +119,7 @@ public final class UpdateService {
             "New version \(version) is available. Update now?",
             "发现新版本 \(version)，是否立即更新？"
         )
-        alert.informativeText = L10n.tr(
-            "SilkPlayer will download and install the update in the background.",
-            "新版本已就绪，SilkPlayer 将在端内静默下载并自动无损替换升级。"
-        )
+        alert.informativeText = formattedAlertMessage(for: version)
         alert.addButton(withTitle: L10n.tr("Yes", "是"))
         alert.addButton(withTitle: L10n.tr("No", "否"))
 
@@ -167,6 +169,7 @@ public final class UpdateService {
                 self?.applyRemoteVersionResult(
                     remoteVersion: edgeResult.version,
                     resolvedDownloadURL: edgeResult.downloadURL,
+                    releaseNotes: edgeResult.notes,
                     completion: completion
                 )
                 return
@@ -176,6 +179,7 @@ public final class UpdateService {
                 self?.applyRemoteVersionResult(
                     remoteVersion: ghResult.version,
                     resolvedDownloadURL: ghResult.downloadURL,
+                    releaseNotes: ghResult.notes,
                     completion: completion
                 )
                 return
@@ -185,31 +189,116 @@ public final class UpdateService {
         }
     }
 
+    /// Formats concise release notes + download guidance shown in both NSAlert and SwiftUI update dialogs.
+    public func formattedAlertMessage(for version: String) -> String {
+        let notesText = resolvedNotesText(for: version)
+        let actionNote = L10n.tr(
+            "Click \"Yes\" to download and install automatically in the background.",
+            "点击「是」即可在端内静默下载并无损替换升级。"
+        )
+        if notesText.isEmpty {
+            return actionNote
+        }
+        return "\(notesText)\n\n\(actionNote)"
+    }
+
+    private func resolvedNotesText(for version: String) -> String {
+        if let raw = latestReleaseNotes?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+            return raw
+        }
+        let cleanVer = version.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
+        if cleanVer == "2.2.0" {
+            return L10n.tr(
+                """
+                What's New in 2.2.0:
+                • Media Library now scans local folders, external drives & NAS shares
+                • Added optional Pro Ambient Letterbox Fill in Settings → Playback
+                • Direct FFmpeg header probe for Dolby Vision & Dolby Atmos specs
+                • Fullscreen right-edge hover opens Playlist; 8s network watchdog
+                """,
+                """
+                2.2.0 更新亮点：
+                • 「媒体库」全面支持本地文件夹、外置硬盘与 NAS 目录海报墙
+                • 新增 Pro「黑边环境光柔化」，可在 设置 → 播放 中按需开启
+                • 详情页直接探测 Dolby Vision / Dolby Atmos 等音视频规格
+                • 全屏右侧悬停展开播放列表，新增网络断流 8 秒超时保护
+                """
+            )
+        }
+        return ""
+    }
+
     private func applyRemoteVersionResult(
         remoteVersion: String,
         resolvedDownloadURL: String,
+        releaseNotes: String?,
         completion: @escaping @MainActor (Bool, String?) -> Void
     ) {
         let comparison = Self.compareVersions(remoteVersion, currentAppVersion)
         if comparison == .orderedDescending {
             latestVersion = remoteVersion
             latestDownloadURL = resolvedDownloadURL
+            let trimmedNotes = releaseNotes?.trimmingCharacters(in: .whitespacesAndNewlines)
+            latestReleaseNotes = (trimmedNotes?.isEmpty == false) ? trimmedNotes : nil
             hasPendingUpdate = true
             UserDefaults.standard.set(remoteVersion, forKey: userDefaultsLatestVersionKey)
             UserDefaults.standard.set(resolvedDownloadURL, forKey: userDefaultsLatestDownloadURLKey)
+            if let notes = latestReleaseNotes {
+                UserDefaults.standard.set(notes, forKey: userDefaultsLatestReleaseNotesKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: userDefaultsLatestReleaseNotesKey)
+            }
             completion(true, remoteVersion)
         } else {
             latestDownloadURL = nil
+            latestReleaseNotes = nil
             hasPendingUpdate = false
             UserDefaults.standard.removeObject(forKey: userDefaultsLatestVersionKey)
             UserDefaults.standard.removeObject(forKey: userDefaultsLatestDownloadURLKey)
+            UserDefaults.standard.removeObject(forKey: userDefaultsLatestReleaseNotesKey)
             completion(false, nil)
         }
     }
 
+    private nonisolated static func selectLocalizedNotes(from json: [String: Any]) -> String? {
+        let isChinese = Locale.preferredLanguages.first?.lowercased().hasPrefix("zh") == true
+        let candidates: [String?] = isChinese
+            ? [json["notes_zh"] as? String, json["notes"] as? String, json["notes_en"] as? String]
+            : [json["notes_en"] as? String, json["notes"] as? String, json["notes_zh"] as? String]
+        for candidate in candidates {
+            if let trimmed = candidate?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+        return nil
+    }
+
+    private nonisolated static func compactGitHubReleaseNotes(_ rawBody: String?) -> String? {
+        guard let rawBody else { return nil }
+        let lines = rawBody
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { line in
+                !line.isEmpty
+                    && !line.hasPrefix("#")
+                    && !line.hasPrefix("```")
+                    && !line.hasPrefix(">")
+                    && (line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("• "))
+            }
+            .prefix(4)
+            .map { line -> String in
+                if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                    return "• " + line.dropFirst(2)
+                }
+                return line
+            }
+        guard !lines.isEmpty else { return nil }
+        return lines.joined(separator: "\n")
+    }
+
     private nonisolated static func fetchFromOfficialEdge(
         appVersion: String
-    ) async -> (version: String, downloadURL: String)? {
+    ) async -> (version: String, downloadURL: String, notes: String?)? {
         guard let url = URL(string: officialVersionEndpoint) else { return nil }
         var request = URLRequest(url: url)
         request.timeoutInterval = 6.0
@@ -226,7 +315,8 @@ public final class UpdateService {
             guard let rawVer else { return nil }
             let cleanVer = rawVer.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
             guard !cleanVer.isEmpty else { return nil }
-            return (cleanVer, officialDownloadEndpoint)
+            let notes = selectLocalizedNotes(from: json)
+            return (cleanVer, officialDownloadEndpoint, notes)
         } catch {
             return nil
         }
@@ -234,7 +324,7 @@ public final class UpdateService {
 
     private nonisolated static func fetchFromGitHubFallback(
         appVersion: String
-    ) async -> (version: String, downloadURL: String)? {
+    ) async -> (version: String, downloadURL: String, notes: String?)? {
         guard let url = URL(string: githubLatestAPIEndpoint) else { return nil }
         var request = URLRequest(url: url)
         request.timeoutInterval = 8.0
@@ -254,7 +344,8 @@ public final class UpdateService {
             let ghURL = resolveDownloadURLString(version: cleanVer, assets: assets)
             // Prefer official Cloudflare Edge download mirror so Mainland China users don't stall on GitHub CDN
             _ = ghURL
-            return (cleanVer, officialDownloadEndpoint)
+            let notes = compactGitHubReleaseNotes(json["body"] as? String)
+            return (cleanVer, officialDownloadEndpoint, notes)
         } catch {
             return nil
         }

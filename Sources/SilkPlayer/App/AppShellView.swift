@@ -63,7 +63,7 @@ public struct AppShellView: View {
     }
 
     private var shouldHidePlaylistDrawerForPro: Bool {
-        !isSecondaryWindow && ((!isPlaying && licenseEngine.isProActive) || isProLibraryActive)
+        !isSecondaryWindow && ((!isPlaying && canUseLANFeatures) || isProLibraryActive)
     }
 
     private var useWarmLightEdgeHandle: Bool {
@@ -169,6 +169,9 @@ public struct AppShellView: View {
                             onFilesDropped: { urls in
                                 let paths = urls.map(\.path)
                                 openExternalPaths(paths)
+                            },
+                            onOpenMediaLibrarySettings: {
+                                PlayerWindowManager.shared.openSettings(initialTab: 2)
                             }
                         )
                         .edgesIgnoringSafeArea(.all)
@@ -318,6 +321,20 @@ public struct AppShellView: View {
                 isLeftSourceDrawerVisible = false
             }
         }
+        .onChange(of: shouldHidePlaylistDrawerForPro) { _, hidden in
+            if hidden {
+                player.isPlaylistDrawerVisible = false
+            }
+        }
+        .onChange(of: settings.proLibraryHomeEnabled) { _, enabled in
+            guard !isSecondaryWindow else { return }
+            if !enabled {
+                playlistManager.isPersistenceEnabled = true
+                if !isPlaying && playlistManager.isEmpty {
+                    playlistManager.restoreFromStorage()
+                }
+            }
+        }
         .alert(
             L10n.tr("Unable to Open Media", "无法打开媒体文件"),
             isPresented: isLibraryPlaybackErrorPresented
@@ -330,6 +347,7 @@ public struct AppShellView: View {
         }
         .onChange(of: licenseEngine.isProActive) { _, isActive in
             SilkProIconManager.syncApplicationIcon(isProActive: isActive)
+            PlayerWindowManager.shared.applyAmbientLetterboxFill(settings.ambientLetterboxFill)
             guard isActive, !isSecondaryWindow else { return }
             Task { @MainActor in
                 if settings.proAutoScanOnLaunch {
@@ -415,6 +433,8 @@ public struct AppShellView: View {
             Button(L10n.tr("No", "否"), role: .cancel) {
                 UpdateService.shared.userDeclinedUpdate()
             }
+        } message: {
+            Text(UpdateService.shared.formattedAlertMessage(for: UpdateService.shared.latestVersion ?? ""))
         }
     }
 
@@ -460,7 +480,6 @@ public struct AppShellView: View {
             playlistManager.clear()
             playlistManager.isPersistenceEnabled = true
             if wasEphemeralExternal {
-                playlistManager.saveToStorage()
                 if let restoreDetailPath {
                     libraryEngine.activeDetailPath = restoreDetailPath
                 }
@@ -1204,7 +1223,7 @@ public struct LeftLANSourceHandleTab: View {
                 action: action
             )
             .frame(width: 28, height: 128)
-            .help(L10n.tr("LAN & Media Sources", "局域网与媒体源"))
+            .help(L10n.tr("Media Sources", "媒体源"))
             .opacity(isDrawerVisible ? 0.0 : 1.0)
             .allowsHitTesting(!isDrawerVisible)
 

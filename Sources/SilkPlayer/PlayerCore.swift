@@ -459,6 +459,7 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
         newLayer.player.isMuted = self.isMuted
         newLayer.player.playbackRate = Float(self.speed)
         newLayer.isQualityEnhancementEnabled = self.isHDREnabled
+        newLayer.isAmbientLetterboxEnabled = AppSettings.shared.ambientLetterboxFill && SilkProLicenseEngine.shared.isProActive
 
         self.subtitleModel.url = resolvedURL
 
@@ -1067,6 +1068,16 @@ public final class PlayerCore: NSObject, ObservableObject, PlayerControllable, S
     public func setHDREnabled(_ enabled: Bool) {
         isHDREnabled = enabled
         applyQualityEnhancement()
+    }
+
+    public func setAmbientLetterboxEnabled(_ enabled: Bool) {
+        let effective = enabled && SilkProLicenseEngine.shared.isProActive
+        playerLayer?.isAmbientLetterboxEnabled = effective
+        renderContainer?.applyRenderViewLayout()
+        if let renderView = (renderContainer?.metalRenderView ?? (playerLayer?.player.view as? SilkMetalRenderView)) {
+            renderView.isAmbientLetterboxEnabled = effective
+            renderView.updateMetalGeometryAndRedraw()
+        }
     }
 
     public func toggleDeband() {

@@ -834,6 +834,12 @@ extension Notification.Name {
         }
     }
 
+    public func applyAmbientLetterboxFill(_ enabled: Bool) {
+        for s in sessions {
+            s.player?.setAmbientLetterboxEnabled(enabled)
+        }
+    }
+
     public func applySubtitleScale(_ scale: Double) {
         for s in sessions {
             s.player?.setSubtitleScale(scale)

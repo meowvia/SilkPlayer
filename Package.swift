@@ -32,38 +32,32 @@ let package = Package(
             name: "Libswscale",
             path: "Packages/Libswscale.xcframework"
         ),
-        (ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true")
-            ? .target(
+        (ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] != "true"
+            && FileManager.default.fileExists(atPath: "Packages/SilkCoreKit.xcframework"))
+            ? .binaryTarget(
+                name: "SilkCoreKit",
+                path: "Packages/SilkCoreKit.xcframework"
+            )
+            : .target(
                 name: "SilkCoreKit",
                 path: "Sources/SilkCoreKitMock",
                 swiftSettings: [
                     .swiftLanguageMode(.v6)
                 ]
-            )
-            : (
-                FileManager.default.fileExists(atPath: "Packages/SilkCoreKit.xcframework")
-                    ? .binaryTarget(
-                        name: "SilkCoreKit",
-                        path: "Packages/SilkCoreKit.xcframework"
-                    )
-                    : .binaryTarget(
-                        name: "SilkCoreKit",
-                        url: "https://github.com/meowvia/SilkPlayer/releases/download/1.1.0/SilkCoreKit.xcframework.zip",
-                        checksum: "a147747afec895a49028f60072def754c316a2086a546fc60ab513370bd39018"
-                    )
             ),
         .executableTarget(
             name: "SilkPlayer",
-            dependencies: (ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true")
+            dependencies: (ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] != "true"
+                && FileManager.default.fileExists(atPath: "Packages/SilkCoreKit.xcframework"))
                 ? [
-                    "SilkCoreKit"
-                ]
-                : [
                     "Libavcodec",
                     "Libavformat",
                     "Libavutil",
                     "Libswresample",
                     "Libswscale",
+                    "SilkCoreKit"
+                ]
+                : [
                     "SilkCoreKit"
                 ],
             path: "Sources/SilkPlayer",

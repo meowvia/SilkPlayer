@@ -16,6 +16,7 @@ public struct PlayerContainerView: View {
     }
     @State private var isHoveringHandle: Bool = false
     @State private var drawerDismissTask: Task<Void, Never>? = nil
+    @State private var drawerExpandTask: Task<Void, Never>? = nil
     var onPlayNext: () -> Void
     var onPlayPrevious: () -> Void
     var onSelectPlaylistItem: (PlaylistItem) -> Void
@@ -208,7 +209,8 @@ public struct PlayerContainerView: View {
 
                 if !isMusicModeActive && !shouldHidePlaylistDrawer {
                     // Right-Edge Floating Side Triangle Pull Tab (always accessible on right border)
-                    // Consistent across windowed and fullscreen: purely manual click to toggle, preventing accidental expansion when reaching for top-right return button.
+                    // Windowed mode: manual click / shortcut P.
+                    // Fullscreen mode: brief hover (~100ms) smoothly expands the playlist drawer.
                     let isHandleVisible = (player.isHUDVisible || isHoveringHandle) && !player.isPlaylistDrawerVisible
                     PlaylistDrawerHandleTab(
                         isDrawerVisible: player.isPlaylistDrawerVisible,
@@ -217,9 +219,23 @@ public struct PlayerContainerView: View {
                             isHoveringHandle = isHovering
                             if isHovering {
                                 player.reportUserActivity()
+                                drawerDismissTask?.cancel()
+                                if player.isFullscreen && !player.isPlaylistDrawerVisible {
+                                    drawerExpandTask?.cancel()
+                                    drawerExpandTask = Task { @MainActor in
+                                        try? await Task.sleep(nanoseconds: 100_000_000)
+                                        guard !Task.isCancelled, player.isFullscreen, isHoveringHandle else { return }
+                                        withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
+                                            player.isPlaylistDrawerVisible = true
+                                        }
+                                    }
+                                }
+                            } else {
+                                drawerExpandTask?.cancel()
                             }
                         }
                     ) {
+                        drawerExpandTask?.cancel()
                         withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
                             player.togglePlaylistDrawer()
                         }
@@ -356,7 +372,7 @@ public struct PlayerContainerView: View {
         guard player.isFullscreen else { return }
         drawerDismissTask?.cancel()
         drawerDismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            try? await Task.sleep(nanoseconds: 250_000_000)
             guard !Task.isCancelled, player.isFullscreen else { return }
             withAnimation(SilkAnimation.adaptive(reduceMotion: reduceMotion, preferred: .silkSnappy)) {
                 player.isPlaylistDrawerVisible = false

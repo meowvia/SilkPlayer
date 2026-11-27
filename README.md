@@ -25,8 +25,8 @@
 <img src="Documentation/Screenshots/zh_01.png" alt="SilkPlayer Pro 影视媒体库海报墙" width="94%" />
 
 <br>
-<sub><em>SilkPlayer Pro · macOS 原生架构 · 局域网影视海报墙 · 杜比视界高动态色彩呈现</em></sub><br>
-<sub><em>Native macOS Architecture · LAN Media Library Poster Wall · Dolby Vision High-Dynamic-Range Playback</em></sub>
+<sub><em>SilkPlayer Pro · macOS 原生架构 · 本地、外置硬盘与 NAS 海报墙 · 杜比视界高动态色彩呈现</em></sub><br>
+<sub><em>Native macOS Architecture · Local, External Drive &amp; NAS Poster Wall · Dolby Vision High-Dynamic-Range Playback</em></sub>
 
 </div>
 
@@ -41,10 +41,10 @@
 > Leave behind confusing codec settings and sluggish cross-platform wrappers. SilkPlayer Pro delivers stunning visuals, an automated cinema poster wall, and a pure native Mac experience out of the box.
 
 在 Mac 上看电影或听音乐，本该是一件轻松愉悦的事。然而许多传统播放器随着版本迭代，积累了大量令人望而生畏的技术设置、不统一的弹窗与繁重的系统负担。  
-SilkPlayer Pro 坚守原生 Mac 软件的高标准：启动即开、拖入即播、画质通透、界面克制。无论是存放在本地磁盘的高清大片，还是家庭网络存储设备中的海量剧集，双击即可呈现原汁原味的视听盛宴。
+SilkPlayer Pro 坚守原生 Mac 软件的高标准：启动即开、拖入即播、画质通透、界面克制。没有 NAS 也能使用完整媒体库——无论是存放在 Mac 本机文件夹、外置移动硬盘里的高清电影，还是家庭网络存储设备中的海量剧集，都可以自动整理成海报墙，双击即播。
 
 Watching movies and listening to music on your Mac should be effortless and delightful. Yet many traditional players have become cluttered with complex configuration menus, disjointed dialogs, and heavy system overhead.  
-SilkPlayer Pro upholds the finest traditions of native Mac software: instant startup, drop-to-play simplicity, vivid color fidelity, and restrained design. Whether you are playing high-bitrate films stored on your internal drive or streaming massive series from home network storage, SilkPlayer Pro delivers a flawless audiovisual experience from the very first click.
+SilkPlayer Pro upholds the finest traditions of native Mac software: instant startup, drop-to-play simplicity, vivid color fidelity, and restrained design. No NAS required—whether your media sits in local Mac folders, on external USB/Thunderbolt drives, or across home network shares, SilkPlayer Pro organizes everything into a clean poster wall ready from the first click.
 
 ---
 
@@ -53,9 +53,9 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
 <table>
   <tr>
     <td width="50%" valign="top">
-      <h4>私人影视海报墙与家庭媒体库<br>Cinema Poster Wall &amp; LAN Hub</h4>
+      <h4>私人影视海报墙与媒体库<br>Cinema Poster Wall &amp; Media Library</h4>
       <ul>
-        <li><b>家庭网络存储自动发现 / Automatic Network Storage Discovery</b><br>自动搜索局域网内的群晖、威联通、TrueNAS、Windows 共享等网络存储设备，无需在系统访达手动连接挂载，一键接入影视目录。<br>Automatically discovers LAN storage devices (Synology, QNAP, TrueNAS, Windows Shares) without manual Finder volume mounting.</li>
+        <li><b>本地、外置硬盘与局域网共享一体接入 / Local, External Drives &amp; LAN Discovery</b><br>无需家庭 NAS，直接添加 Mac 本机目录或外置移动硬盘即可生成海报墙；同时也自动搜索局域网内的群晖、威联通、TrueNAS、Windows 共享等设备，免去访达手动挂载。<br>No NAS required: add Mac local folders or external drives directly into the poster wall, or auto-discover LAN SMB/NFS shares (Synology, QNAP, TrueNAS, Windows) without manual Finder mounting.</li>
         <li><b>自动整理与精美海报呈现 / Instant Poster Wall Organization</b><br>自动刮削电影海报、背景画、演职员阵容与剧情简介，完美识别各类现有元数据文件，将凌乱文件夹秒变专业流媒体式海报墙。<br>Instantly turns messy folders into a polished streaming-style poster wall, complete with high-resolution artwork, cast details, and plot summaries.</li>
         <li><b>连续剧多季归拢与智能选集 / Multi-Season Series &amp; Episode Navigation</b><br>整季电视剧自动聚拢归类，提供直观的选集抽屉大网格，单集播放进度清晰可见，追剧不再迷失集数。<br>Aggregates full series into organized season views with a structured episode grid and per-episode resume checkpoints.</li>
         <li><b>沉浸式双栏电影详情页 / Immersive Two-Column Movie Detail</b><br>高分辨率立体海报配合柔和背景环境光，直观呈现 4K、HDR、杜比视界、音频声道及文件体积等完整规格标签。<br>Features ambient blurred backdrops, 3D drop-shadow posters, and clear badges for 4K, HDR, Dolby Vision, audio channels, and file sizes.</li>
@@ -68,6 +68,7 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
       <ul>
         <li><b>4K / 8K 超高清极速直出 / 4K &amp; 8K High-Bitrate Playback</b><br>随心播放超高码率影片，拖拽进度条毫无拖沓，即拖即放，发热极低，长久观影省电安心。<br>Effortlessly plays high-bitrate 4K and 8K videos with instantaneous timeline seeking, low heat generation, and extended battery life.</li>
         <li><b>杜比视界与 HDR 高动态色彩还原 / Dolby Vision &amp; HDR Color Fidelity</b><br>充分释放 Mac 屏幕高动态范围潜力，暗部深邃有层次，高光透亮不过曝，彻底杜绝画面发白与偏色。<br>Unlocks the full dynamic range of your Mac display, delivering deep blacks and vibrant highlights without washed-out colors.</li>
+        <li><b>黑边环境光柔化（Pro 可选）/ Ambient Letterbox Fill (Pro Optional)</b><br>观看宽银幕电影存在上下/左右黑边留白时，可选开启柔和的画面延展微光，兼顾极黑沉浸与氛围延伸。<br>Optionally fills cinema letterbox/pillarbox margins with a soft dimmed ambient glow while keeping the main picture crisp.</li>
         <li><b>全格式视频通吃 / Universal Video Format Support</b><br>全面支持 MP4、MKV、MOV、FLV、TS、WebM、AVI 等各种主流与专业视频封装，无需转码。<br>Seamlessly handles MP4, MKV, MOV, FLV, TS, WebM, AVI, and all major video containers without conversion.</li>
         <li><b>纯透明悬浮播控栏 / Transparent Floating Controls</b><br>控制条如呼吸般轻盈浮于画面之上，播放时自动隐退，还你纯净无遮挡的全屏沉浸视野。<br>Sleek floating controls hover cleanly over the picture and vanish smoothly during playback for an unobstructed view.</li>
         <li><b>时间轴悬停预览缩略图 / Timeline Hover Thumbnail Previews</b><br>鼠标划过时间轴即刻显示对应画面的高清预览图，精彩片段与精彩对白一击即中。<br>Hover anywhere along the scrubber to view instant high-resolution frame previews for precise scene navigation.</li>
@@ -107,7 +108,7 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
 
 <table>
   <tr>
-    <td width="50%" align="center"><b>01. 局域网影视海报墙全景<br>LAN Media Library Poster Wall</b></td>
+    <td width="50%" align="center"><b>01. 影视海报墙全景（本地 / 外置硬盘 / NAS）<br>Media Library Poster Wall (Local, External &amp; NAS)</b></td>
     <td width="50%" align="center"><b>02. 多源全量聚合与影视分类管理<br>Multi-Source Aggregation &amp; Categories</b></td>
   </tr>
   <tr>
@@ -197,16 +198,16 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
 
 <br>
 
-#### 5. 家庭网络存储与局域网设备接入全流程 / LAN Storage &amp; Network Setup Guide
+#### 5. 本地、外置硬盘与网络存储接入流程 / Local, External &amp; LAN Storage Setup
 
 <table>
   <tr>
     <td width="50%" align="center"><b>10. 媒体库初始页面与极简接入向导<br>Library Welcome &amp; Onboarding Guide</b></td>
-    <td width="50%" align="center"><b>11. 局域网网络存储连接指引面板<br>LAN Storage Connection Guide</b></td>
+    <td width="50%" align="center"><b>11. 本地目录与网络存储接入引导<br>Local Folder &amp; LAN Storage Guide</b></td>
   </tr>
   <tr>
     <td align="center"><img src="Documentation/Screenshots/zh_10.png" alt="媒体库初始空态" width="100%" /></td>
-    <td align="center"><img src="Documentation/Screenshots/zh_11.png" alt="网络源接入引导" width="100%" /></td>
+    <td align="center"><img src="Documentation/Screenshots/zh_11.png" alt="媒体源接入引导" width="100%" /></td>
   </tr>
   <tr>
     <td width="50%" align="center"><b>12. 局域网设备全自动扫描发现列表<br>Automatic LAN Storage Device Discovery List</b></td>
@@ -217,7 +218,7 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
     <td align="center"><img src="Documentation/Screenshots/zh_13.png" alt="远程共享目录勾选" width="100%" /></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><sub>告别在系统访达里反复配置网络驱动器的繁琐操作，自动搜索局域网设备，一键勾选共享文件夹即刻生成海报墙<br>Skip tedious manual network mounting in Finder; auto-discover local storage and check folders to build your cinema library</sub></td>
+    <td colspan="2" align="center"><sub>既可直接勾选 Mac 本机与外置移动硬盘文件夹，也能自动搜索局域网设备，免去访达手动挂载即可生成海报墙<br>Select Mac local folders or external drives directly, or auto-discover LAN shares without manual Finder mounting to build your library</sub></td>
   </tr>
 </table>
 
@@ -235,7 +236,7 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
     <td align="center"><img src="Documentation/Screenshots/zh_16.png" alt="播放与连续性设置" width="100%" /></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><b>17. 局域网媒体库设置：多设备云端同步控制<br>LAN Settings: Multi-Device Sync Control</b></td>
+    <td width="50%" align="center"><b>17. 媒体库设置：本地、外置硬盘、局域网与云同步控制<br>Library Settings: Local, External, LAN &amp; Sync Control</b></td>
     <td width="50%" align="center"><b>18. 关于面板：SilkPlayer Pro 软件信息与硬件规格<br>About Panel: SilkPlayer Pro Specs &amp; Licensing</b></td>
   </tr>
   <tr>
@@ -264,14 +265,14 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
 直接从官方全球网络高速下载最新通用安装镜像（满速秒下，无任何跳转与拦截）：  
 Download the latest universal disk image directly from our global network:
 
-* **通用安装镜像 / Universal DMG (Apple Silicon &amp; Intel)**: [SilkPlayer-universal.dmg](https://silkplayer.com/api/download)（安装包体积仅 22.8 MiB，精简轻巧 / 22.8 MiB, ultra-compact）
+* **通用安装镜像 / Universal DMG (Apple Silicon &amp; Intel)**: [SilkPlayer-universal.dmg](https://silkplayer.com/api/download)（安装包体积约 24.0 MiB，精简轻巧 / 24.0 MiB, ultra-compact）
 
 亦可前往 / Alternatively download from [GitHub Releases](https://github.com/meowvia/SilkPlayer/releases/latest)。
 
 #### 方式二：拖拽安装 / Option 2: Drag-and-Drop Installation
 
-1. 双击打开 `SilkPlayer-2.0.0-universal.dmg`；  
-   Open `SilkPlayer-2.0.0-universal.dmg`;
+1. 双击打开 `SilkPlayer-2.2.0-universal.dmg`；  
+   Open `SilkPlayer-2.2.0-universal.dmg`;
 2. 将 `SilkPlayer.app` 图标拖入右侧的 `Applications`（应用程序）文件夹中；  
    Drag `SilkPlayer.app` into your Applications folder;
 3. 从启动台（Launchpad）或应用程序目录打开使用。  
