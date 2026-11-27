@@ -48,63 +48,43 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
 
 ---
 
-### 核心功能与体验亮点 / Feature Showcase & Highlights
+### 核心功能与实机全景 / Feature Highlights & Visual Tour
+
+> 采用**左中右英分栏要点 + 对应实机界面直览**，按 4 大核心场景编排；全部功能要点均配有实机截图对照。  
+> Organized into 4 core scenarios with **side-by-side bilingual highlights** paired directly with live application screenshots.
+
+---
+
+#### 1. 私人影视海报墙与全源媒体库 / Cinema Poster Wall & Media Library
 
 <table>
   <tr>
-    <td width="50%" valign="top">
-      <h4>私人影视海报墙与媒体库<br>Cinema Poster Wall &amp; Media Library</h4>
-      <ul>
-        <li><b>本地、外置硬盘与局域网共享一体接入 / Local, External Drives &amp; LAN Discovery</b><br>无需家庭 NAS，直接添加 Mac 本机目录或外置移动硬盘即可生成海报墙；同时也自动搜索局域网内的群晖、威联通、TrueNAS、Windows 共享等设备，免去访达手动挂载。<br>No NAS required: add Mac local folders or external drives directly into the poster wall, or auto-discover LAN SMB/NFS shares (Synology, QNAP, TrueNAS, Windows) without manual Finder mounting.</li>
-        <li><b>自动整理与精美海报呈现 / Instant Poster Wall Organization</b><br>自动刮削电影海报、背景画、演职员阵容与剧情简介，完美识别各类现有元数据文件，将凌乱文件夹秒变专业流媒体式海报墙。<br>Instantly turns messy folders into a polished streaming-style poster wall, complete with high-resolution artwork, cast details, and plot summaries.</li>
-        <li><b>连续剧多季归拢与智能选集 / Multi-Season Series &amp; Episode Navigation</b><br>整季电视剧自动聚拢归类，提供直观的选集抽屉大网格，单集播放进度清晰可见，追剧不再迷失集数。<br>Aggregates full series into organized season views with a structured episode grid and per-episode resume checkpoints.</li>
-        <li><b>沉浸式双栏电影详情页 / Immersive Two-Column Movie Detail</b><br>高分辨率立体海报配合柔和背景环境光，直观呈现 4K、HDR、杜比视界、音频声道及文件体积等完整规格标签。<br>Features ambient blurred backdrops, 3D drop-shadow posters, and clear badges for 4K, HDR, Dolby Vision, audio channels, and file sizes.</li>
-        <li><b>智能关联好片推荐 / Contextual Movie Recommendations</b><br>根据当前电影的类型与标签，在详情页右侧贴心推荐风格相近的精彩影片，发现更多私人曲库珍藏。<br>Intelligently highlights similar titles from your collection right beside the movie details based on genres and themes.</li>
-        <li><b>高效批量管理 / Seamless Batch Management</b><br>支持一键切换分类、批量重置观看进度、移出海报墙索引，并带有安全防误删确认。<br>Easily switch categories, reset watch progress in bulk, and manage your library with complete trash protection.</li>
-      </ul>
-    </td>
-    <td width="50%" valign="top">
-      <h4>极简通透的影院级播放体验<br>Master-Grade Cinema Playback</h4>
-      <ul>
-        <li><b>4K / 8K 超高清极速直出 / 4K &amp; 8K High-Bitrate Playback</b><br>随心播放超高码率影片，拖拽进度条毫无拖沓，即拖即放，发热极低，长久观影省电安心。<br>Effortlessly plays high-bitrate 4K and 8K videos with instantaneous timeline seeking, low heat generation, and extended battery life.</li>
-        <li><b>杜比视界与 HDR 高动态色彩还原 / Dolby Vision &amp; HDR Color Fidelity</b><br>充分释放 Mac 屏幕高动态范围潜力，暗部深邃有层次，高光透亮不过曝，彻底杜绝画面发白与偏色。<br>Unlocks the full dynamic range of your Mac display, delivering deep blacks and vibrant highlights without washed-out colors.</li>
-        <li><b>黑边环境光柔化（Pro 可选）/ Ambient Letterbox Fill (Pro Optional)</b><br>观看宽银幕电影存在上下/左右黑边留白时，可选开启柔和的画面延展微光，兼顾极黑沉浸与氛围延伸。<br>Optionally fills cinema letterbox/pillarbox margins with a soft dimmed ambient glow while keeping the main picture crisp.</li>
-        <li><b>全格式视频通吃 / Universal Video Format Support</b><br>全面支持 MP4、MKV、MOV、FLV、TS、WebM、AVI 等各种主流与专业视频封装，无需转码。<br>Seamlessly handles MP4, MKV, MOV, FLV, TS, WebM, AVI, and all major video containers without conversion.</li>
-        <li><b>纯透明悬浮播控栏 / Transparent Floating Controls</b><br>控制条如呼吸般轻盈浮于画面之上，播放时自动隐退，还你纯净无遮挡的全屏沉浸视野。<br>Sleek floating controls hover cleanly over the picture and vanish smoothly during playback for an unobstructed view.</li>
-        <li><b>时间轴悬停预览缩略图 / Timeline Hover Thumbnail Previews</b><br>鼠标划过时间轴即刻显示对应画面的高清预览图，精彩片段与精彩对白一击即中。<br>Hover anywhere along the scrubber to view instant high-resolution frame previews for precise scene navigation.</li>
-        <li><b>外挂字幕智能关联 / Automatic External Subtitle Matching</b><br>自动寻找同级目录与字幕文件夹下的所有外挂字幕（SRT、ASS、VTT 等），拖放也能即刻挂载。<br>Automatically detects external subtitles (SRT, ASS, VTT) in parent or companion folders, with instant drag-and-drop loading.</li>
-      </ul>
-    </td>
+    <th width="50%" align="left">中文特性说明</th>
+    <th width="50%" align="left">English Highlights</th>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <h4>独立桌面黑胶音乐播放器<br>Standalone Vinyl Music Mode</h4>
       <ul>
-        <li><b>大窗列表与迷你卡片自由切换 / Full Queue &amp; Mini Card Views</b><br>提供展开模式（浏览完整播放队列与歌曲信息）与极简小卡片（随手摆放于桌面角落），适配各种分屏工作流。<br>Smoothly toggle between an expanded playlist queue view and a minimal desktop card tailored for focused workflows.</li>
-        <li><b>优雅拟真黑胶唱片视窗 / Realistic Rotating Vinyl Visualizer</b><br>伴随动听旋律缓缓旋转的拟真黑胶唱片，辅以随音乐起伏的柔和动态光晕，工作与学习时的绝佳伴侣。<br>Enjoy a beautifully rendered vinyl disc rotating to the rhythm, complete with a gentle ambient dynamic light glow.</li>
-        <li><b>菜单栏常驻随身听 / Menu Bar Resident Micro-Player</b><br>可随时将音乐收拢至 Mac 顶部菜单栏，彻底释放 Dock 栏空间，点击即可快速切歌与调整音量。<br>Minimize directly to the macOS menu bar to keep your Dock clean while retaining one-click playback and track controls.</li>
-        <li><b>全格式高解析度无损音质 / Studio-Grade Lossless Audio Playback</b><br>完美还原 FLAC、APE、WAV、DSD、DTS 等母带级无损音频细节，声场宽广，人声纯净通透。<br>Faithfully reproduces FLAC, APE, WAV, DSD, DTS, and studio-grade lossless audio with expansive clarity and warmth.</li>
-        <li><b>智能多声道平衡与防破音 / Smart Audio Balance &amp; Protection</b><br>多声道音轨自动平衡，使用耳机或外放音响时人声清晰饱满，大动态电影爆破与交响乐平顺不刺耳。<br>Intelligently balances multichannel tracks for headphones and stereo speakers, ensuring clear dialog and preventing harsh distortion.</li>
+        <li><b>全源一体接入</b>：无需 NAS 即可直接添加 Mac 本机目录与外置硬盘；同时支持局域网自动发现群晖、威联通、TrueNAS、Windows SMB/NFS 共享，免去访达手动挂载。</li>
+        <li><b>自动刮削海报墙</b>：自动识别元数据并匹配海报、背景图、演职员阵容与剧情简介，将零散目录整理为流媒体式海报墙。</li>
+        <li><b>连续剧多季归拢</b>：整季剧集自动聚合，提供结构化分集大网格与单集断点续播记忆。</li>
+        <li><b>双栏电影详情页</b>：立体投影海报搭配柔和背景环境光，直观展示 4K、HDR、杜比视界、声道与文件体积标签。</li>
+        <li><b>相似好片推荐</b>：依据当前影片类型与标签，在详情页右侧关联推荐同片库佳作。</li>
+        <li><b>高效批量管理</b>：支持一键切换分类、批量重置观看进度与安全防误删移出索引。</li>
       </ul>
     </td>
     <td width="50%" valign="top">
-      <h4>纯正 Mac 原生质感与个性化<br>Pure Native Mac Craftsmanship</h4>
       <ul>
-        <li><b>4 套高品质主题随心切换 / 4 Curated High-Contrast Themes</b><br>内置经典深灰、深邃黑（OLED 纯黑）、钛金灰、冰霜白 4 款专属主题，完美契合你的桌面壁纸与视觉偏好。<br>Choose from Classic Dark, Deep Onyx (OLED Pure Black), Titanium Gray, and Frost White to complement your Mac setup.</li>
-        <li><b>多设备观影进度随行 / Seamless Multi-Device Watch History</b><br>支持在不同 Mac 设备之间同步观影进度，书房看一半，客厅接着看，进度无缝延续。<br>Optionally keeps your playback progress in sync across multiple Mac computers, picking up right where you left off.</li>
-        <li><b>播放列表快速拼音搜索 / Instant Playlist Pinyin &amp; Text Search</b><br>直接输入汉字或拼音首字母，海量分集与音频曲目秒级精准过滤，找片找歌无需费神。<br>Filter through massive playlists in seconds using Chinese Pinyin initials or keyword search.</li>
-        <li><b>极低资源占用与零多余常驻 / Ultra-Low Resource Footprint</b><br>静态浏览时维持极低系统消耗，退出即彻底释放，没有后台常驻守护进程，不抢占宝贵内存。<br>Maintains near-zero CPU and GPU usage when idle, completely freeing memory on exit with no background daemons.</li>
-        <li><b>简洁直观的偏好设置 / Single-Screen Intuitive Preferences</b><br>精心排版的设置界面，一屏尽收眼底，无需在多层嵌套的复杂菜单中反复寻找开关。<br>Carefully designed single-screen preference panes eliminate tedious nested menus and vertical scrolling.</li>
+        <li><b>Local, External &amp; LAN Sources</b>: Add local Mac folders or external drives without a NAS, or auto-discover LAN SMB/NFS shares (Synology, QNAP, TrueNAS, Windows) without manual Finder mounting.</li>
+        <li><b>Automated Poster Wall</b>: Scrapes artwork, backdrops, cast info, and plot summaries to turn raw folders into a structured cinema wall.</li>
+        <li><b>Multi-Season Series Grid</b>: Groups TV seasons automatically with an episode grid drawer and per-episode resume checkpoints.</li>
+        <li><b>Two-Column Movie Detail</b>: 3D drop-shadow posters and ambient backdrop lighting with clear badges for 4K, HDR, Dolby Vision, audio channels, and file size.</li>
+        <li><b>Contextual Recommendations</b>: Suggests related titles from your own library beside the movie details based on genres and tags.</li>
+        <li><b>Batch Library Management</b>: Switch categories, reset watch progress in bulk, and remove entries with trash-safe confirmation.</li>
       </ul>
     </td>
   </tr>
 </table>
-
----
-
-### 实机效果全景展示 / 18-Part Feature Gallery
-
-#### 1. 影视媒体库全景与分类管理 / Media Library Overview &amp; Category Filtering
 
 <table>
   <tr>
@@ -116,16 +96,9 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
     <td align="center"><img src="Documentation/Screenshots/zh_02.png" alt="多源分类管理" width="100%" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>高密度自适应海报网格，悬停即可单点快捷播放，支持快速移出继续观看<br>High-density adaptive poster grid with instant hover-to-play and quick watchlist pruning</sub></td>
-    <td align="center"><sub>支持全部媒体源下拉快速切换，电影与剧集一键分流，顶部工具栏轻松筛选<br>Dropdown media source switcher, movie and series classification, and quick top-bar filtering</sub></td>
+    <td align="center"><sub>自适应海报网格，悬停单点快捷播放，支持快速移出继续观看<br>Adaptive poster grid with hover-to-play and quick watchlist pruning</sub></td>
+    <td align="center"><sub>全部媒体源下拉切换、电影与剧集分流、顶部栏快速筛选<br>Dropdown source switcher, movie/series split, and top-bar filtering</sub></td>
   </tr>
-</table>
-
-<br>
-
-#### 2. 沉浸式电影详情页与连续剧选集 / Movie Detail View &amp; Multi-Season Series
-
-<table>
   <tr>
     <td width="50%" align="center"><b>03. 电影沉浸详情页与 4K 杜比视界规格标签<br>Movie Detail View &amp; Technical Badges</b></td>
     <td width="50%" align="center"><b>04. 连续剧分季选集大网格与相似好片推荐<br>TV Series Multi-Season Grid &amp; Recommendations</b></td>
@@ -135,72 +108,9 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
     <td align="center"><img src="Documentation/Screenshots/zh_04.png" alt="剧集多季选集" width="100%" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>柔和背景光影、高清海报立体投影、完整剧情简介与右侧智能关联好片推荐<br>Soft ambient backdrop glow, 3D poster shadow, full synopsis, and contextual recommendations</sub></td>
-    <td align="center"><sub>整季电视剧大网格选集抽屉，逐集记录播放断点，追剧体验一目了然<br>Structured multi-season episode drawer with individual resume memory for effortless binge-watching</sub></td>
+    <td align="center"><sub>背景环境光、立体海报投影、剧情简介与实测音画规格标签<br>Ambient glow, 3D poster shadow, synopsis, and probed media badges</sub></td>
+    <td align="center"><sub>分季选集抽屉与逐集断点记忆，右侧联动推荐相似影片<br>Multi-season episode drawer with resume state and related picks</sub></td>
   </tr>
-</table>
-
-<br>
-
-#### 3. 4K 超高清杜比视界播放与悬浮播控 / 4K Dolby Vision Playback &amp; Floating HUD
-
-<table>
-  <tr>
-    <td width="50%" align="center"><b>05. 4K UHD 杜比视界超高清高动态画质直出<br>4K UHD Dolby Vision High-Fidelity Playback</b></td>
-    <td width="50%" align="center"><b>06. 纯透明悬浮播控栏与毫秒级进度微调<br>Transparent Floating Scrubber &amp; Controls</b></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="Documentation/Screenshots/zh_05.png" alt="杜比视界高清播放" width="100%" /></td>
-    <td align="center"><img src="Documentation/Screenshots/zh_06.png" alt="纯透明悬浮时间轴" width="100%" /></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>充分释放屏幕高动态画质潜力，暗部细节丰富深邃，高光通透自然，色彩真实还原<br>Delivers expansive dynamic contrast with deep shadow detail, pristine highlights, and faithful colors</sub></td>
-    <td align="center"><sub>纯透明悬浮播控胶囊，播放时自动优雅隐退，无任何多余方框遮挡观影视野<br>Minimalist floating pill control bar that fades away cleanly with zero opaque bottom boxes</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><b>07. 视频规格属性与音画详细信息悬浮面板<br>Live Stream Properties &amp; Video Metadata Overlay</b></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="Documentation/Screenshots/zh_07.png" alt="视频详细属性面板" width="80%" /></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><sub>随时查看当前视频的实际分辨率、帧率、色彩格式与音频通道详细参数<br>Inspect live resolution, frame rate, color space, and audio channel parameters at any moment</sub></td>
-  </tr>
-</table>
-
-<br>
-
-#### 4. 独立桌面黑胶音乐播放器与无损曲库 / Standalone Vinyl Music Mode &amp; Audio Library
-
-<table>
-  <tr>
-    <td width="50%" align="center"><b>08. 独立音乐播放器：展开模式与黑胶旋转视窗<br>Music Mode: Expanded Queue &amp; Vinyl Visualizer</b></td>
-    <td width="50%" align="center"><b>09. 独立音乐播放器：极简桌面伴侣小卡片<br>Music Mode: Minimal Desktop Companion Card</b></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="Documentation/Screenshots/zh_08.png" alt="独立音乐播放器展开模式" width="100%" /></td>
-    <td align="center"><img src="Documentation/Screenshots/zh_09.png" alt="独立音乐播放器极简卡片" width="100%" /></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>优雅旋转的拟真黑胶唱片与随音乐起伏的柔和光晕，支持一键最小化至顶部菜单栏常驻<br>Realistic rotating vinyl disc with dynamic ambient glow; supports direct minimization to the menu bar</sub></td>
-    <td align="center"><sub>随手摆放在桌面角落或分屏边缘的超紧凑卡片，清晰呈现高清专辑封面与播控按钮<br>Ultra-compact card for desk placement or split-screen multitasking with embedded artwork and controls</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><b>14. 本地无损音频曲库一体化管理<br>Local Lossless Audio Track Library Management</b></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="Documentation/Screenshots/zh_14.png" alt="本地音乐曲库管理" width="80%" /></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><sub>集中管理本地无损音乐曲目，支持按歌手、专辑与曲目快速检索定位<br>Manage local lossless audio tracks in one centralized view with instant searching across artists and albums</sub></td>
-  </tr>
-</table>
-
-<br>
-
-#### 5. 本地、外置硬盘与网络存储接入流程 / Local, External &amp; LAN Storage Setup
-
-<table>
   <tr>
     <td width="50%" align="center"><b>10. 媒体库初始页面与极简接入向导<br>Library Welcome &amp; Onboarding Guide</b></td>
     <td width="50%" align="center"><b>11. 本地目录与网络存储接入引导<br>Local Folder &amp; LAN Storage Guide</b></td>
@@ -218,33 +128,174 @@ SilkPlayer Pro upholds the finest traditions of native Mac software: instant sta
     <td align="center"><img src="Documentation/Screenshots/zh_13.png" alt="远程共享目录勾选" width="100%" /></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><sub>既可直接勾选 Mac 本机与外置移动硬盘文件夹，也能自动搜索局域网设备，免去访达手动挂载即可生成海报墙<br>Select Mac local folders or external drives directly, or auto-discover LAN shares without manual Finder mounting to build your library</sub></td>
+    <td colspan="2" align="center"><sub>支持直接勾选本机与外置硬盘目录，或自动扫描局域网共享服务，免访达挂载一键建库<br>Select Mac local/external folders directly or auto-discover LAN shares without Finder mounting</sub></td>
   </tr>
 </table>
 
 <br>
 
-#### 6. 偏好设置与 4 款高品质主题切换 / Preferences &amp; 4 Curated Themes
+#### 2. 影院级 4K/8K 与杜比视界播放 / Master-Grade Cinema Playback
 
 <table>
   <tr>
-    <td width="50%" align="center"><b>15. 通用设置：外观与 4 款高品质主题随心选<br>General Settings: Appearance &amp; 4 Curated Themes</b></td>
-    <td width="50%" align="center"><b>16. 播放与连续性设置：紧凑零滚动舒适布局<br>Playback Settings: Compact Zero-Scrolling Layout</b></td>
+    <th width="50%" align="left">中文特性说明</th>
+    <th width="50%" align="left">English Highlights</th>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <ul>
+        <li><b>4K / 8K 高码率直出</b>：硬件加速直通解码，拖拽时间轴即时响应，长时间观影低功耗低发热。</li>
+        <li><b>杜比视界与 HDR 色彩还原</b>：充分发挥 Mac 屏幕高动态范围能力，暗部层次清晰、高光通透不过曝，避免画面发白偏色。</li>
+        <li><b>黑边环境光柔化（Pro 可选）</b>：宽银幕留白黑边可选开启柔和延展微光，兼顾沉浸感与边缘视觉过渡。</li>
+        <li><b>全格式封装直读</b>：原生支持 MP4、MKV、MOV、FLV、TS、WebM、AVI 等主流及专业封装，无需转码。</li>
+        <li><b>纯透明悬浮播控栏</b>：无底部实心黑框，播放时自动渐隐退场，保持完整观影视野。</li>
+        <li><b>时间轴悬停预览缩略图</b>：光标滑过进度条即时呈现对应画面高清缩略图，快速定位目标片段。</li>
+        <li><b>外挂字幕智能关联</b>：自动检索同级与字幕子目录内的 SRT、ASS、VTT 等外挂字幕，也支持拖放即时挂载。</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <ul>
+        <li><b>4K &amp; 8K High-Bitrate Playback</b>: Hardware-accelerated pipeline with instant timeline seeking, low heat, and extended battery life.</li>
+        <li><b>Dolby Vision &amp; HDR Fidelity</b>: Unlocks full Mac display dynamic range for deep shadow detail and crisp highlights without washed-out colors.</li>
+        <li><b>Ambient Letterbox Fill (Pro Optional)</b>: Optionally fills cinema letterbox/pillarbox margins with a soft ambient glow while keeping video sharp.</li>
+        <li><b>Universal Container Support</b>: Plays MP4, MKV, MOV, FLV, TS, WebM, AVI, and professional containers natively with zero transcoding.</li>
+        <li><b>Transparent Floating Controls</b>: Minimalist floating HUD with no opaque bars; fades smoothly out of sight during playback.</li>
+        <li><b>Timeline Hover Thumbnails</b>: Hover along the scrubber to preview high-resolution frames for precise scene navigation.</li>
+        <li><b>Smart Subtitle Matching</b>: Auto-loads SRT, ASS, and VTT files from adjacent or subtitle folders, plus drag-and-drop mounting.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" align="center"><b>05. 4K UHD 杜比视界高动态画质直出<br>4K UHD Dolby Vision High-Fidelity Playback</b></td>
+    <td width="50%" align="center"><b>06. 纯透明悬浮播控栏与毫秒级进度微调<br>Transparent Floating Scrubber &amp; Controls</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="Documentation/Screenshots/zh_05.png" alt="杜比视界高清播放" width="100%" /></td>
+    <td align="center"><img src="Documentation/Screenshots/zh_06.png" alt="纯透明悬浮时间轴" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>完整保留暗部细节与高光层次，真实还原 HDR / 杜比视界色彩<br>Preserves shadow depth and specular highlights with accurate HDR / Dolby Vision tone</sub></td>
+    <td align="center"><sub>纯透明悬浮播控胶囊，播放时自动隐退，无实心底框遮挡画面<br>Floating pill controls fade away cleanly with zero opaque bottom boxes</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><b>07. 视频规格属性与音画详细信息悬浮面板<br>Live Stream Properties &amp; Video Metadata Overlay</b></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="Documentation/Screenshots/zh_07.png" alt="视频详细属性面板" width="80%" /></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub>实时查看当前视频的分辨率、帧率、色彩空间、编码格式与音频声道参数<br>Inspect live resolution, frame rate, color space, codec, and audio channel details anytime</sub></td>
+  </tr>
+</table>
+
+<br>
+
+#### 3. 独立桌面黑胶音乐播放器与无损曲库 / Standalone Vinyl Music Mode &amp; Audio Library
+
+<table>
+  <tr>
+    <th width="50%" align="left">中文特性说明</th>
+    <th width="50%" align="left">English Highlights</th>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <ul>
+        <li><b>展开列表与迷你卡片切换</b>：既可展开查看完整队列与曲库信息，也能收拢为桌面角落的极简小卡片，适配多任务分屏。</li>
+        <li><b>拟真旋转黑胶视窗</b>：黑胶唱片随旋律平滑旋转，辅以柔和动态光晕，提供专注纯粹的桌面听歌陪伴。</li>
+        <li><b>菜单栏常驻随身听</b>：一键收拢至顶部菜单栏，释放 Dock 空间，随时点击切歌与调音。</li>
+        <li><b>全格式高解析无损音频</b>：直出 FLAC、APE、WAV、DSD、DTS 等无损音频，人声与声场通透还原。</li>
+        <li><b>多声道平衡与防破音保护</b>：自动平衡多声道音轨输出至耳机或双声道音箱，保障对白清晰、大动态不削波失真。</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <ul>
+        <li><b>Expanded Queue &amp; Mini Card</b>: Switch smoothly between a full playlist view and an ultra-compact desktop card for multitasking.</li>
+        <li><b>Rotating Vinyl Visualizer</b>: Realistic spinning vinyl disc paired with gentle ambient glow for focused listening sessions.</li>
+        <li><b>Menu Bar Micro-Player</b>: Minimize directly to the macOS menu bar to keep your Dock tidy with one-click track controls.</li>
+        <li><b>Lossless Audio Playback</b>: Faithfully decodes FLAC, APE, WAV, DSD, and DTS studio-grade formats with clean detail.</li>
+        <li><b>Smart Balance &amp; Protection</b>: Balances multichannel tracks for headphones and stereo speakers, keeping dialog crisp without clipping.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" align="center"><b>08. 独立音乐播放器：展开模式与黑胶旋转视窗<br>Music Mode: Expanded Queue &amp; Vinyl Visualizer</b></td>
+    <td width="50%" align="center"><b>09. 独立音乐播放器：极简桌面伴侣小卡片<br>Music Mode: Minimal Desktop Companion Card</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="Documentation/Screenshots/zh_08.png" alt="独立音乐播放器展开模式" width="100%" /></td>
+    <td align="center"><img src="Documentation/Screenshots/zh_09.png" alt="独立音乐播放器极简卡片" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>拟真黑胶旋转视窗与动态光晕，支持一键收拢至菜单栏常驻<br>Rotating vinyl disc with dynamic glow and menu bar minimization</sub></td>
+    <td align="center"><sub>紧凑桌面伴侣卡片，清晰呈现专辑封面与快捷播控按钮<br>Compact desk companion card with album artwork and quick controls</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><b>14. 本地无损音频曲库一体化管理<br>Local Lossless Audio Track Library Management</b></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="Documentation/Screenshots/zh_14.png" alt="本地音乐曲库管理" width="80%" /></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub>集中管理本地无损曲目，支持按歌手、专辑与曲目快速检索定位<br>Centralized lossless track management with instant artist, album, and song search</sub></td>
+  </tr>
+</table>
+
+<br>
+
+#### 4. 纯正 Mac 原生质感与极简设置 / Pure Native Mac Craftsmanship &amp; Preferences
+
+<table>
+  <tr>
+    <th width="50%" align="left">中文特性说明</th>
+    <th width="50%" align="left">English Highlights</th>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <ul>
+        <li><b>4 款高品质主题全局联动</b>：内置经典深灰、深邃黑（OLED 纯黑）、钛金灰与冰霜白主题，全局视窗同步切换。</li>
+        <li><b>多设备观影进度随行</b>：支持跨 Mac 设备同步播放进度，换一台设备即可从上次断点无缝续播。</li>
+        <li><b>播放列表拼音与文本快搜</b>：支持汉字与拼音首字母秒级过滤海量剧集分集与音频曲目。</li>
+        <li><b>极低占用与零后台常驻</b>：静态浏览维持极低 CPU/GPU 消耗，退出即彻底释放内存，无常驻守护进程。</li>
+        <li><b>一屏无滚动偏好设置</b>：信息架构紧凑清晰，全部核心设置一屏直达，告别多层嵌套翻找。</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <ul>
+        <li><b>4 Curated Global Themes</b>: Switch seamlessly across Classic Dark, Deep Onyx (OLED), Titanium Gray, and Frost White across every window.</li>
+        <li><b>Multi-Device Watch Sync</b>: Keeps playback checkpoints synced across multiple Macs so you can resume right where you left off.</li>
+        <li><b>Pinyin &amp; Keyword Search</b>: Filter large episode lists and audio queues instantly by Chinese Pinyin initials or text keywords.</li>
+        <li><b>Low Footprint, Zero Daemons</b>: Minimal idle CPU/GPU overhead and complete memory release on quit with no background agents.</li>
+        <li><b>Single-Screen Preferences</b>: Clean, non-scrolling layout puts all essential settings within immediate reach.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" align="center"><b>15. 通用设置：外观与 4 款高品质主题切换<br>General Settings: Appearance &amp; 4 Curated Themes</b></td>
+    <td width="50%" align="center"><b>16. 播放与连续性设置：紧凑零滚动布局<br>Playback Settings: Compact Zero-Scrolling Layout</b></td>
   </tr>
   <tr>
     <td align="center"><img src="Documentation/Screenshots/zh_15.png" alt="通用设置与主题切换" width="100%" /></td>
     <td align="center"><img src="Documentation/Screenshots/zh_16.png" alt="播放与连续性设置" width="100%" /></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><b>17. 媒体库设置：本地、外置硬盘、局域网与云同步控制<br>Library Settings: Local, External, LAN &amp; Sync Control</b></td>
-    <td width="50%" align="center"><b>18. 关于面板：SilkPlayer Pro 软件信息与硬件规格<br>About Panel: SilkPlayer Pro Specs &amp; Licensing</b></td>
+    <td width="50%" align="center"><b>17. 媒体库设置：本地、外置硬盘、局域网与同步控制<br>Library Settings: Local, External, LAN &amp; Sync Control</b></td>
+    <td width="50%" align="center"><b>18. 关于面板：SilkPlayer Pro 软件信息与规格<br>About Panel: SilkPlayer Pro Specs &amp; Licensing</b></td>
   </tr>
   <tr>
     <td align="center"><img src="Documentation/Screenshots/zh_17.png" alt="局域网与同步设置" width="100%" /></td>
     <td align="center"><img src="Documentation/Screenshots/zh_18.png" alt="关于与规格面板" width="100%" /></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><sub>精心微调的设置面板，所有选项一屏尽览无纵向滚动条，4 款精美主题全局联动所有视窗<br>Refined layouts eliminate vertical scrolling, while four distinct themes synchronize seamlessly across all windows</sub></td>
+    <td colspan="2" align="center"><sub>精心微调的设置面板，所有选项一屏尽览无纵向滚动条，4 款主题全局同步所有视窗<br>Refined preference panes eliminate vertical scrolling while four themes sync across all windows</sub></td>
   </tr>
 </table>
 

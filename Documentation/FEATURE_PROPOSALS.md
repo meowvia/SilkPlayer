@@ -50,6 +50,9 @@
 | 提案 037 | 全屏播放列表胶囊悬停自动呼出与离场收回机制 (Fullscreen Playlist Drawer Handle-Hover Auto-Expand & Boundary Auto-Collapse) | 本次实施 | **2.2.0** |
 | 提案 038 | 网络挂载卷宗与流媒体 I/O 8 秒熔断看门狗与超时自愈治理 (Network Volume & Stream I/O 8s Watchdog Timeout & Anti-Hang Hardening) | 本次实施 | **2.2.0** |
 | 提案 039 | 原生 WebDAV 协议网络存储源挂载与媒体点播流式直读 (Native WebDAV Network Share & Direct Streaming VOD Pipeline) | 搁置（待后续长周期压测） | **—** |
+| 提案 040 | 精准装机与运营统计体系（新装下载、应用内更新分流与去重日活设备统计） | 下一版本重点部署 | **下一版本** |
+| 提案 041 | 品牌图标升级定稿（电影定焦镜头：免费版冰川蓝宝石 / Pro 徕卡红圈） | 已定稿待装包（下一版本同步官网与 App） | **下一版本** |
+| 提案 042 | 媒体库画报级详情页与双端视觉语言统一（macOS 先行验证，复用铺路 tvOS 客厅端） | 方向已定稿待设计排期 | **后续版本** |
 
 
 ---
@@ -1403,6 +1406,66 @@
 
 ### 3. 当前状态
 - 需求架构定稿归档，正式排期于 **2.2.0** 作为网络拓展核心特性落地。
+
+---
+
+## 提案 040: 精准装机与运营统计体系（新装下载、应用内更新分流与去重日活设备统计） [下一版本重点部署]
+
+### 1. 问题背景
+1. 目前官网网页下载与客户端应用内更新均指向 `/api/download?arch=universal` 并 `302` 至同一静态 `.dmg` 文件，统计层面无法区分“新装下载”与“老用户升级”。
+2. `stats.js` 现有 `version_checks` 仅统计 `/api/version` 的请求总次数（PV），未按设备去重，无法直接作为真实日活设备数（DAU），且 `8087` 看板尚未接入展示。
+
+### 2. 实施方案
+1. **新装与更新路径分流**：
+   - 官网网页下载保持 `/api/download?arch=universal`（纯新装渠道）。
+   - 客户端 `UpdateService` 发起更新包下载时附加来源参数（如 `source=updater`），官网 `download.js` 在 `302` 重定向至 `/downloads/SilkPlayer-<ver>-universal.dmg` 时保留该 Query 参数（CDN 仍命中同一份静态文件，无需双份存储）。
+   - `stats.js` 按 `clientRequestQuery` / 路径来源拆出 `web_downloads`（新装）与 `updater_downloads`（升级）。
+2. **去重日活设备统计（DAU）**：
+   - 客户端请求 `/api/version` 时携带匿名本地安装 UUID（仅用于去重计数，不采集个人隐私信息），或结合服务端 `country + colo + userAgent` 维度在 `stats.js` 中去重统计 `unique_version_checks_24h`。
+### 3. 8087 看板接入与持久化
+   - 将 `新装下载`、`应用内更新`、`24h 去重日活` 接入 `/opt/gitmetrics/server.py` 与前端看板，配合 SQLite 每日快照形成长期装机量趋势。
+
+---
+
+## 提案 041: 品牌图标升级定稿（电影定焦镜头 · 冰川蓝宝石 / 徕卡红圈） [已定稿待装包]
+
+### 1. 定稿规格
+1. **统一几何模具**：电影定焦镜头外观（72 格精密光圈刻度环 + 各向异性拉丝金属外圈 + 内凹光学镜筒阶梯 + 镀膜玻璃反光 + 全对称圆角白玉播放棱镜），彻底修复旧版三角形切角破损与 Pro 版放大锯齿。
+2. **双版本配色**：
+   - **免费版（Standard）**：深海暗蓝曜石机身 + **冰川蓝宝石光学镀膜**（去除了高饱和荧光蓝）。
+   - **专业版（Pro）**：哑光纯黑机身 + **徕卡红（Leica Crimson）四向主刻度与内圈卡口** + 暗红玉光学镀膜。
+
+### 2. 预制交付资产位置（暂不推送公开仓库与官网，待下一版发版同步替换）
+- 资产目录：`/Volumes/2T/Projects/SilkPlayer/Design_Assets_vNext_Icons/`
+  - `AppIcon_Standard.icns`、`AppIcon_Standard_1024.png`
+  - `AppIcon_Pro.icns`、`AppIcon_Pro_1024.png`
+  - 生成脚本：`render_lens_icons.swift`
+- **下一版发版上线清单一并同步**：
+  1. 替换 `SilkPlayer/Resources/AppIcon.icns`、`AppIcon_Standard.icns`、`AppIcon_Pro.icns` 及对应 `1024.png`；
+  2. 同步更新应用内 `Sources/SilkPlayer/Shared/SilkBrandLogoView.swift`（修复 `PlayTriangleShape` 顶点切角并对齐新定焦镜头视觉）；
+  3. 同步更新 `Website/assets/images/`（`app_icon.png`、`app_icon.webp`、`logo_1024.png`、`logo.svg`）。
+
+---
+
+## 提案 042: 媒体库画报级详情页与双端视觉语言统一（macOS 先行验证，复用铺路 tvOS 客厅端） [方向已定稿]
+
+### 1. 设计原则与推进节奏
+1. **差异化视觉风格**：参考主流流媒体与影音管理软件的画报级详情页信息架构，不进行一比一像素复刻，结合 SilkPlayer 现有半透明毛玻璃与克制排版体系，形成自有视觉辨识度。
+2. **macOS 先行，双端复用**：先在 macOS 媒体库详情页落地 SwiftUI 视觉布局与 TMDB 扩展元数据模型（ClearLogo、演职员列表），在桌面端快速验证观感后再复用到 tvOS 端“极简客厅三件套”（全屏通栏海报墙首页、电影画报详情页、极简播控 HUD）。
+
+### 2. 详情页核心结构规划
+1. **无边框通栏剧照与自适应取色渐融**：
+   - 顶部窗口控制与导航按钮直接悬浮于通栏剧照之上；
+   - 下半部分从剧照主色调平滑渐融出同色系毛玻璃背景，同时强制加入**背景主色亮度自适应兜底**（确保暗夜海报或高亮剧照下文字与控件均保持充足对比度）。
+2. **TMDB ClearLogo 优先展示**：
+   - 刮削并缓存电影透明艺术字 Logo（ClearLogo）替代纯文字标题；无可用 ClearLogo 时回退为标准排版标题。
+3. **双栏比例与微透光控件**：
+   - 左侧放置主播放按钮与精简辅助图标（已看标记、收藏、音轨/字幕选择），辅助按钮统一采用微透光液态玻璃材质替代实心色块；
+   - 右侧紧凑排布评分、分级、类型、时长、上映年份以及基于 FFmpeg 实测的硬核规格标签（如 `4K`、`DV`、`60FPS`、文件体积）。
+4. **演职员圆角肖像条与悬浮导航胶囊**：
+   - 底部展示演职员头像、姓名与角色名横向列表；顶部左上/右上保留低遮挡圆形毛玻璃返回、侧边栏切换与搜索入口。
+
+
 
 
 
